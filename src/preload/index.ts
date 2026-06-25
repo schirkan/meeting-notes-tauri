@@ -1,16 +1,19 @@
 // Tauri 2 bridge for the meeting-notes renderer.
 //
-// Block 1 / T-101: stubs the full `TranscriptApi` surface so that the
-// React renderer can mount against `window.transcriptApi` without changes.
-// Real command/event wiring lands in Block 2 (T-102/T-302/T-303).
-//
-// Pattern:
-//   - Commands: `@tauri-apps/api/core` invoke() with snake_case command name
-//   - Events:   `@tauri-apps/api/event` listen() returning an unsubscribe fn
-//   - All methods match the `TranscriptApi` interface from @shared/transcript-contract
+// Each method maps 1:1 to a `#[tauri::command]` in src-tauri (see
+// src/shared/tauri-contract.ts for the single-source-of-truth name list).
+// Commands land in src-tauri/src/commands.rs over Blocks 2–4; until a
+// command is implemented, Tauri rejects the invoke call and the bridge
+// propagates the error message to the renderer so UI tests can be done
+// in isolation.
 
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import {
+  TAURI_COMMANDS,
+  TAURI_EVENTS,
+  type SidecarCrashedPayload
+} from '@shared/tauri-contract'
 import type {
   AudioDeviceSnapshot,
   DebugLogEntry,
@@ -21,7 +24,7 @@ import type {
 } from '@shared/transcript-contract'
 import type { AzureConfig, AzureConfigState, UserSettings } from '@shared/config-contract'
 
-type ConnectivityResult = {
+export type ConnectivityResult = {
   probeUrl: string
   reachable: boolean
   httpStatus?: number
@@ -29,29 +32,6 @@ type ConnectivityResult = {
   latencyMs: number
   error?: string
   steps: Array<{ step: string; status: 'ok' | 'warn' | 'error'; detail: string }>
-}
-
-const stoppedStatus = (): TranscriptStatus => ({ running: false })
-
-const stubSettings: UserSettings = {
-  language: 'de-DE',
-  devices: { micId: null, speakerLoopbackId: null }
-}
-
-const stubDevices: AudioDeviceSnapshot = {
-  inputs: [],
-  outputs: [],
-  fetchedAtIso: new Date(0).toISOString()
-}
-
-const stubConfigState: AzureConfigState = {
-  exists: false,
-  path: '',
-  config: null
-}
-
-function notImplemented(method: string): never {
-  throw new Error(`transcriptApi.${method}: not implemented yet (Block 1 stub)`)
 }
 
 function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
@@ -65,28 +45,40 @@ function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
 }
 
 const api: TranscriptApi = {
-  start: async () => {
-    await invoke('start_recording')
-    return stoppedStatus()
-  },
-  stop: async () => {
-    await invoke('stop_recording')
-    return stoppedStatus()
-  },
-  getStatus: () => Promise.resolve(stoppedStatus()),
-  getDebugLog: () => Promise.resolve<DebugLogEntry[]>([]),
-  clearDebugLog: () => Promise.resolve({ cleared: 0 }),
-  getDevices: () => Promise.resolve(stubDevices),
-  getSettings: () => Promise.resolve(stubSettings),
-  getConfig: () => Promise.resolve(stubConfigState),
-  saveSettings: () => Promise.resolve(stubSettings),
-  saveConfig: () => Promise.resolve(stubConfigState),
-  testAzureConnectivity: () => notImplemented('testAzureConnectivity'),
-  copyTranscript: () => Promise.resolve(),
-  onSegment: (cb) => subscribe<TranscriptSegment>('transcript:segment', cb),
-  onError: (cb) => subscribe<TranscriptError>('transcript:error', cb),
-  onStatus: (cb) => subscribe<TranscriptStatus>('transcript:status', cb),
-  onDebugLog: (cb) => subscribe<DebugLogEntry>('transcript:debug', cb)
+  start: () => invoke<TranscriptStatus>(TAURI_COMMANDS.startRecording),
+  stop: () => invoke<TranscriptStatus>(TAURI_COMMANDS.stopRecording),
+  getStatus: () => invoke<TranscriptStatus>(TAURI_COMMANDS.getStatus),
+  getDebugLog: () => invoke<DebugLogEntry[]>(TAURI_COMMANDS.getDebugLog),
+  clearDebugLog: () =>
+    invoke<{ cleared: number }>(TAURI_COMMANDS.clearDebugLog),
+  getDevices: () =>
+    invoke<AudioDeviceSnapshot>(TAURI_COMMANDS.getDevices),
+  getSettings: () =>
+    invoke<UserSettings>(TAURI_COMMANDS.getUserSettings),
+  getConfig: () =>
+    invoke<AzureConfigState>(TAURI_COMMANDS.getFixedConfig),
+  saveSettings: (settings) =>
+    invoke<UserSettings>(TAURI_COMMANDS.saveUserSettings, { settings }),
+  saveConfig: (config) =>
+    invoke<AzureConfigState>(TAURI_COMMANDS.saveFixedConfig, { config }),
+  testAzureConnectivity: (payload) =>
+    invoke<ConnectivityResult>(TAURI_COMMANDS.testAzureConnectivity, { payload }),
+  copyTranscript: (segments) =>
+    invoke<void>(TAURI_COMMANDS.copyTranscript, { segments }),
+  onSegment: (cb) =>
+    subscribe<TranscriptSegment>(TAURI_EVENTS.segment, cb),
+  onError: (cb) =>
+    subscribe<TranscriptError>(TAURI_EVENTS.error, cb),
+  onStatus: (cb) =>
+    subscribe<TranscriptStatus>(TAURI_EVENTS.status, cb),
+  onDebugLog: (cb) =>
+    subscribe<DebugLogEntry>(TAURI_EVENTS.debug, cb)
+}
+
+// Sidecar crash event is not part of TranscriptApi (it's a Tauri-internal
+// event the renderer can also subscribe to). Expose it for completeness.
+;(window as unknown as { transcriptApi: TranscriptApi; transcriptSidecar: { onCrashed: (cb: (p: SidecarCrashedPayload) => void) => () => void } }).transcriptSidecar = {
+  onCrashed: (cb) => subscribe<SidecarCrashedPayload>(TAURI_EVENTS.sidecarCrashed, cb)
 }
 
 ;(window as unknown as { transcriptApi: TranscriptApi }).transcriptApi = api
