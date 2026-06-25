@@ -1,21 +1,43 @@
 //! Tauri 2 entry point for meeting-notes-tauri.
 //!
-//! Block 2 / T-102 + T-302 + T-303 + T-401: shared IPC contract,
-//! command skeletons, event helpers, and an in-memory AppState.
-//! Block 4 (T-300 / T-301 / T-304 / T-305) wires the real sidecar,
-//! settings, connectivity, and clipboard logic.
+//! Block 4 wires all Tauri-Commands to real implementations
+//! (settings, connectivity, sidecar spawn, clipboard). The app
+//! keeps an in-memory AppState for status + debug log and a cached
+//! SidecarHandle so stop_recording can reach the running child.
 
 mod commands;
+mod connectivity;
 mod events;
+mod settings;
+mod sidecar;
 mod state;
 
+use std::sync::Arc;
+
+use tauri::{Manager, RunEvent};
+use tokio::sync::Mutex;
+
+use sidecar::SidecarHandle;
 use state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
+    .plugin(tauri_plugin_clipboard_manager::init())
     .manage(AppState::default())
+    .manage(Arc::new(Mutex::new(None::<SidecarHandle>)) as SidecarCache)
+    .setup(|app| {
+      let handle = app.handle().clone();
+      let state = handle.state::<AppState>();
+      let entry = state.push_debug(
+        state::DebugLogEntrySource::Main,
+        state::DebugLogEntryLevel::Info,
+        "Tauri app initialisiert.",
+      );
+      events::emit_debug(&handle, &entry);
+      Ok(())
+    })
     .invoke_handler(tauri::generate_handler![
       commands::start_recording,
       commands::stop_recording,
@@ -31,6 +53,22 @@ pub fn run() {
       commands::test_azure_connectivity,
       commands::copy_transcript,
     ])
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while running tauri application")
+    .run(|app_handle, event| match event {
+      RunEvent::ExitRequested { .. } | RunEvent::Exit => {
+        let cache = app_handle.state::<SidecarCache>();
+        let inner = cache.inner().clone();
+        tauri::async_runtime::block_on(async move {
+          let mut guard = inner.lock().await;
+          if let Some(handle) = guard.take() {
+            let _ = sidecar::stop(handle).await;
+          }
+        });
+      }
+      _ => {}
+    });
 }
+
+/// Wrapper alias so `manage()` registers a stable type.
+type SidecarCache = Arc<Mutex<Option<SidecarHandle>>>;
