@@ -25,6 +25,7 @@ config/*.local.json
 # ===== Logs / Temp =====
 *.log
 logs/
+temp/
 
 # ===== IDE / OS =====
 .vs/

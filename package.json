@@ -1,0 +1,36 @@
+{
+  "name": "meeting-notes-tauri",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Meeting Notes PoC (Tauri 2 + React + C# Sidecar)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "tauri": "tauri",
+    "build:sidecar": "dotnet build sidecar/MeetingNotes.Sidecar.csproj -c Release",
+    "clean:sidecar": "node scripts/clean-sidecar.mjs",
+    "publish:sidecar": "npm run clean:sidecar && dotnet publish sidecar/MeetingNotes.Sidecar.csproj -c Release -r win-x64 --self-contained false -o sidecar/publish/sidecar"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "engines": {
+    "node": ">=22.12.0 <23 || >=24.0.0 <24.16.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/cli": "^2.0.0",
+    "@tauri-apps/plugin-shell": "^2.0.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "playwright": "^1.55.0",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.2"
+  }
+}
