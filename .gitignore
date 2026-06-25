@@ -1,0 +1,51 @@
+# ===== Tauri / Rust (src-tauri/) =====
+src-tauri/target/
+src-tauri/gen/
+src-tauri/WixTools/
+
+# ===== Node / Vite / React (Renderer) =====
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# ===== C# Sidecar (.NET) =====
+sidecar/bin/
+sidecar/obj/
+sidecar/publish/
+
+# ===== Secrets / lokale Konfiguration (laut T-103) =====
+config/azure.json
+config/user-settings.json
+config/*.local.json
+.env
+.env.local
+.env.*.local
+
+# ===== Logs / Temp =====
+*.log
+logs/
+
+# ===== IDE / OS =====
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== OpenClaw-Interna =====
+.openclaw/
+
+# ===== Project-Rules: specs/ und context/ lokal halten, NICHT im Git =====
+# Diese Ordner sind private Arbeitsdokumente / externe Hardware/API-Referenzen,
+# nicht für das öffentliche Repo bestimmt (siehe projects/PROJECT-RULES.md).
+specs/
+context/
+
+# ===== Memory / lokale Notizen =====
+memory/
