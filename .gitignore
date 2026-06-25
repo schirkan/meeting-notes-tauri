@@ -41,10 +41,10 @@ desktop.ini
 # ===== OpenClaw-Interna =====
 .openclaw/
 
-# ===== Project-Rules: specs/ und context/ lokal halten, NICHT im Git =====
-# Diese Ordner sind private Arbeitsdokumente / externe Hardware/API-Referenzen,
-# nicht für das öffentliche Repo bestimmt (siehe projects/PROJECT-RULES.md).
-specs/
+# ===== context/ bleibt lokal (externe Hardware/API-Referenzen) =====
+# Hinweis: specs/ werden entgegen der OpenClaw-Workspace-PROJECT-RULES.md
+# bewusst im Repo getrackt (Owner-Entscheidung 2026-06-25). specs/ sind
+# öffentliche Planungsartefakte dieses Projekts.
 context/
 
 # ===== Memory / lokale Notizen =====
