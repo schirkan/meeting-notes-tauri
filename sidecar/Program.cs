@@ -1,61 +1,73 @@
-using System.IO.Pipes;
-using System.Text;
-using System.Text.Json;
+using System;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using MeetingNotes.Sidecar;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
-using NAudio.Wave.SampleProviders;
 
-const int HeaderSize = 36;
-const uint Magic = 0x4D4E5043;
+// Block 3 composition root for meeting-notes-tauri.
+//
+// Responsibilities:
+//   1. Parse CLI args (ArgsParser).
+//   2. Resolve + enumerate audio devices (DeviceResolver).
+//   3. Open two NAudio captures: mic (WasapiCapture) and speaker loopback
+//      (WasapiLoopbackCapture). Each feeds a BufferedWaveProvider, which is
+//      drained by a MediaFoundationResampler to 16 kHz / 16-bit / mono.
+//   4. Forward the resampled PCM frames into AzureSpeechService, which owns
+//      two Recognizers (SpeechRecognizer for mic, ConversationTranscriber
+//      for speaker) and surfaces transcripts + errors via Logger.
+//   5. Emit everything (status, transcript, error, debug) as JSON-Lines
+//      on stdout for the Tauri main process to consume.
+//
+// In Block 4 the Tauri-Main (Rust) spawns this EXE via tauri-plugin-shell
+// and reads stdout as JSON-Lines; commands flow back over stdin.
 
-var argsMap = ParseArgs(args);
+var argsMap = ArgsParser.Parse(args);
 
 if (argsMap.ContainsKey("--list-devices"))
 {
-    Console.WriteLine(JsonSerializer.Serialize(ListDevices()));
+    var snapshot = DeviceResolver.ListDevices();
+    Logger.Event("device_list", snapshot);
     return 0;
 }
 
-if (!argsMap.TryGetValue("--pipe-name", out var pipeName) || string.IsNullOrWhiteSpace(pipeName))
+if (!argsMap.TryGetValue("--sample-rate", out var srRaw) || string.IsNullOrWhiteSpace(srRaw))
 {
-    LogError("SIDECAR_START_FAILED", "Parameter --pipe-name fehlt.");
-    return 10;
+    srRaw = "16000";
+    Logger.Info("config", "sample_rate_default", $"--sample-rate nicht gesetzt, verwende Default {srRaw} Hz.");
 }
-
-var sampleRate = 16000;
-if (argsMap.TryGetValue("--sample-rate", out var srRaw) && !string.IsNullOrWhiteSpace(srRaw))
+if (!int.TryParse(srRaw, out var sampleRate) || sampleRate < 8000 || sampleRate > 48000)
 {
-    if (!int.TryParse(srRaw, out var srParsed) || srParsed <= 0)
-    {
-        LogError("SIDECAR_START_FAILED", $"Parameter --sample-rate ist ungültig: '{srRaw}'. Erwartet positive Ganzzahl.");
-        return 11;
-    }
-    if (srParsed < 8000 || srParsed > 48000)
-    {
-        LogError("SIDECAR_START_FAILED", $"Parameter --sample-rate={srParsed} außerhalb des unterstützten Bereichs (8000-48000).");
-        return 12;
-    }
-    sampleRate = srParsed;
-}
-else
-{
-    LogInfo("config", "sample_rate_default", $"--sample-rate nicht gesetzt, verwende Default {sampleRate} Hz.");
+    Logger.Error("SIDECAR_START_FAILED", $"Parameter --sample-rate ist ungültig: '{srRaw}'. Erwartet 8000-48000.");
+    return 11;
 }
 
 var micId = argsMap.GetValueOrDefault("--mic-device-id");
 var speakerId = argsMap.GetValueOrDefault("--speaker-device-id");
+var language = argsMap.GetValueOrDefault("--language") ?? "de-DE";
+var speechKey = argsMap.GetValueOrDefault("--speech-key");
+var speechRegion = argsMap.GetValueOrDefault("--speech-region");
+var speechEndpoint = argsMap.GetValueOrDefault("--speech-endpoint");
+var azureEnabled = !string.IsNullOrWhiteSpace(speechKey)
+                   && !string.IsNullOrWhiteSpace(speechRegion)
+                   && !string.IsNullOrWhiteSpace(speechEndpoint);
+
+if (!azureEnabled)
+{
+    Logger.Warn(
+        "config",
+        "azure_incomplete",
+        "Azure-Konfiguration unvollständig (speech-key/region/endpoint fehlt). Audio-Capture läuft, Azure-Start übersprungen.");
+}
 
 if (!string.IsNullOrWhiteSpace(micId))
-{
-    LogInfo("config", "mic_device_id", $"--mic-device-id={micId}");
-}
+    Logger.Info("config", "mic_device_id", $"--mic-device-id={micId}");
 if (!string.IsNullOrWhiteSpace(speakerId))
-{
-    LogInfo("config", "speaker_device_id", $"--speaker-device-id={speakerId}");
-}
+    Logger.Info("config", "speaker_device_id", $"--speaker-device-id={speakerId}");
 
 var targetWaveFormat = new WaveFormat(sampleRate, 16, 1);
-
 var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
 {
@@ -65,66 +77,77 @@ Console.CancelKeyPress += (_, e) =>
 
 try
 {
-    using var pipe = new NamedPipeServerStream(pipeName, PipeDirection.Out, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
-    LogInfo("status", "waiting_for_pipe", $"Warte auf Pipe-Verbindung {pipeName}.");
-    await pipe.WaitForConnectionAsync(cts.Token);
-    LogInfo("status", "pipe_connected", "Pipe-Verbindung steht.");
-
     using var mm = new MMDeviceEnumerator();
-
-    var micDevice = ResolveInputDevice(mm, micId);
-    var speakerDevice = ResolveOutputDevice(mm, speakerId);
+    var micDevice = DeviceResolver.ResolveInputDevice(mm, micId);
+    var speakerDevice = DeviceResolver.ResolveOutputDevice(mm, speakerId);
 
     if (speakerDevice is null)
     {
-        LogError("LOOPBACK_DEVICE_NOT_FOUND", "Kein Speaker-Device für Loopback gefunden.");
+        Logger.Error("LOOPBACK_DEVICE_NOT_FOUND", "Kein Speaker-Device für Loopback gefunden.");
         return 21;
     }
-
     if (micDevice is null)
     {
-        LogError("SIDECAR_START_FAILED", "Kein Mikrofon-Device gefunden.");
+        Logger.Error("SIDECAR_START_FAILED", "Kein Mikrofon-Device gefunden.");
         return 22;
     }
 
+    var micBuffered = new BufferedWaveProvider(micDevice.AudioClient.MixFormat)
+    {
+        DiscardOnBufferOverflow = true,
+        ReadFully = false
+    };
+    var speakerBuffered = new BufferedWaveProvider(speakerDevice.AudioClient.MixFormat)
+    {
+        DiscardOnBufferOverflow = true,
+        ReadFully = false
+    };
+
     using var micCapture = new WasapiCapture(micDevice);
     using var speakerCapture = new WasapiLoopbackCapture(speakerDevice);
-    var micBufferedProvider = new BufferedWaveProvider(micCapture.WaveFormat)
-    {
-        DiscardOnBufferOverflow = true,
-        ReadFully = false
-    };
-    var speakerBufferedProvider = new BufferedWaveProvider(speakerCapture.WaveFormat)
-    {
-        DiscardOnBufferOverflow = true,
-        ReadFully = false
-    };
-    using var micResampler = new MediaFoundationResampler(micBufferedProvider, targetWaveFormat);
-    using var speakerResampler = new MediaFoundationResampler(speakerBufferedProvider, targetWaveFormat);
-
+    using var micResampler = new MediaFoundationResampler(micBuffered, targetWaveFormat);
+    using var speakerResampler = new MediaFoundationResampler(speakerBuffered, targetWaveFormat);
     micResampler.ResamplerQuality = 60;
     speakerResampler.ResamplerQuality = 60;
 
-    long micSequence = 0;
-    long speakerSequence = 0;
-    var writeLock = new object();
+    AzureSpeechService? azure = null;
+    if (azureEnabled)
+    {
+        var azureConfig = new AzureSpeechConfig(
+            Endpoint: speechEndpoint!,
+            Region: speechRegion!,
+            SpeechKey: speechKey!,
+            InterimResults: true,
+            Proxy: null);
+        var userSettings = new UserSettings(language, new DeviceIds(micId, speakerId));
+        azure = new AzureSpeechService(azureConfig, userSettings);
+        await azure.InitAsync();
+        await azure.StartAsync(new AzureAudioFormat(sampleRate, 16, 1));
+    }
+
+    long micSeq = 0;
+    long speakerSeq = 0;
+    var azurePushLock = new object();
 
     micCapture.DataAvailable += (_, e) =>
     {
         try
         {
-            micBufferedProvider.AddSamples(e.Buffer, 0, e.BytesRecorded);
-            var pcm16 = DrainResampledPcm(micResampler);
-            if (pcm16.Length == 0) return;
-
-            lock (writeLock)
+            micBuffered.AddSamples(e.Buffer, 0, e.BytesRecorded);
+            var pcm = DrainResampled(micResampler);
+            if (pcm.Length == 0) return;
+            lock (azurePushLock)
             {
-                WriteFrame(pipe, source: 1, sampleRate, channels: 1, bitsPerSample: 16, sequence: ++micSequence, payload: pcm16);
+                azure?.PushFrame(new AudioFrame(
+                    AzureSpeechService.SourceMic,
+                    sampleRate, 16, 1,
+                    pcm));
             }
+            _ = micSeq;
         }
         catch (Exception ex)
         {
-            LogError("SIDECAR_UNAVAILABLE", $"Mic-Frame Fehler: {ex.Message}");
+            Logger.Error("SIDECAR_UNAVAILABLE", $"Mic-Frame Fehler: {ex.Message}");
         }
     };
 
@@ -132,161 +155,73 @@ try
     {
         try
         {
-            speakerBufferedProvider.AddSamples(e.Buffer, 0, e.BytesRecorded);
-            var pcm16 = DrainResampledPcm(speakerResampler);
-            if (pcm16.Length == 0) return;
-
-            lock (writeLock)
+            speakerBuffered.AddSamples(e.Buffer, 0, e.BytesRecorded);
+            var pcm = DrainResampled(speakerResampler);
+            if (pcm.Length == 0) return;
+            lock (azurePushLock)
             {
-                WriteFrame(pipe, source: 2, sampleRate, channels: 1, bitsPerSample: 16, sequence: ++speakerSequence, payload: pcm16);
+                azure?.PushFrame(new AudioFrame(
+                    AzureSpeechService.SourceSpeaker,
+                    sampleRate, 16, 1,
+                    pcm));
             }
+            _ = speakerSeq;
         }
         catch (Exception ex)
         {
-            LogError("LOOPBACK_INIT_FAILED", $"Loopback-Frame Fehler: {ex.Message}");
+            Logger.Error("LOOPBACK_INIT_FAILED", $"Loopback-Frame Fehler: {ex.Message}");
         }
     };
 
     micCapture.StartRecording();
     speakerCapture.StartRecording();
 
-    LogInfo("format", "mic_capture_format", $"Mic Capture Format: {micCapture.WaveFormat}");
-    LogInfo("format", "speaker_capture_format", $"Speaker Capture Format: {speakerCapture.WaveFormat}");
-    LogInfo("format", "azure_target_format", $"Azure Target Format: {targetWaveFormat}");
-    LogInfo("status", "capturing", "Mic + Speaker Loopback aktiv.");
+    Logger.Info("format", "mic_format", $"Mic Capture Format: {micCapture.WaveFormat}");
+    Logger.Info("format", "speaker_format", $"Speaker Capture Format: {speakerCapture.WaveFormat}");
+    Logger.Info("format", "azure_target", $"Azure Target Format: {targetWaveFormat}");
+    Logger.Info("status", "capturing", "Mic + Speaker Loopback aktiv.");
+    Logger.Event("status", new { phase = "started", running = true });
 
     var healthInterval = TimeSpan.FromSeconds(30);
     var nextHealthLog = DateTime.UtcNow.Add(healthInterval);
-
     while (!cts.Token.IsCancellationRequested)
     {
-        try
-        {
-            await Task.Delay(TimeSpan.FromSeconds(1), cts.Token);
-        }
+        try { await Task.Delay(TimeSpan.FromSeconds(1), cts.Token); }
         catch (OperationCanceledException) { break; }
 
         if (DateTime.UtcNow >= nextHealthLog)
         {
-            LogInfo("health", "alive", "ok");
+            Logger.Info("health", "alive", "ok");
             nextHealthLog = DateTime.UtcNow.Add(healthInterval);
         }
     }
 
     micCapture.StopRecording();
     speakerCapture.StopRecording();
-    LogInfo("status", "stopped", "Graceful shutdown abgeschlossen.");
+    if (azure is not null) await azure.StopAsync();
+    Logger.Info("status", "stopped", "Graceful shutdown abgeschlossen.");
+    Logger.Event("status", new { phase = "stopped", running = false });
     return 0;
 }
 catch (OperationCanceledException)
 {
-    LogInfo("status", "cancelled", "Beendet durch Cancellation.");
+    Logger.Info("status", "cancelled", "Beendet durch Cancellation.");
     return 0;
 }
 catch (Exception ex)
 {
-    LogError("SIDECAR_UNAVAILABLE", ex.Message);
+    Logger.Error("SIDECAR_UNAVAILABLE", ex.Message);
     return 50;
 }
-
-static Dictionary<string, string?> ParseArgs(string[] args)
+finally
 {
-    var result = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-
-    for (var i = 0; i < args.Length; i++)
-    {
-        var key = args[i];
-        if (!key.StartsWith("--", StringComparison.Ordinal)) continue;
-
-        var hasValue = i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal);
-        result[key] = hasValue ? args[++i] : "true";
-    }
-
-    return result;
+    cts.Dispose();
 }
 
-static object ListDevices()
-{
-    using var mm = new MMDeviceEnumerator();
-
-    string? defaultIn = null;
-    string? defaultOut = null;
-
-    try { defaultIn = mm.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia).ID; } catch { }
-    try { defaultOut = mm.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia).ID; } catch { }
-
-    var inputs = mm.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
-        .Select(d => new { id = d.ID, name = d.FriendlyName, flow = "input", isDefault = d.ID == defaultIn })
-        .ToArray();
-
-    var outputs = mm.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
-        .Select(d => new { id = d.ID, name = d.FriendlyName, flow = "output", isDefault = d.ID == defaultOut })
-        .ToArray();
-
-    return new
-    {
-        inputs,
-        outputs,
-        fetchedAtIso = DateTimeOffset.UtcNow.ToString("O")
-    };
-}
-
-static MMDevice? ResolveInputDevice(MMDeviceEnumerator mm, string? explicitId)
-{
-    if (!string.IsNullOrWhiteSpace(explicitId))
-    {
-        return mm.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active)
-            .FirstOrDefault(d => string.Equals(d.ID, explicitId, StringComparison.OrdinalIgnoreCase));
-    }
-
-    try { return mm.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia); } catch { return null; }
-}
-
-static MMDevice? ResolveOutputDevice(MMDeviceEnumerator mm, string? explicitId)
-{
-    if (!string.IsNullOrWhiteSpace(explicitId))
-    {
-        return mm.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
-            .FirstOrDefault(d => string.Equals(d.ID, explicitId, StringComparison.OrdinalIgnoreCase));
-    }
-
-    try { return mm.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia); } catch { return null; }
-}
-
-static void WriteFrame(Stream stream, byte source, int sampleRate, byte channels, byte bitsPerSample, long sequence, ReadOnlySpan<byte> payload)
-{
-    var header = new byte[HeaderSize];
-
-    BitConverter.GetBytes(Magic).CopyTo(header, 0);
-    header[4] = 1; // protocol version
-    header[5] = source;
-    header[6] = channels;
-    header[7] = bitsPerSample;
-    BitConverter.GetBytes(sampleRate).CopyTo(header, 8);
-    BitConverter.GetBytes(payload.Length).CopyTo(header, 12);
-    BitConverter.GetBytes(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()).CopyTo(header, 16);
-    BitConverter.GetBytes(sequence).CopyTo(header, 24);
-
-    var crc = ComputeCrc32(payload);
-    BitConverter.GetBytes(crc).CopyTo(header, 32);
-
-    // Header und Payload in einem einzigen Write-Call absetzen, damit auf der
-    // Named Pipe (PipeTransmissionMode.Byte) kein DataAvailable-Event zwischen
-    // Header und Payload feuern kann. Sonst sieht der Reader einen Header-only
-    // Chunk, kann den Frame nicht zuordnen und verwirft ihn.
-    var combined = new byte[header.Length + payload.Length];
-    Buffer.BlockCopy(header, 0, combined, 0, header.Length);
-    payload.CopyTo(combined.AsSpan(header.Length));
-
-    stream.Write(combined, 0, combined.Length);
-    stream.Flush();
-}
-
-static byte[] DrainResampledPcm(IWaveProvider provider)
+static byte[] DrainResampled(IWaveProvider provider)
 {
     var buffer = new byte[8192];
     using var output = new MemoryStream();
-
     while (true)
     {
         var read = provider.Read(buffer, 0, buffer.Length);
@@ -294,33 +229,5 @@ static byte[] DrainResampledPcm(IWaveProvider provider)
         output.Write(buffer, 0, read);
         if (read < buffer.Length) break;
     }
-
     return output.ToArray();
-}
-
-static uint ComputeCrc32(ReadOnlySpan<byte> buffer)
-{
-    uint crc = 0xffffffff;
-
-    foreach (var b in buffer)
-    {
-        crc ^= b;
-        for (var i = 0; i < 8; i++)
-        {
-            var mask = (uint)-(int)(crc & 1);
-            crc = (crc >> 1) ^ (0xedb88320 & mask);
-        }
-    }
-
-    return crc ^ 0xffffffff;
-}
-
-static void LogInfo(string type, string code, string message)
-{
-    Console.WriteLine(JsonSerializer.Serialize(new { type, level = "info", code, message }));
-}
-
-static void LogError(string code, string message)
-{
-    Console.WriteLine(JsonSerializer.Serialize(new { type = "error", level = "error", code, message }));
 }
