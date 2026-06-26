@@ -1,0 +1,9 @@
+{
+  "_comment": "Benutzereinstellungen. Diese Datei nach 'user-settings.json' kopieren und bei Bedarf anpassen. 'user-settings.json' ist in .gitignore und wird nicht ins Repo committed. Quelle: src/shared/config-contract.ts → UserSettings. Hinweis: device-IDs werden in der Praxis zur Laufzeit über die Settings-UI gewählt; in dieser Datei sind sie nur Defaults.",
+
+  "language": "de-DE",
+  "devices": {
+    "micId": null,
+    "speakerLoopbackId": null
+  }
+}

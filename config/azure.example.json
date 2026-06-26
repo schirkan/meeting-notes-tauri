@@ -1,0 +1,14 @@
+{
+  "_comment": "Azure Speech Service Konfiguration. Diese Datei nach 'azure.json' kopieren und 'speechKey' eintragen. 'azure.json' ist in .gitignore und wird nicht ins Repo committed. Quelle: src/shared/config-contract.ts → AzureConfig",
+
+  "endpoint": "wss://westeurope.stt.speech.microsoft.com/speech/universal/v2",
+  "region": "westeurope",
+  "speechKey": "<HIER-DEINEN-AZURE-SPEECH-KEY-EINTRAGEN>",
+  "interimResults": true,
+  "proxy": {
+    "host": "",
+    "port": 0,
+    "username": "",
+    "password": ""
+  }
+}

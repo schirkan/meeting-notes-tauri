@@ -39,6 +39,11 @@ npm install
 2. Speech-Key direkt im Feld `speechKey` eintragen
 3. Optional: Proxy unter `proxy.host`/`proxy.port` (+ optional `username`/`password`)
 
+### Benutzereinstellungen (optional)
+1. `config/user-settings.example.json` → `config/user-settings.json` kopieren
+2. Bei Bedarf `language` (BCP-47, z. B. `de-DE`, `en-US`) und `devices` anpassen
+3. Hinweis: Die echten Konfigurationsdateien (`config/azure.json`, `config/user-settings.json`) werden zur Laufzeit in das App-Config-Verzeichnis kopiert (`app_config_dir()`), siehe `src-tauri/src/settings.rs`. Die Repo-Dateien dienen nur als Initial-Templates.
+
 ## Entwicklung (Soll)
 ```bash
 npm run dev          # Tauri-Dev (Sidecar wird automatisch via src-tauri/build.rs gebaut)
