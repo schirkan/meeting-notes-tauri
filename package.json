@@ -12,7 +12,8 @@
     "tauri": "tauri",
     "build:sidecar": "dotnet build sidecar/MeetingNotes.Sidecar.csproj -c Release",
     "clean:sidecar": "node scripts/clean-sidecar.mjs",
-    "publish:sidecar": "npm run clean:sidecar && dotnet publish sidecar/MeetingNotes.Sidecar.csproj -c Release -r win-x64 --self-contained false -o sidecar/publish/sidecar"
+    "publish:sidecar": "npm run clean:sidecar && dotnet publish sidecar/MeetingNotes.Sidecar.csproj -c Release -r win-x64 --self-contained false -o sidecar/publish/sidecar",
+    "dist:portable": "node scripts/dist-portable.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
