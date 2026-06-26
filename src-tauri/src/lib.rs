@@ -24,7 +24,6 @@ use state::AppState;
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
-    .plugin(tauri_plugin_clipboard_manager::init())
     .manage(AppState::default())
     .manage(Arc::new(Mutex::new(None::<SidecarHandle>)) as SidecarCache)
     .setup(|app| {
@@ -51,7 +50,6 @@ pub fn run() {
       commands::get_fixed_config,
       commands::save_fixed_config,
       commands::test_azure_connectivity,
-      commands::copy_transcript,
     ])
     .build(tauri::generate_context!())
     .expect("error while running tauri application")

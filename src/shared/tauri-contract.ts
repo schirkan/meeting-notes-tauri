@@ -16,8 +16,7 @@ export const TAURI_COMMANDS = {
   saveUserSettings: 'save_user_settings',
   getFixedConfig: 'get_fixed_config',
   saveFixedConfig: 'save_fixed_config',
-  testAzureConnectivity: 'test_azure_connectivity',
-  copyTranscript: 'copy_transcript'
+  testAzureConnectivity: 'test_azure_connectivity'
 } as const
 
 export type TauriCommand = (typeof TAURI_COMMANDS)[keyof typeof TAURI_COMMANDS]

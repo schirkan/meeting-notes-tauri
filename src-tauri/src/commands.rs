@@ -6,8 +6,7 @@
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State};
-use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
 
 use crate::connectivity;
@@ -20,6 +19,7 @@ use crate::state::{
     AppState, DebugLogEntry, DebugLogEntryLevel, DebugLogEntrySource,
 };
 
+#[allow(unused_imports)]
 pub use crate::state::{DebugLogEntryLevel as Level, DebugLogEntrySource as Source};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -93,8 +93,11 @@ pub async fn start_recording(
     {
         let mut guard = cache.lock().await;
         // Replace any stale handle (e.g. after a previous crash).
+        // The CommandChild is wrapped in Arc<Mutex<Option<...>>> so the
+        // orchestrator can keep writing via the original handle while
+        // the cache owns another reference for stop_recording().
         *guard = Some(SidecarHandle {
-            child: handle.child.clone(),
+            child: Arc::clone(&handle.child),
             events_rx: tokio::sync::mpsc::channel(1).1,
         });
     }
@@ -238,97 +241,10 @@ pub async fn test_azure_connectivity(
 }
 
 // ---------- clipboard ----------
-
-#[tauri::command]
-pub async fn copy_transcript(
-    app: AppHandle,
-    segments: Vec<serde_json::Value>,
-) -> Result<(), String> {
-    let final_segments: Vec<&serde_json::Value> = segments
-        .iter()
-        .filter(|s| s.get("state").and_then(|v| v.as_str()) == Some("final"))
-        .collect();
-
-    let export_ended = final_segments
-        .last()
-        .and_then(|s| s.get("timestampIso").and_then(|v| v.as_str()))
-        .map(String::from)
-        .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
-
-    let export_started = final_segments
-        .first()
-        .and_then(|s| s.get("timestampIso").and_then(|v| v.as_str()))
-        .map(String::from)
-        .unwrap_or_else(|| export_ended.clone());
-
-    let metadata = format!(
-        "---\ndatum: {}\nstartzeit: {}\ndauer: {}\n---",
-        as_german_date(&export_started),
-        as_german_time(&export_started),
-        format_duration(&export_started, &export_ended),
-    );
-
-    let body: Vec<String> = final_segments
-        .iter()
-        .filter_map(|s| {
-            let speaker = s.get("speaker").and_then(|v| v.as_str()).unwrap_or("unknown");
-            let text = s.get("text").and_then(|v| v.as_str()).unwrap_or("");
-            let timestamp = s.get("timestampIso").and_then(|v| v.as_str())?;
-            let language = s.get("language").and_then(|v| v.as_str());
-            let lang_suffix = language.map(|l| format!(" ({l})")).unwrap_or_default();
-            Some(format!("- [{}] {}{}: {}", as_german_clock(timestamp), speaker, lang_suffix, text))
-        })
-        .collect();
-
-    let content = if body.is_empty() {
-        metadata
-    } else {
-        format!("{}\n\n{}", metadata, body.join("\n"))
-    };
-
-    app.clipboard()
-        .write_text(content)
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-// ---------- helpers ----------
-
-fn as_german_clock(iso: &str) -> String {
-    chrono::DateTime::parse_from_rfc3339(iso)
-        .map(|dt| dt.format("%d.%m.%Y %H:%M:%S").to_string())
-        .unwrap_or_else(|_| iso.to_string())
-}
-
-fn as_german_date(iso: &str) -> String {
-    chrono::DateTime::parse_from_rfc3339(iso)
-        .map(|dt| dt.format("%d.%m.%Y").to_string())
-        .unwrap_or_else(|_| iso.to_string())
-}
-
-fn as_german_time(iso: &str) -> String {
-    chrono::DateTime::parse_from_rfc3339(iso)
-        .map(|dt| dt.format("%H:%M:%S").to_string())
-        .unwrap_or_else(|_| iso.to_string())
-}
-
-fn format_duration(start: &str, end: &str) -> String {
-    let Ok(start_dt) = chrono::DateTime::parse_from_rfc3339(start) else {
-        return "00:00".into();
-    };
-    let Ok(end_dt) = chrono::DateTime::parse_from_rfc3339(end) else {
-        return "00:00".into();
-    };
-    let secs = (end_dt - start_dt).num_seconds().max(0);
-    let h = secs / 3600;
-    let m = (secs % 3600) / 60;
-    let s = secs % 60;
-    if h > 0 {
-        format!("{h:02}:{m:02}:{s:02}")
-    } else {
-        format!("{m:02}:{s:02}")
-    }
-}
+//
+// Clipboard copy is done in the renderer via `navigator.clipboard`
+// (WebView2 supports it natively) — the Rust side has no clipboard
+// command any more. See `src/preload/index.ts` for the implementation.
 
 // ---------- event forwarder (replacement for lib.rs::ensure_sidecar) ----------
 
@@ -378,6 +294,10 @@ fn spawn_event_forwarder(
                     );
                     let status = app_handle.state::<AppState>().mark_stopped();
                     events::emit_status(&app_handle, &status);
+                }
+                _ => {
+                    // CommandEvent is #[non_exhaustive]; new variants land
+                    // here until we add a dedicated arm.
                 }
             }
         }

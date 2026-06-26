@@ -12,10 +12,9 @@
 
 use std::time::{Duration, Instant};
 
-use hickory_resolver::TokioResolver;
+use hickory_resolver::TokioAsyncResolver;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use serde::Serialize;
-use url::Url;
 
 const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -63,21 +62,21 @@ fn host_from_endpoint(endpoint: &str) -> String {
 }
 
 fn probe_url_from_endpoint(endpoint: &str, language: &str) -> String {
-    let base = endpoint
+    let stripped = endpoint
         .replace("wss://", "https://")
-        .replace("https://", "")
-        .trim_end_matches('/');
+        .replace("https://", "");
+    let base = stripped.trim_end_matches('/');
     format!("https://{base}/speech/recognition/interactive/cognitiveservices/v1?language={language}")
 }
 
 async fn dns_lookup_system(host: &str) -> Option<std::net::IpAddr> {
-    let resolver = TokioResolver::build(ResolverConfig::default(), ResolverOpts::default()).ok()?;
+    let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
     let response = resolver.lookup_ip(host).await.ok()?;
     response.iter().next()
 }
 
 async fn dns_lookup_fallback(host: &str) -> Option<std::net::IpAddr> {
-    let resolver = TokioResolver::build(ResolverConfig::default(), ResolverOpts::default()).ok()?;
+    let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
     let response = resolver.lookup_ip(host).await.ok()?;
     response.iter().next()
 }

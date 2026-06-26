@@ -9,13 +9,14 @@
 //! (AD-008): JSON-Lines goes over stdin/stdout, no Named Pipe needed.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
-use tauri_plugin_shell::shell::CommandExt;
-use tokio::sync::mpsc;
+use tauri_plugin_shell::ShellExt;
+use tokio::sync::{mpsc, Mutex};
 
 pub const SIDECAR_BIN: &str = "MeetingNotes.Sidecar";
 
@@ -56,8 +57,13 @@ pub struct SidecarOptions {
 /// Handle returned by `start` — exposes the underlying `CommandChild`
 /// for stdin writes plus a Tokio mpsc channel for the orchestrator to
 /// receive CommandEvents (stdout chunks, stderr, termination) from.
+///
+/// `CommandChild` is not `Clone` in tauri-plugin-shell 2.x, so we wrap
+/// it in `Arc<Mutex<Option<...>>>`: the `Arc` lets the orchestrator and
+/// the cache share ownership, the `Option` lets `stop()` consume the
+/// child for `kill(self)`.
 pub struct SidecarHandle {
-    pub child: CommandChild,
+    pub child: Arc<Mutex<Option<CommandChild>>>,
     pub events_rx: mpsc::Receiver<CommandEvent>,
 }
 
@@ -104,7 +110,10 @@ pub async fn start<R: Runtime>(
         }
     });
 
-    Ok(SidecarHandle { child, events_rx })
+    Ok(SidecarHandle {
+        child: Arc::new(Mutex::new(Some(child))),
+        events_rx,
+    })
 }
 
 /// Write a JSON-Lines command to the sidecar's stdin (one line, no
@@ -112,18 +121,24 @@ pub async fn start<R: Runtime>(
 pub async fn send_command(handle: &SidecarHandle, command: &str) -> Result<(), SidecarError> {
     let mut line = command.as_bytes().to_vec();
     line.push(b'\n');
-    handle
-        .child
-        .write(line)
+    let mut guard = handle.child.lock().await;
+    let child = guard.as_mut().ok_or_else(|| {
+        SidecarError::Spawn("Sidecar bereits beendet — Schreiben nicht möglich.".into())
+    })?;
+    child
+        .write(&line)
         .map_err(|e| SidecarError::Spawn(e.to_string()))?;
     Ok(())
 }
 
-pub async fn stop(mut handle: SidecarHandle) -> Result<(), SidecarError> {
+pub async fn stop(handle: SidecarHandle) -> Result<(), SidecarError> {
     // Politely ask the sidecar to shut down before killing.
     let _ = send_command(&handle, r#"{"type":"shutdown"}"#).await;
     tokio::time::sleep(Duration::from_millis(250)).await;
-    handle.child.kill().map_err(|e| SidecarError::Spawn(e.to_string()))?;
+    let mut guard = handle.child.lock().await;
+    if let Some(child) = guard.take() {
+        child.kill().map_err(|e| SidecarError::Spawn(e.to_string()))?;
+    }
     Ok(())
 }
 
