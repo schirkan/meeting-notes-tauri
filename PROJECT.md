@@ -92,7 +92,9 @@ Eine detaillierte Begründung der Entscheidungen siehe `DECISIONS.md`; eine aktu
 | Audio-Library | NAudio 2.2.x (WASAPI Mic + Loopback) |
 | Speech-SDK | `Microsoft.CognitiveServices.Speech` 1.44.x NuGet |
 | IPC Sidecar ↔ App | `stdin/stdout` über `tauri-plugin-shell`, JSON-Lines (Status, Events, Commands, Settings) — siehe `DECISIONS.md → AD-008` |
-| Build-Pipeline | `tauri build` (NSIS/MSI-Installer) + `dotnet publish` für Sidecar |
+| Build-Pipeline | `tauri build` (NSIS/MSI-Installer) + `dotnet publish` für Sidecar, automatisiert via `src-tauri/build.rs` (siehe `DECISIONS.md → AD-009`) |
+| Sidecar-Lifecycle | `Arc<Mutex<Option<CommandChild>>>` aus `tauri-plugin-shell` 2.x (`CommandChild` ist nicht mehr Clone, Wrapper teilt Schreibzugriff zwischen Cache und Orchestrator) |
+| Clipboard | `navigator.clipboard.writeText` direkt im Preload (siehe `DECISIONS.md → AD-010`) |
 
 ## Offene Probleme / Erkenntnisse
 

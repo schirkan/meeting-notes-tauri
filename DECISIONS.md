@@ -151,6 +151,64 @@ Architekturentscheidungen für die Tauri-Migration. Wird fortlaufend ergänzt, w
 
 ---
 
+## AD-009 · Sidecar-Publish via `src-tauri/build.rs` (statt manuelles npm-Skript) (2026-06-26)
+
+**Kontext:** Vor diesem AD musste vor jedem `tauri build` / `tauri dev` manuell `npm run publish:sidecar` aufgerufen werden, sonst traf die Tauri-Bundler-Stage auf ein leeres `sidecar/publish/sidecar/` und der Bundle-Resources-Glob `../sidecar/publish/sidecar/*` resolved zu nichts. Das war ein klassischer Stolperdraht für Erstkontakt mit dem Projekt und für CI.
+
+**Entscheidung:** Das Sidecar-Publish wird in `src-tauri/build.rs` verlagert und damit zur Pflichtstufe des Cargo-Builds.
+- Cargo ruft `build.rs` **vor** jeder Rust-Kompilation auf.
+- `build.rs` mappt `CARGO_CFG_TARGET_OS` / `CARGO_CFG_TARGET_ARCH` auf den passenden .NET-RID (win-x64/win-arm64, osx-x64/osx-arm64, linux-x64/linux-arm64 vorbereitet) und `PROFILE` auf `Debug`/`Release`.
+- `dotnet publish sidecar/MeetingNotes.Sidecar.csproj -c {config} -r {rid} --self-contained false -o ../sidecar/publish/sidecar` läuft dort synchron.
+- `cargo:rerun-if-changed=../sidecar` sorgt dafür, dass nur bei Sidecar-Quelländerungen neu publisht wird.
+- `tauri_build::build()` wird am Ende aufgerufen, sodass Capabilities-Check und Schema-Generation weiterhin stattfinden.
+- Das `npm run publish:sidecar`-Skript bleibt als Opt-in für Ad-hoc-Rebuilds ohne Tauri-Build erhalten.
+
+**Begründung:**
+- **Ein-Befehl-Workflow:** `tauri build` reicht jetzt für Sidecar + Renderer + Tauri + Bundle. Erstkontakt und CI werden trivial.
+- **Cargo-eigene Inkrementalität:** `cargo:rerun-if-changed` ist äquivalent zu `npm`-Watch-Skripten, nur näher an der Cargo-Toolchain und ohne zusätzliches Glied.
+- **Klare Fehlerlokalisierung:** Fehlende `dotnet`-Toolchain oder nicht gemappte Zielplattform schlagen **vor** der Cargo-Resolve-Phase mit klaren Meldungen fehl (kein „warum sehe ich hier nichts?“-Debugging mehr).
+- **Pattern etabliert:** Build-Skript-Konvention ist im Rust-Ökosystem Standard (siehe `exphert/TauriCS`-Template, `tonari/tlslite-ng`, …) und damit wiedererkennbar für neue Entwickler:innen.
+
+**Alternativen, die verworfen wurden:**
+- **`beforeBuildCommand` in `tauri.conf.json`:** Läuft vor `vite build`, aber vor `cargo build` läuft nur `build.rs` — wir hätten weiterhin zwei Stellen pflegen müssen.
+- **Eigenes `cargo make`/`cargo xtask`-Taskfile:** Mehr Setup, weniger idiomatisch für ein einzelnes Sidecar.
+- **Pre-Commit-Hook oder CI-Skript:** Hilft CI, aber nicht der lokalen Entwicklung.
+
+**Konsequenzen für bestehende ADs und Specs:**
+- **AD-006** (framework-dependent) bleibt unverändert — wir bauen weiterhin framework-dependent, nur **wer** es tut, ändert sich.
+- **`specs/T-503`**, **`specs/T-207`** und **`README.md`** werden angepasst, sodass `publish:sidecar` nicht mehr als Voraussetzung erscheint.
+
+**Validierung (Stand 2026-06-26):**
+- `rm -rf sidecar/publish && npx tauri build --no-bundle` → grün, `build.rs` erzeugt Sidecar automatisch.
+- Zweiter Build ohne Sidecar-Änderung → Sidecar-mtime unverändert, `build.rs` korrekt gecached.
+
+---
+
+## AD-010 · Clipboard-Copy im Renderer via `navigator.clipboard` (statt Tauri-Clipboard-Plugin) (2026-06-26)
+
+**Kontext:** Das ursprüngliche Backend-Design (`specs/T-302`) sah einen Rust-Command `copy_transcript(segments: Vec<…>) -> Result<(), String>` vor, der mit `tauri-plugin-clipboard-manager::ClipboardExt::write_text` in die Zwischenablage schreibt. Im Zuge der ersten Build-Fixes hat sich herausgestellt, dass WebView2 (Chromium-Engine) `navigator.clipboard.writeText` nativ und ohne zusätzliches Plugin unterstützt — der Tauri-Umweg über das IPC-Backend ist redundant.
+
+**Entscheidung:** Das Transkript-Clipboard-Format (`- [HH:MM:SS] speaker (lang): text` mit deutschem Metadaten-Header) wird direkt im Preload (`src/preload/index.ts`) gebaut und via `navigator.clipboard.writeText` geschrieben. Der Rust-Command `copy_transcript` entfällt komplett.
+- `tauri-plugin-clipboard-manager` ist aus `Cargo.toml`, `lib.rs` und `capabilities/default.json` entfernt.
+- `TAURI_COMMANDS.copyTranscript` ist aus `src/shared/tauri-contract.ts` entfernt.
+- Die `TranscriptApi.copyTranscript(segments): Promise<void>`-Signatur bleibt unverändert, damit der Renderer-Code (`use-app-state.ts → onCopyTranscript`) ohne Anpassung weiterarbeitet.
+- Hilfsfunktionen (`formatGermanClock`, `formatGermanDate`, `formatGermanTime`, `formatDuration`, `buildTranscriptText`) liegen jetzt im Preload-Modul.
+
+**Begründung:**
+- **Eine Schicht weniger:** Kein Rust-Roundtrip, kein Permission-Eintrag (`clipboard-manager:allow-write-text`), keine zusätzliche Cargo-Dependency.
+- **Verhalten 1:1 identisch:** WebView2 implementiert `navigator.clipboard` exakt so wie der Browser; das Format-Byte-für-Byte-Mapping bleibt erhalten.
+- **Weniger Surface:** Wenn jemand den Sidecar-Vertrag erweitert, muss er nicht gleichzeitig an eine Clipboard-Schnittstelle denken.
+
+**Alternativen, die verworfen wurden:**
+- **Tauri-Clipboard-Plugin beibehalten:** Kostet eine Dependency, einen Capability-Eintrag und einen Roundtrip pro Klick — kein Mehrwert in einer WebView2-App.
+- **Browser-Fallback über `document.execCommand('copy')`:** Deprecated, würde aber ohnehin nur in HTTP-Kontext relevant — Tauri-Webview liefert eine HTTPS-äquivalente Origin.
+
+**Konsequenzen für bestehende ADs und Specs:**
+- **`specs/T-302`** verliert `copy_transcript` aus der Command-Liste (war ohnehin nur informell dort).
+- **`PROJECT.md` Tech-Stack** verliert `tauri-plugin-clipboard-manager` (war nicht explizit aufgeführt, wird aber via Bereinigung deutlicher).
+
+---
+
 ## Offene Fragen
 
 | # | Frage | Status |

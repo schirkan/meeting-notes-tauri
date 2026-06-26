@@ -9,11 +9,12 @@ Abhängigkeiten: T-300
 C#-Sidecar via offizielles Tauri-Shell-Plugin starten, stoppen und überwachen. IPC läuft über `stdin/stdout` (siehe `AD-008`, `T-201`) — Named Pipe entfällt.
 
 ## Done When
-- [ ] `tauri-plugin-shell` ist in `Cargo.toml` und `tauri.conf.json` konfiguriert.
-- [ ] Sidecar-Pfad wird je nach Build-Variante korrekt aufgelöst (Dev: `sidecar/publish/sidecar/MeetingNotes.Sidecar.exe`, Prod: Resource-Pfad via `tauri::api::path::resource_dir()`).
-- [ ] `tauri::command async fn start_sidecar(app: AppHandle) -> Result<(), String>` startet den Sidecar und übergibt CLI-Args (`--sample-rate`, `--log-level`). **Kein `--pipe-name`-Arg mehr** — Named Pipe entfällt (siehe `AD-008`, `T-201`).
-- [ ] `tauri::command async fn stop_sidecar() -> Result<(), String>` beendet den Sidecar sauber (SIGTERM → 5 s Timeout → SIGKILL).
-- [ ] Sidecar-Crashes (Exit-Code ≠ 0) werden via Tauri-Event `sidecar:crashed` an den Renderer gemeldet.
+- [x] `tauri-plugin-shell` ist in `Cargo.toml` und `tauri.conf.json` konfiguriert.
+- [x] Sidecar-Pfad wird je nach Build-Variante korrekt aufgelöst (Dev: `sidecar/publish/sidecar/MeetingNotes.Sidecar.exe`, Prod: Resource-Pfad via `tauri::api::path::resource_dir()`). `resolve_sidecar_path` durchsucht CWD-relativ, Resource-Dir und EXE-Verzeichnis in dieser Reihenfolge.
+- [x] `tauri::command async fn start_recording(app: AppHandle) -> Result<TranscriptStatus, String>` startet den Sidecar und übergibt CLI-Args (`--sample-rate`, `--language`, `--speech-key`, `--speech-region`, `--speech-endpoint`, `--mic-device-id`, `--speaker-device-id`). **Kein `--pipe-name`-Arg mehr** — Named Pipe entfällt (siehe `AD-008`, `T-201`).
+- [x] `tauri::command async fn stop_recording(app: AppHandle) -> Result<TranscriptStatus, String>` beendet den Sidecar sauber (`{"type":"shutdown"}`-JSON-Lines → 250 ms Timeout → `CommandChild::kill`).
+- [x] Sidecar-Crashes (Exit-Code ≠ 0) werden via Tauri-Event `sidecar:crashed` (`SidecarCrashedPayload { exitCode, lastError? }`) an den Renderer gemeldet.
+- [x] Der Sidecar-Handle ist als `Arc<Mutex<Option<CommandChild>>>` getypt — `CommandChild` ist in `tauri-plugin-shell` 2.x **nicht Clone**. Der `Arc` erlaubt Orchestrator + Cache geteilten Besitz, das `Option` lässt `CommandChild::kill(self)` weiter konsumieren (via `Option::take()` im `stop`-Pfad).
 
 ## Approach
 - Tauri-Shell-Plugin-Befehl `Command::new_sidecar("MeetingNotes.Sidecar")`.

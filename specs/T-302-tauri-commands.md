@@ -9,19 +9,22 @@ Abhängigkeiten: T-102, T-301
 Vollständige Tauri-Command-API definieren, die der React-Renderer aufrufen kann.
 
 ## Done When
-- [ ] Commands sind in Rust mit `#[tauri::command]` deklariert:
-  - `start_recording() -> Result<(), String>`
-  - `stop_recording() -> Result<(), String>`
+- [x] Commands sind in Rust mit `#[tauri::command]` deklariert:
+  - `start_recording() -> Result<TranscriptStatus, String>`
+  - `stop_recording() -> Result<TranscriptStatus, String>`
   - `reset_transcript() -> Result<(), String>`
-  - `get_status() -> Result<AppStatus, String>`
-  - `get_settings() -> Result<UserSettings, String>`
-  - `save_settings(settings: UserSettings) -> Result<(), String>`
-  - `get_fixed_config() -> Result<AzureConfig, String>`
-  - `save_fixed_config(config: AzureConfig) -> Result<(), String>`
-  - `test_azure_connectivity() -> Result<ConnectivityResult, String>` (siehe T-304)
-  - `clear_debug_log() -> Result<(), String>`
-- [ ] Alle Commands sind in einer zentralen `commands.rs` registriert.
-- [ ] Preload-Bridge im Renderer hat typisierte Wrapper-Funktionen für jeden Command.
+  - `get_status() -> Result<TranscriptStatus, String>`
+  - `get_debug_log() -> Result<Vec<DebugLogEntry>, String>`
+  - `clear_debug_log() -> Result<{ cleared: number }, String>`
+  - `get_devices() -> Result<DeviceSnapshot, String>`
+  - `get_user_settings() -> Result<UserSettings, String>`
+  - `save_user_settings(settings: UserSettings) -> Result<UserSettings, String>`
+  - `get_fixed_config() -> Result<AzureConfigState, String>`
+  - `save_fixed_config(config: AzureConfig) -> Result<AzureConfigState, String>`
+  - `test_azure_connectivity(payload: Option<Value>) -> Result<ConnectivityResult, String>` (siehe T-304)
+- [x] **Kein** `copy_transcript`-Command mehr — Clipboard-Copy lebt im Preload via `navigator.clipboard.writeText` (siehe `DECISIONS.md → AD-010`).
+- [x] Alle Commands sind in einer zentralen `commands.rs` registriert.
+- [x] Preload-Bridge im Renderer hat typisierte Wrapper-Funktionen für jeden Command (`src/preload/index.ts`, `TranscriptApi` in `src/shared/transcript-contract.ts`).
 
 ## Approach
 - Granularität: ein Command pro Use-Case (kein „do-everything"-Command).
