@@ -41,12 +41,16 @@ npm install
 
 ## Entwicklung (Soll)
 ```bash
-npm run dev          # Tauri-Dev + Sidecar-Publish
+npm run dev          # Tauri-Dev (Sidecar wird automatisch via src-tauri/build.rs gebaut)
 npm run typecheck    # TS-Lint
 npm run build        # Renderer-Build
-npm run build:sidecar
-npm run tauri build  # MSI/NSIS-Installer
+npm run tauri build  # MSI/NSIS-Installer (Sidecar-Publish läuft in src-tauri/build.rs)
 ```
+
+> Das C#-Sidecar wird seit `src-tauri/build.rs` automatisch per
+> `dotnet publish` erzeugt, bevor Cargo kompiliert. Der frühere
+> manuelle Schritt `npm run publish:sidecar` ist nicht mehr nötig —
+> das Skript existiert weiterhin für Ad-hoc-Rebuilds ohne Tauri-Build.
 
 ## Portable Build (Soll)
 ```bash
