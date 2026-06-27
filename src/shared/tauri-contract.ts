@@ -26,7 +26,9 @@ export const TAURI_EVENTS = {
   status: 'transcript:status',
   error: 'transcript:error',
   debug: 'transcript:debug',
-  sidecarCrashed: 'sidecar:crashed'
+  sidecarCrashed: 'sidecar:crashed',
+  fixedConfigStatus: 'transcript:fixed-config-status',
+  connectivityResult: 'transcript:connectivity-result'
 } as const
 
 export type TauriEventName = (typeof TAURI_EVENTS)[keyof typeof TAURI_EVENTS]
@@ -34,4 +36,21 @@ export type TauriEventName = (typeof TAURI_EVENTS)[keyof typeof TAURI_EVENTS]
 export interface SidecarCrashedPayload {
   exitCode: number | null
   lastError?: string
+}
+
+/** Wird beim App-Start (und nach jedem save_fixed_config) emittiert. */
+export interface FixedConfigStatus {
+  exists: boolean
+  path: string
+}
+
+/** Wird nach test_azure_connectivity als Bridge-Event emittiert. */
+export interface ConnectivityResultEvent {
+  probeUrl: string
+  reachable: boolean
+  httpStatus?: number
+  httpStatusText?: string
+  latencyMs: number
+  error?: string
+  steps: Array<{ step: string; status: 'ok' | 'warn' | 'error'; detail: string }>
 }

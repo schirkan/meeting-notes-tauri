@@ -18,8 +18,6 @@ use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::{mpsc, Mutex};
 
-pub const SIDECAR_BIN: &str = "MeetingNotes.Sidecar";
-
 #[derive(Debug, thiserror::Error)]
 pub enum SidecarError {
     #[error("shell plugin error: {0}")]

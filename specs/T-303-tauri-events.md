@@ -1,7 +1,7 @@
 # T-303: Tauri-Events definieren
 
 ## Kontext
-Status: partial
+Status: implemented
 Priorität: high
 Abhängigkeiten: T-102
 
@@ -17,8 +17,8 @@ Vollständige Tauri-Event-API definieren, mit der der Rust-Main den React-Render
   - `sidecar:crashed` → `{ exitCode, lastError? }` (`events::SidecarCrashedPayload`)
 - [x] Renderer abonniert Events via typisiertem `listen<T>(event, cb)` im Preload (`subscribe<T>`-Helper in `src/preload/index.ts`).
 - [x] Event-Names sind als String-Union typisiert und werden zwischen Rust und TS geteilt (über `src/shared/tauri-contract.ts`).
-- [ ] `transcript:connectivity-result` als separates Event — **offen**: aktuell liefert `test_azure_connectivity` das Result als Return-Wert zurück; Renderer kann es direkt nach `invoke()` anzeigen. Spec lässt beide Wege offen.
-- [ ] `transcript:fixed-config-status` mit `status=missing` beim App-Start — **offen** (siehe T-305): aktuell erkennt der Renderer eine fehlende `azure.json` über `get_fixed_config` (`exists: false`) und blendet den Hinweis im UI ein.
+- [x] `transcript:connectivity-result` als separates Event — nach `test_azure_connectivity` emittiert (`events::emit_connectivity_result`); Renderer kann alternativ zum `invoke`-Return-Wert zuhören.
+- [x] `transcript:fixed-config-status` beim App-Start emittiert (`lib.rs::setup` ruft `settings::get_azure_config_state` und `events::emit_fixed_config_status`); spiegelt `exists` + `path` der `azure.json`.
 
 ## Approach
 - Alle Events tragen eine `timestampMs`-Feld (für Debug-Logging und UI-Sync).

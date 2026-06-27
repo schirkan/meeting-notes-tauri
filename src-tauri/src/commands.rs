@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
 
 use crate::connectivity;
@@ -219,6 +219,8 @@ pub async fn save_fixed_config(
 
 #[tauri::command]
 pub async fn test_azure_connectivity(
+    app: AppHandle,
+    state: State<'_, AppState>,
     payload: Option<serde_json::Value>,
 ) -> Result<connectivity::ConnectivityResult, String> {
     let value = payload.unwrap_or(serde_json::Value::Null);
@@ -237,7 +239,20 @@ pub async fn test_azure_connectivity(
         .and_then(|v| v.as_str())
         .unwrap_or("de-DE")
         .to_string();
-    Ok(connectivity::diagnose(&endpoint, &speech_key, &language).await)
+
+    push_and_emit_debug(
+        &app,
+        &state,
+        DebugLogEntrySource::Ipc,
+        DebugLogEntryLevel::Info,
+        format!("test_azure_connectivity(endpoint={endpoint}) aufgerufen."),
+    );
+
+    let result = connectivity::diagnose(&endpoint, &speech_key, &language).await;
+
+    // Bridge-Event: Renderer kann zuhören statt zu pollen
+    events::emit_connectivity_result(&app, &result);
+    Ok(result)
 }
 
 // ---------- clipboard ----------
@@ -323,7 +338,7 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) {
 
     match ty {
         "transcript" | "transcript:segment" => {
-            let _ = app.emit("transcript:segment", &payload);
+            events::emit_segment(app, &payload);
         }
         "status" | "transcript:status" => {
             let running = payload.get("running").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -333,7 +348,7 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) {
             } else {
                 app.state::<AppState>().mark_stopped()
             };
-            let _ = app.emit("transcript:status", &status);
+            events::emit_status(app, &status);
             let entry = app.state::<AppState>().push_debug(
                 DebugLogEntrySource::Status,
                 DebugLogEntryLevel::Info,
@@ -342,7 +357,7 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) {
             events::emit_debug(app, &entry);
         }
         "error" | "transcript:error" => {
-            let _ = app.emit("transcript:error", &payload);
+            events::emit_error(app, &payload);
         }
         "debug" => {
             let entry = app.state::<AppState>().push_debug(

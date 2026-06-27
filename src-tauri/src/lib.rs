@@ -35,6 +35,23 @@ pub fn run() {
         "Tauri app initialisiert.",
       );
       events::emit_debug(&handle, &entry);
+
+      // Beim App-Start den Azure-Config-Status melden, damit der
+      // Renderer ohne Polling weiß, ob eine Konfiguration vorhanden ist.
+      let config_status = tauri::async_runtime::block_on(async {
+        match settings::get_azure_config_state(&handle).await {
+          Ok(state) => events::FixedConfigStatus {
+            exists: state.exists,
+            path: state.path,
+          },
+          Err(_) => events::FixedConfigStatus {
+            exists: false,
+            path: String::new(),
+          },
+        }
+      });
+      events::emit_fixed_config_status(&handle, &config_status);
+
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
