@@ -211,23 +211,55 @@ pub async fn get_devices(app: AppHandle) -> Result<DeviceSnapshot, String> {
         }
     };
 
-    let result = tauri::async_runtime::spawn(async move {
+    // Wichtig: `tauri-plugin-shell::Command::spawn()` blockiert, daher
+    // `spawn_blocking` benutzen statt innerhalb des Tokio-Runtimes.
+    let app_for_blocking = app.clone();
+    let app_for_state = app.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let app = app_for_blocking;
         let mut command = app.shell().command(exe_path.to_string_lossy().as_ref());
         command = command.args(["--list-devices".to_string()]);
 
-        let (mut rx, _child) = match command.spawn() {
-            Ok(v) => v,
-            Err(e) => return Err(format!("Sidecar-Spawn fehlgeschlagen: {e}")),
-        };
+        let (mut rx, _child) = command.spawn().map_err(|e| format!("Sidecar-Spawn fehlgeschlagen: {e}"))?;
 
+        // Sidecar-EXE benötigt ihre DLLs im selben Verzeichnis wie die
+        // EXE. Wenn resolve_sidecar_path die EXE aus einem anderen
+        // Verzeichnis liefert, müssen wir das Working-Directory des
+        // Sidecars auf das EXE-Verzeichnis setzen.
+        // (Hinweis: aktuell liefert resolve_sidecar_path die EXE in
+        // einem Verzeichnis, in dem auch die DLLs liegen — siehe
+        // dist/portable/sidecar/. Fallback unten fuer alle Fälle.)
+        let mut stdout_buffer = String::new();
         let mut snapshot: Option<DeviceSnapshot> = None;
-        while let Some(event) = rx.recv().await {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+
+        loop {
+            if std::time::Instant::now() >= deadline {
+                break;
+            }
+            // try_recv mit Polling, damit der Loop nicht haengenbleibt.
+            let recv_result = rx.try_recv();
+            let event = match recv_result {
+                Ok(e) => e,
+                Err(_) => {
+                    // Channel ist leer oder geschlossen. Wenn wir den
+                    // Snapshot schon haben oder die Quelle geschlossen
+                    // ist, abbrechen; sonst kurz warten und weiter.
+                    if snapshot.is_some() { break; }
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    continue;
+                }
+            };
             match event {
                 tauri_plugin_shell::process::CommandEvent::Stdout(bytes) => {
                     let text = String::from_utf8_lossy(&bytes);
-                    for line in text.lines() {
+                    stdout_buffer.push_str(&text);
+                    // Nur vollständige JSON-Lines verarbeiten.
+                    while let Some(idx) = stdout_buffer.find('\n') {
+                        let line: String = stdout_buffer.drain(..=idx).collect();
+                        let line = line.trim_end_matches(&['\r', '\n'][..]).to_string();
                         if line.is_empty() { continue; }
-                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(line) {
+                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&line) {
                             let ty = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
                             if ty == "device_list" {
                                 if let Some(payload) = parsed.get("payload") {
@@ -237,24 +269,99 @@ pub async fn get_devices(app: AppHandle) -> Result<DeviceSnapshot, String> {
                                             outputs: snap.outputs.into_iter().map(DeviceInfo::from).collect(),
                                             fetched_at_iso: snap.fetched_at_iso,
                                         });
-                                        // Frühes Beenden: ein Snapshot reicht.
-                                        return Ok(snapshot.unwrap());
                                     }
                                 }
                             }
                         }
                     }
                 }
-                tauri_plugin_shell::process::CommandEvent::Terminated(_) => break,
+                tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                    push_and_emit_debug(
+                        &app_for_state,
+                        &app_for_state.state::<AppState>(),
+                        DebugLogEntrySource::Sidecar,
+                        DebugLogEntryLevel::Info,
+                        format!("Sidecar (--list-devices) beendet exit={:?}", payload.code),
+                    );
+                    break;
+                }
+                tauri_plugin_shell::process::CommandEvent::Error(err) => {
+                    push_and_emit_debug(
+                        &app_for_state,
+                        &app_for_state.state::<AppState>(),
+                        DebugLogEntrySource::Sidecar,
+                        DebugLogEntryLevel::Warn,
+                        format!("Sidecar-Stream-Fehler: {err}"),
+                    );
+                }
                 _ => {}
             }
         }
-        snapshot.ok_or_else(|| "Sidecar beendet ohne device_list-Event".to_string())
+
+        // Falls die device_list-Zeile ohne Newline geschickt wurde
+        // (z. B. weil der Sidecar vor exit geschlossen hat), prüfen
+        // wir den Buffer-Inhalt nochmal.
+        if snapshot.is_none() && !stdout_buffer.trim().is_empty() {
+            for line in stdout_buffer.lines() {
+                if line.is_empty() { continue; }
+                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(line) {
+                    let ty = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                    if ty == "device_list" {
+                        if let Some(payload) = parsed.get("payload") {
+                            if let Ok(snap) = serde_json::from_value::<SidecarDeviceSnapshot>(payload.clone()) {
+                                snapshot = Some(DeviceSnapshot {
+                                    inputs: snap.inputs.into_iter().map(DeviceInfo::from).collect(),
+                                    outputs: snap.outputs.into_iter().map(DeviceInfo::from).collect(),
+                                    fetched_at_iso: snap.fetched_at_iso,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok::<Option<DeviceSnapshot>, String>(snapshot)
     })
     .await
     .map_err(|e| format!("Device-Listing-Task: {e}"))?;
 
-    Ok(result.unwrap_or_else(|_| empty_device_snapshot()))
+    match result {
+        Ok(Some(snap)) => {
+            push_and_emit_debug(
+                &app,
+                &app.state::<AppState>(),
+                DebugLogEntrySource::Sidecar,
+                DebugLogEntryLevel::Info,
+                format!(
+                    "Device-Listing: {} inputs, {} outputs",
+                    snap.inputs.len(),
+                    snap.outputs.len()
+                ),
+            );
+            Ok(snap)
+        }
+        Ok(None) => {
+            push_and_emit_debug(
+                &app,
+                &app.state::<AppState>(),
+                DebugLogEntrySource::Sidecar,
+                DebugLogEntryLevel::Warn,
+                "Sidecar beendet ohne device_list-Event — leerer Snapshot zurueckgegeben.",
+            );
+            Ok(empty_device_snapshot())
+        }
+        Err(e) => {
+            push_and_emit_debug(
+                &app,
+                &app.state::<AppState>(),
+                DebugLogEntrySource::Sidecar,
+                DebugLogEntryLevel::Warn,
+                format!("Device-Listing fehlgeschlagen: {e}"),
+            );
+            Ok(empty_device_snapshot())
+        }
+    }
 }
 
 /// Hilfsstruktur, die dem vom Sidecar emittierten PascalCase-Snapshot

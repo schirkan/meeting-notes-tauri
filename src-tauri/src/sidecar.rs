@@ -141,13 +141,14 @@ pub async fn stop(handle: SidecarHandle) -> Result<(), SidecarError> {
 }
 
 /// Locate the sidecar EXE. Search order:
-///   1. `sidecar/publish/sidecar/<exe>` next to the Tauri-Main CWD (dev)
-///   2. Bundled resource dir (`app.path().resource_dir()/sidecar/<exe>`)
-///   3. Same directory as the Tauri-Main EXE
+///   1. CWD-relative dev paths (`sidecar/publish/sidecar/`, `../sidecar/bin/Release/`)
+///   2. Bundled resource dir (`app.path().resource_dir()/sidecar/`)
+///   3. Tauri-EXE directory + `sidecar/` (portable distribution layout)
+///   4. Tauri-EXE directory directly (fallback)
 pub fn resolve_sidecar_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, SidecarError> {
     let exe = if cfg!(windows) { "MeetingNotes.Sidecar.exe" } else { "MeetingNotes.Sidecar" };
 
-    // 1. CWD-relative dev path
+    // 1. CWD-relative dev paths
     if let Ok(cwd) = std::env::current_dir() {
         let candidate = cwd.join("sidecar").join("publish").join("sidecar").join(exe);
         if candidate.exists() {
@@ -159,7 +160,7 @@ pub fn resolve_sidecar_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, S
         }
     }
 
-    // 2. Bundled resource dir
+    // 2. Bundled resource dir (Tauri bundle's `resources/sidecar/<exe>`)
     if let Ok(resource_dir) = app.path().resource_dir() {
         let candidate = resource_dir.join("sidecar").join(exe);
         if candidate.exists() {
@@ -167,12 +168,17 @@ pub fn resolve_sidecar_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, S
         }
     }
 
-    // 3. Same directory as the Tauri-Main EXE
+    // 3. Tauri-EXE directory + `sidecar/<exe>` (portable dist layout)
     if let Ok(self_path) = std::env::current_exe() {
         if let Some(dir) = self_path.parent() {
-            let candidate = dir.join(exe);
+            let candidate = dir.join("sidecar").join(exe);
             if candidate.exists() {
                 return Ok(candidate);
+            }
+            // 4. Tauri-EXE directory directly (fallback)
+            let candidate2 = dir.join(exe);
+            if candidate2.exists() {
+                return Ok(candidate2);
             }
         }
     }
