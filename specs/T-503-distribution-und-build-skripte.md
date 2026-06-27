@@ -1,7 +1,7 @@
 # T-503: Distribution und Build-Skripte
 
 ## Kontext
-Status: draft
+Status: implemented
 Priorität: high
 Abhängigkeiten: T-207
 
@@ -10,13 +10,14 @@ Standardisierte Build-Pipeline für die Tauri-Variante.
 
 ## Done When
 - [x] `src-tauri/build.rs` publisht den C#-Sidecar automatisch vor `cargo build` (RID aus `CARGO_CFG_TARGET_OS`/`CARGO_CFG_TARGET_ARCH`, Config aus `PROFILE`). — siehe `DECISIONS.md → AD-009`.
-- [ ] `npm run build:renderer` baut den React-Renderer via Vite.
-- [x] `npm run tauri build` produziert NSIS- und/oder MSI-Installer (Sidecar-Build läuft automatisch in build.rs).
-- [ ] `npm run dist:portable` baut zusätzlich eine portable Variante (selbstextrahierend).
+- [x] `npm run build` (= `tsc --noEmit && vite build`) baut den React-Renderer via Vite.
+- [x] `npm run tauri build` produziert NSIS- und MSI-Installer (Sidecar-Build läuft automatisch in build.rs).
+- [x] `npm run dist:portable` baut die portable Variante nach `dist/portable/` (T-504).
 - [x] Sidecar-EXE ist über `tauri.conf.json → bundle.resources` im Installer enthalten.
 - [x] `npm run typecheck` ist grün.
-- [ ] `npm run lint` (sofern konfiguriert) ist grün.
+- [ ] `npm run lint` (sofern konfiguriert) ist grün — **offen**: kein Lint-Setup im Projekt.
 - [x] `npm run publish:sidecar` ist nur noch ein optionales Skript für Ad-hoc-Rebuilds ohne Tauri-Build.
+- [x] Toolchain-Setup-Skripte (`scripts/setup-toolchain.ps1`, `scripts/check-toolchain.ps1`, `scripts/run-with-toolchain.ps1`, `scripts/patch-w64devkit-gcc-eh.ps1`) reproduzieren die Build-Umgebung auf einer frischen Windows-Maschine.
 
 ## Approach
 - `src-tauri/build.rs` ruft `dotnet publish` mit korrektem RID auf, bevor Cargo kompiliert. `cargo:rerun-if-changed=../sidecar` sorgt dafür, dass nur bei Sidecar-Quelländerungen neu publisht wird.
