@@ -15,7 +15,7 @@
     "publish:sidecar": "npm run clean:sidecar && dotnet publish sidecar/MeetingNotes.Sidecar.csproj -c Release -r win-x64 --self-contained false -o sidecar/publish/sidecar",
     "dist:portable": "node scripts/dist-portable.mjs",
     "test:smoke": "node scripts/test-smoke.mjs",
-    "test:unit": "node --test tests/"
+    "test:unit": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
