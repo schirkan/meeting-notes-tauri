@@ -144,7 +144,7 @@ pub async fn stop(handle: SidecarHandle) -> Result<(), SidecarError> {
 ///   1. `sidecar/publish/sidecar/<exe>` next to the Tauri-Main CWD (dev)
 ///   2. Bundled resource dir (`app.path().resource_dir()/sidecar/<exe>`)
 ///   3. Same directory as the Tauri-Main EXE
-fn resolve_sidecar_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, SidecarError> {
+pub fn resolve_sidecar_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, SidecarError> {
     let exe = if cfg!(windows) { "MeetingNotes.Sidecar.exe" } else { "MeetingNotes.Sidecar" };
 
     // 1. CWD-relative dev path

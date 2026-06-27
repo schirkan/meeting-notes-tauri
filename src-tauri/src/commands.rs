@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
+use tauri_plugin_shell::ShellExt;
 use tokio::sync::Mutex;
 
 use crate::connectivity;
@@ -136,6 +137,36 @@ pub async fn reset_transcript(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "reset_transcript aufgerufen.");
+
+    // Transkript-Buffer wird vom Renderer gehalten. Hier nur ein
+    // zentraler Log-Punkt + das Versenden eines optionalen
+    // reset-Befehls an den laufenden Sidecar (best-effort).
+    let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
+    let handle = {
+        let guard = cache.lock().await;
+        guard.as_ref().map(|h| SidecarHandle {
+            child: Arc::clone(&h.child),
+            events_rx: tokio::sync::mpsc::channel(1).1,
+        })
+    };
+    if let Some(handle) = handle {
+        let _ = sidecar::send_command(&handle, r#"{"type":"reset"}"#).await;
+        push_and_emit_debug(
+            &app,
+            &state,
+            DebugLogEntrySource::Sidecar,
+            DebugLogEntryLevel::Info,
+            "Reset-Befehl an Sidecar gesendet.",
+        );
+    }
+
+    push_and_emit_debug(
+        &app,
+        &state,
+        DebugLogEntrySource::Main,
+        DebugLogEntryLevel::Info,
+        "Transkript zurueckgesetzt.",
+    );
     Ok(())
 }
 
@@ -162,11 +193,97 @@ pub async fn clear_debug_log(
 // ---------- devices ----------
 
 #[tauri::command]
-pub async fn get_devices() -> Result<DeviceSnapshot, String> {
-    // Block 4: spawn a temporary sidecar instance with --list-devices
-    // is the cleanest path; for now return an empty snapshot until
-    // Block 6 wires the device-listing through the orchestrator.
-    Ok(empty_device_snapshot())
+pub async fn get_devices(app: AppHandle) -> Result<DeviceSnapshot, String> {
+    // One-Shot-Spawn des Sidecars mit `--list-devices`. Der Sidecar
+    // emittiert ein einzelnes `device_list`-JSON-Lines-Event und
+    // beendet sich danach. Wir parsen die erste solche Zeile.
+    let exe_path = match sidecar::resolve_sidecar_path(&app) {
+        Ok(p) => p,
+        Err(e) => {
+            push_and_emit_debug(
+                &app,
+                &app.state::<AppState>(),
+                DebugLogEntrySource::Sidecar,
+                DebugLogEntryLevel::Warn,
+                format!("Sidecar-EXE für Device-Listing nicht gefunden: {e}"),
+            );
+            return Ok(empty_device_snapshot());
+        }
+    };
+
+    let result = tauri::async_runtime::spawn(async move {
+        let mut command = app.shell().command(exe_path.to_string_lossy().as_ref());
+        command = command.args(["--list-devices".to_string()]);
+
+        let (mut rx, _child) = match command.spawn() {
+            Ok(v) => v,
+            Err(e) => return Err(format!("Sidecar-Spawn fehlgeschlagen: {e}")),
+        };
+
+        let mut snapshot: Option<DeviceSnapshot> = None;
+        while let Some(event) = rx.recv().await {
+            match event {
+                tauri_plugin_shell::process::CommandEvent::Stdout(bytes) => {
+                    let text = String::from_utf8_lossy(&bytes);
+                    for line in text.lines() {
+                        if line.is_empty() { continue; }
+                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(line) {
+                            let ty = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                            if ty == "device_list" {
+                                if let Some(payload) = parsed.get("payload") {
+                                    if let Ok(snap) = serde_json::from_value::<SidecarDeviceSnapshot>(payload.clone()) {
+                                        snapshot = Some(DeviceSnapshot {
+                                            inputs: snap.inputs.into_iter().map(DeviceInfo::from).collect(),
+                                            outputs: snap.outputs.into_iter().map(DeviceInfo::from).collect(),
+                                            fetched_at_iso: snap.fetched_at_iso,
+                                        });
+                                        // Frühes Beenden: ein Snapshot reicht.
+                                        return Ok(snapshot.unwrap());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                tauri_plugin_shell::process::CommandEvent::Terminated(_) => break,
+                _ => {}
+            }
+        }
+        snapshot.ok_or_else(|| "Sidecar beendet ohne device_list-Event".to_string())
+    })
+    .await
+    .map_err(|e| format!("Device-Listing-Task: {e}"))?;
+
+    Ok(result.unwrap_or_else(|_| empty_device_snapshot()))
+}
+
+/// Hilfsstruktur, die dem vom Sidecar emittierten PascalCase-Snapshot
+/// entspricht (`DeviceSnapshot` in `sidecar/DeviceResolver.cs`).
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct SidecarDeviceSnapshot {
+    inputs: Vec<SidecarDeviceInfo>,
+    outputs: Vec<SidecarDeviceInfo>,
+    fetched_at_iso: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct SidecarDeviceInfo {
+    id: String,
+    name: String,
+    flow: String,
+    is_default: bool,
+}
+
+impl From<SidecarDeviceInfo> for DeviceInfo {
+    fn from(value: SidecarDeviceInfo) -> Self {
+        DeviceInfo {
+            id: value.id,
+            name: value.name,
+            flow: value.flow,
+            is_default: value.is_default,
+        }
+    }
 }
 
 // ---------- user settings ----------
