@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
-use tauri_plugin_shell::ShellExt;
 use tokio::sync::Mutex;
 
 use crate::connectivity;
@@ -194,9 +193,22 @@ pub async fn clear_debug_log(
 
 #[tauri::command]
 pub async fn get_devices(app: AppHandle) -> Result<DeviceSnapshot, String> {
-    // One-Shot-Spawn des Sidecars mit `--list-devices`. Der Sidecar
-    // emittiert ein einzelnes `device_list`-JSON-Lines-Event und
-    // beendet sich danach. Wir parsen die erste solche Zeile.
+    // Wir rufen hier den **Sidecar-EXE selbst** auf, aber **nicht als
+    // laufende Transkriptions-Instanz** — sondern im Device-Listing-
+    // Modus (`--list-devices`). In diesem Modus emittiert der Sidecar
+    // genau ein JSON-Lines-Event und beendet sich sofort wieder.
+    // Das ist unabhängig vom laufenden Recording-Sidecar, der in
+    // `start_recording` über `tauri-plugin-shell` gestartet wird und
+    // dauerhaft transcribiert.
+    //
+    // Wir nutzen hier `std::process::Command` direkt (statt
+    // tauri-plugin-shell), weil:
+    //   1. Es ein One-Shot-Spawn ist (kein Stream, kein Event-Loop
+    //      über mehrere Sekunden) — tauri-plugin-shell ist für
+    //      langlebige Prozesse mit Stream-Kommunikation gedacht.
+    //   2. `std::process::Command` ist `Send` und kann direkt aus
+    //      `spawn_blocking` aufgerufen werden, ohne Borrow-Lifetime-
+    //      Konflikte mit dem `tauri::AppHandle`.
     let exe_path = match sidecar::resolve_sidecar_path(&app) {
         Ok(p) => p,
         Err(e) => {
@@ -211,117 +223,77 @@ pub async fn get_devices(app: AppHandle) -> Result<DeviceSnapshot, String> {
         }
     };
 
-    // Wichtig: `tauri-plugin-shell::Command::spawn()` blockiert, daher
-    // `spawn_blocking` benutzen statt innerhalb des Tokio-Runtimes.
-    let app_for_blocking = app.clone();
-    let app_for_state = app.clone();
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let app = app_for_blocking;
-        let mut command = app.shell().command(exe_path.to_string_lossy().as_ref());
-        command = command.args(["--list-devices".to_string()]);
+    // Sidecar-EXE benötigt ihre DLLs im selben Verzeichnis. Wir
+    // lassen `std::process::Command` das Arbeitsverzeichnis
+    // standardmäßig vom aktuellen Prozess erben — das ist im
+    // portable-Layout automatisch das EXE-Dir (Tauri startet von
+    // dort). resolve_sidecar_path liefert die EXE in
+    // `<exe_dir>/sidecar/<exe>`, und das EXE-Dir enthält die DLLs.
+    // Wir setzen zusätzlich explizit das CWD auf das
+    // Sidecar-EXE-Verzeichnis, falls resolve_sidecar_path mal einen
+    // abweichenden Pfad liefern sollte.
+    let cwd = exe_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
-        let (mut rx, _child) = command.spawn().map_err(|e| format!("Sidecar-Spawn fehlgeschlagen: {e}"))?;
+    let result = tauri::async_runtime::spawn_blocking(move || -> Result<Option<DeviceSnapshot>, String> {
+        let mut child = std::process::Command::new(&exe_path)
+            .arg("--list-devices")
+            .current_dir(&cwd)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("Sidecar-Spawn fehlgeschlagen: {e}"))?;
 
-        // Sidecar-EXE benötigt ihre DLLs im selben Verzeichnis wie die
-        // EXE. Wenn resolve_sidecar_path die EXE aus einem anderen
-        // Verzeichnis liefert, müssen wir das Working-Directory des
-        // Sidecars auf das EXE-Verzeichnis setzen.
-        // (Hinweis: aktuell liefert resolve_sidecar_path die EXE in
-        // einem Verzeichnis, in dem auch die DLLs liegen — siehe
-        // dist/portable/sidecar/. Fallback unten fuer alle Fälle.)
-        let mut stdout_buffer = String::new();
-        let mut snapshot: Option<DeviceSnapshot> = None;
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-
+        // Sidecar beendet sich nach der device_list-Zeile selbst.
+        // Wir warten max. 5 s, lesen aber auch schon früher, wenn
+        // der Prozess exited ist.
+        let start = std::time::Instant::now();
+        let timeout = std::time::Duration::from_secs(5);
         loop {
-            if std::time::Instant::now() >= deadline {
-                break;
-            }
-            // try_recv mit Polling, damit der Loop nicht haengenbleibt.
-            let recv_result = rx.try_recv();
-            let event = match recv_result {
-                Ok(e) => e,
-                Err(_) => {
-                    // Channel ist leer oder geschlossen. Wenn wir den
-                    // Snapshot schon haben oder die Quelle geschlossen
-                    // ist, abbrechen; sonst kurz warten und weiter.
-                    if snapshot.is_some() { break; }
+            match child.try_wait() {
+                Ok(Some(_)) => break, // Prozess beendet
+                Ok(None) => {
+                    if start.elapsed() >= timeout { break; }
                     std::thread::sleep(std::time::Duration::from_millis(50));
-                    continue;
                 }
-            };
-            match event {
-                tauri_plugin_shell::process::CommandEvent::Stdout(bytes) => {
-                    let text = String::from_utf8_lossy(&bytes);
-                    stdout_buffer.push_str(&text);
-                    // Nur vollständige JSON-Lines verarbeiten.
-                    while let Some(idx) = stdout_buffer.find('\n') {
-                        let line: String = stdout_buffer.drain(..=idx).collect();
-                        let line = line.trim_end_matches(&['\r', '\n'][..]).to_string();
-                        if line.is_empty() { continue; }
-                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&line) {
-                            let ty = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                            if ty == "device_list" {
-                                if let Some(payload) = parsed.get("payload") {
-                                    if let Ok(snap) = serde_json::from_value::<SidecarDeviceSnapshot>(payload.clone()) {
-                                        snapshot = Some(DeviceSnapshot {
-                                            inputs: snap.inputs.into_iter().map(DeviceInfo::from).collect(),
-                                            outputs: snap.outputs.into_iter().map(DeviceInfo::from).collect(),
-                                            fetched_at_iso: snap.fetched_at_iso,
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
-                    push_and_emit_debug(
-                        &app_for_state,
-                        &app_for_state.state::<AppState>(),
-                        DebugLogEntrySource::Sidecar,
-                        DebugLogEntryLevel::Info,
-                        format!("Sidecar (--list-devices) beendet exit={:?}", payload.code),
-                    );
-                    break;
-                }
-                tauri_plugin_shell::process::CommandEvent::Error(err) => {
-                    push_and_emit_debug(
-                        &app_for_state,
-                        &app_for_state.state::<AppState>(),
-                        DebugLogEntrySource::Sidecar,
-                        DebugLogEntryLevel::Warn,
-                        format!("Sidecar-Stream-Fehler: {err}"),
-                    );
-                }
-                _ => {}
+                Err(_) => break,
             }
         }
+        let _ = child.kill(); // sicherheitshalber
 
-        // Falls die device_list-Zeile ohne Newline geschickt wurde
-        // (z. B. weil der Sidecar vor exit geschlossen hat), prüfen
-        // wir den Buffer-Inhalt nochmal.
-        if snapshot.is_none() && !stdout_buffer.trim().is_empty() {
-            for line in stdout_buffer.lines() {
-                if line.is_empty() { continue; }
-                if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(line) {
-                    let ty = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                    if ty == "device_list" {
-                        if let Some(payload) = parsed.get("payload") {
-                            if let Ok(snap) = serde_json::from_value::<SidecarDeviceSnapshot>(payload.clone()) {
-                                snapshot = Some(DeviceSnapshot {
-                                    inputs: snap.inputs.into_iter().map(DeviceInfo::from).collect(),
-                                    outputs: snap.outputs.into_iter().map(DeviceInfo::from).collect(),
-                                    fetched_at_iso: snap.fetched_at_iso,
-                                });
-                            }
+        let mut stdout = String::new();
+        if let Some(mut out) = child.stdout.take() {
+            use std::io::Read;
+            let _ = out.read_to_string(&mut stdout);
+        }
+
+        if stdout.trim().is_empty() {
+            return Ok(None);
+        }
+
+        // Parse: die Sidecar-Ausgabe ist genau eine JSON-Lines-Zeile
+        // {"type":"device_list","payload":{...}}. Wir scannen alle
+        // Zeilen und nehmen die erste mit type=="device_list".
+        for line in stdout.lines() {
+            if line.trim().is_empty() { continue; }
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(line) {
+                let ty = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                if ty == "device_list" {
+                    if let Some(payload) = parsed.get("payload") {
+                        if let Ok(snap) = serde_json::from_value::<SidecarDeviceSnapshot>(payload.clone()) {
+                            return Ok(Some(DeviceSnapshot {
+                                inputs: snap.inputs.into_iter().map(DeviceInfo::from).collect(),
+                                outputs: snap.outputs.into_iter().map(DeviceInfo::from).collect(),
+                                fetched_at_iso: snap.fetched_at_iso,
+                            }));
                         }
                     }
                 }
             }
         }
-
-        Ok::<Option<DeviceSnapshot>, String>(snapshot)
+        Ok(None)
     })
     .await
     .map_err(|e| format!("Device-Listing-Task: {e}"))?;
