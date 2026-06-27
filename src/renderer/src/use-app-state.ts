@@ -52,7 +52,7 @@ export function useAppState() {
   const [now, setNow] = useState(() => Date.now())
   const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null)
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
-  const transcriptListRef = useRef<HTMLUListElement>(null)
+  const transcriptListRef = useRef<HTMLUListElement | null>(null)
 
   useEffect(() => {
     const transcriptApi = window.transcriptApi

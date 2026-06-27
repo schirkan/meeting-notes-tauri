@@ -3,7 +3,7 @@ import type { TranscriptSegment } from '@shared/transcript-contract'
 
 type TranscriptPanelProps = {
   segments: TranscriptSegment[]
-  transcriptListRef: RefObject<HTMLUListElement>
+  transcriptListRef: RefObject<HTMLUListElement | null>
   getSpeakerClass: (speaker: string) => string
   getSpeakerLabel: (speaker: string) => string
   canCopyTranscript: boolean

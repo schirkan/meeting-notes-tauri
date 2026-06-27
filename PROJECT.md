@@ -86,7 +86,7 @@ Eine detaillierte Begründung der Entscheidungen siehe `DECISIONS.md`; eine aktu
 | Schicht | Technologie |
 |---|---|
 | App-Container | Tauri 2 (Rust) |
-| Renderer | React 18 + Vite (TypeScript) |
+| Renderer | React 19 + Vite 8 (TypeScript) |
 | System-WebView | WebView2 (Edge/Chromium-Engine, Windows 11 Bestandteil) |
 | Backend-Prozess | C#/.NET 8, framework-dependent Publish |
 | Audio-Library | NAudio 2.2.x (WASAPI Mic + Loopback) |
