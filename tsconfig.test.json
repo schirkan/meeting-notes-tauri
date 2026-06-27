@@ -11,5 +11,8 @@
     "composite": false,
     "rootDir": "./src"
   },
-  "include": ["src/shared/config-contract.ts", "src/renderer/src/config-utils.ts"]
+  "include": [
+    "src/shared/config-contract.ts",
+    "src/renderer/src/config-utils.ts"
+  ]
 }

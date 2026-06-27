@@ -106,7 +106,8 @@ if (-not $SkipMingw) {
     New-Item -ItemType Directory -Path $w64Parent -Force | Out-Null
     $proc = Start-Process -FilePath $w64Exe -ArgumentList "-y", "-o`"$w64Parent`"" -Wait -PassThru -NoNewWindow
     if ($proc.ExitCode -ne 0) { throw "w64devkit extraction failed (exit=$($proc.ExitCode))" }
-  } else {
+  }
+  else {
     Write-Host 'w64devkit already extracted.'
   }
 

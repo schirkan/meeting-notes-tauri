@@ -53,14 +53,14 @@ Eine detaillierte Begründung der Entscheidungen siehe `DECISIONS.md`; eine aktu
 
 ### Pipeline-Vergleich
 
-| Phase | Electron-Variante (`meeting-notes`) | Tauri-Variante (dieses Projekt) |
-|---|---|---|
-| Audio-Capture | C# Sidecar (NAudio) | **C# Sidecar (NAudio)** |
-| Audio-Frame-Transport | Named Pipe → Node-Main → Azure PushStream | **entfällt — bleibt im Sidecar** |
-| Azure Speech | Node SDK im Electron-Main | **C# SDK im Sidecar** |
-| Transcript-Events | Electron IPC → React | **Tauri `.emit()` → React** |
-| Bundle-Größe (Windows) | ~180 MB | **~15–30 MB (Zielwert)** |
-| Sprache der Backend-Logik | C# (Audio) + TypeScript (Speech) | **C# (Audio + Speech)** |
+| Phase                     | Electron-Variante (`meeting-notes`)       | Tauri-Variante (dieses Projekt)  |
+| ------------------------- | ----------------------------------------- | -------------------------------- |
+| Audio-Capture             | C# Sidecar (NAudio)                       | **C# Sidecar (NAudio)**          |
+| Audio-Frame-Transport     | Named Pipe → Node-Main → Azure PushStream | **entfällt — bleibt im Sidecar** |
+| Azure Speech              | Node SDK im Electron-Main                 | **C# SDK im Sidecar**            |
+| Transcript-Events         | Electron IPC → React                      | **Tauri `.emit()` → React**      |
+| Bundle-Größe (Windows)    | ~180 MB                                   | **~15–30 MB (Zielwert)**         |
+| Sprache der Backend-Logik | C# (Audio) + TypeScript (Speech)          | **C# (Audio + Speech)**          |
 
 ## Scope (unverändert gegenüber Electron-Variante)
 - Plattform: Windows 11
@@ -83,18 +83,18 @@ Eine detaillierte Begründung der Entscheidungen siehe `DECISIONS.md`; eine aktu
 
 ## Technologie-Stack (Soll)
 
-| Schicht | Technologie |
-|---|---|
-| App-Container | Tauri 2 (Rust) |
-| Renderer | React 19 + Vite 8 (TypeScript) |
-| System-WebView | WebView2 (Edge/Chromium-Engine, Windows 11 Bestandteil) |
-| Backend-Prozess | C#/.NET 8, framework-dependent Publish |
-| Audio-Library | NAudio 2.2.x (WASAPI Mic + Loopback) |
-| Speech-SDK | `Microsoft.CognitiveServices.Speech` 1.44.x NuGet |
-| IPC Sidecar ↔ App | `stdin/stdout` über `tauri-plugin-shell`, JSON-Lines (Status, Events, Commands, Settings) — siehe `DECISIONS.md → AD-008` |
-| Build-Pipeline | `tauri build` (NSIS/MSI-Installer) + `dotnet publish` für Sidecar, automatisiert via `src-tauri/build.rs` (siehe `DECISIONS.md → AD-009`) |
+| Schicht           | Technologie                                                                                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App-Container     | Tauri 2 (Rust)                                                                                                                                                      |
+| Renderer          | React 19 + Vite 8 (TypeScript)                                                                                                                                      |
+| System-WebView    | WebView2 (Edge/Chromium-Engine, Windows 11 Bestandteil)                                                                                                             |
+| Backend-Prozess   | C#/.NET 8, framework-dependent Publish                                                                                                                              |
+| Audio-Library     | NAudio 2.2.x (WASAPI Mic + Loopback)                                                                                                                                |
+| Speech-SDK        | `Microsoft.CognitiveServices.Speech` 1.44.x NuGet                                                                                                                   |
+| IPC Sidecar ↔ App | `stdin/stdout` über `tauri-plugin-shell`, JSON-Lines (Status, Events, Commands, Settings) — siehe `DECISIONS.md → AD-008`                                           |
+| Build-Pipeline    | `tauri build` (NSIS/MSI-Installer) + `dotnet publish` für Sidecar, automatisiert via `src-tauri/build.rs` (siehe `DECISIONS.md → AD-009`)                           |
 | Sidecar-Lifecycle | `Arc<Mutex<Option<CommandChild>>>` aus `tauri-plugin-shell` 2.x (`CommandChild` ist nicht mehr Clone, Wrapper teilt Schreibzugriff zwischen Cache und Orchestrator) |
-| Clipboard | `navigator.clipboard.writeText` direkt im Preload (siehe `DECISIONS.md → AD-010`) |
+| Clipboard         | `navigator.clipboard.writeText` direkt im Preload (siehe `DECISIONS.md → AD-010`)                                                                                   |
 
 ## Offene Probleme / Erkenntnisse
 
