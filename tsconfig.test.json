@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ES2022",
+    "noEmit": false,
+    "emitDeclarationOnly": false,
+    "declaration": false,
+    "sourceMap": false,
+    "composite": false
+  },
+  "include": ["src/shared/config-contract.ts", "src/renderer/src/config-utils.ts"]
+}
