@@ -130,15 +130,23 @@ async function main() {
   info(`Kopiere ${TAURI_EXE_NAME} …`)
   copyFileSync(TAURI_EXE_SRC, join(PORTABLE_OUT, TAURI_EXE_NAME))
 
-  // 1a. Tauri-Support-DLLs aus dem Release-Ordner (z. B. WebView2Loader.dll
-  // wird von Tauri 2 als Delayed-Load-DLL neben der EXE erwartet).
+  // 1a. Tauri-Support-DLLs aus dem Release-Ordner. Wir kopieren nur
+  // eine explizite Whitelist, weil Cargo hier auch Lib-Artefakte
+  // (z. B. meeting_notes_tauri_lib.dll bei crate-type=cdylib)
+  // ablegen kann, die nichts im Portable-Output zu suchen haben.
+  // Aktuell bekannt: WebView2Loader.dll (Tauri 2 Delayed-Load-DLL).
+  const TAURI_PORTABLE_DLLS = ['WebView2Loader.dll']
   const tauriReleaseDir = TAURI_EXE_SRC.replace(/[\\/][^\\/]+$/, '')
-  const tauriDlls = readdirSync(tauriReleaseDir).filter((f) => f.toLowerCase().endsWith('.dll'))
-  if (tauriDlls.length > 0) {
-    info(`Kopiere Tauri-Support-DLLs (${tauriDlls.length}) …`)
-    for (const dll of tauriDlls) {
-      copyFileSync(join(tauriReleaseDir, dll), join(PORTABLE_OUT, dll))
+  const copiedDlls = []
+  for (const dll of TAURI_PORTABLE_DLLS) {
+    const src = join(tauriReleaseDir, dll)
+    if (existsSync(src)) {
+      copyFileSync(src, join(PORTABLE_OUT, dll))
+      copiedDlls.push(dll)
     }
+  }
+  if (copiedDlls.length > 0) {
+    info(`Kopiere Tauri-Support-DLLs (${copiedDlls.join(', ')}) …`)
   }
 
   // 2. Sidecar-Verzeichnis
