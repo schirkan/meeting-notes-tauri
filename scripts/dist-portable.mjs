@@ -130,6 +130,17 @@ async function main() {
   info(`Kopiere ${TAURI_EXE_NAME} …`)
   copyFileSync(TAURI_EXE_SRC, join(PORTABLE_OUT, TAURI_EXE_NAME))
 
+  // 1a. Tauri-Support-DLLs aus dem Release-Ordner (z. B. WebView2Loader.dll
+  // wird von Tauri 2 als Delayed-Load-DLL neben der EXE erwartet).
+  const tauriReleaseDir = TAURI_EXE_SRC.replace(/[\\/][^\\/]+$/, '')
+  const tauriDlls = readdirSync(tauriReleaseDir).filter((f) => f.toLowerCase().endsWith('.dll'))
+  if (tauriDlls.length > 0) {
+    info(`Kopiere Tauri-Support-DLLs (${tauriDlls.length}) …`)
+    for (const dll of tauriDlls) {
+      copyFileSync(join(tauriReleaseDir, dll), join(PORTABLE_OUT, dll))
+    }
+  }
+
   // 2. Sidecar-Verzeichnis
   info(`Kopiere Sidecar (${SIDECAR_EXE_NAME} + DLLs) …`)
   copyDirContents(SIDECAR_SRC, join(PORTABLE_OUT, 'sidecar'))
