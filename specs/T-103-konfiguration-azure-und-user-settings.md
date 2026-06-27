@@ -1,7 +1,7 @@
 # T-103: Konfiguration (Azure + User-Settings)
 
 ## Kontext
-Status: draft
+Status: implemented
 Priorität: high
 Abhängigkeiten: T-102
 

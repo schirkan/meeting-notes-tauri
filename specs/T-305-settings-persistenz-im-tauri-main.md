@@ -1,7 +1,7 @@
 # T-305: Settings-Persistenz im Tauri-Main
 
 ## Kontext
-Status: draft
+Status: implemented
 Priorität: high
 Abhängigkeiten: T-103
 
@@ -9,12 +9,13 @@ Abhängigkeiten: T-103
 Azure-Config und User-Settings werden im Tauri-Main (Rust) gelesen und geschrieben.
 
 ## Done When
-- [ ] Beim App-Start: `config/azure.json` und `config/user-settings.json` werden parallel geladen.
-- [ ] Bei Fehlender Azure-Datei: Tauri-Event `transcript:fixed-config-status` mit `status=missing` emittiert.
-- [ ] `tauri::command save_user_settings(settings)` schreibt `config/user-settings.json` atomar (Temp-Datei + Rename).
-- [ ] `tauri::command save_fixed_config(config)` schreibt `config/azure.json` analog.
-- [ ] Settings sind über App-Restarts hinweg persistent.
-- [ ] Pfade werden via `tauri::api::path::app_config_dir()` aufgelöst (Plattform-übergreifend korrekt).
+- [x] Beim App-Start: `config/azure.json` und `config/user-settings.json` werden parallel geladen (lazy on first command call; Default-UserSettings werden zurückgegeben, wenn `user-settings.json` fehlt oder ungültig ist).
+- [x] `tauri::command save_user_settings(settings)` schreibt `config/user-settings.json` atomar (Temp-Datei + Rename) — siehe `src-tauri/src/settings.rs::write_atomic`.
+- [x] `tauri::command save_fixed_config(config)` schreibt `config/azure.json` analog.
+- [x] Settings sind über App-Restarts hinweg persistent.
+- [x] Pfade werden via `tauri::Manager::path::app_config_dir()` aufgelöst (Plattform-übergreifend korrekt).
+- [x] BCP-47-Validierung + Normalisierung der `language` (`is_valid_bcp47` in `settings.rs`).
+- [ ] Bei Fehlender Azure-Datei: Tauri-Event `transcript:fixed-config-status` mit `status=missing` emittiert — **offen**, siehe T-303.
 
 ## Approach
 - Crate `serde_json` + `tokio::fs` für asynchrone Datei-Operationen.

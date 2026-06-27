@@ -1,7 +1,7 @@
 # T-302: Tauri-Commands definieren
 
 ## Kontext
-Status: draft
+Status: implemented
 Priorität: high
 Abhängigkeiten: T-102, T-301
 
