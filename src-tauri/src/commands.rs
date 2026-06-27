@@ -246,37 +246,55 @@ pub async fn get_devices(app: AppHandle) -> Result<DeviceSnapshot, String> {
             .spawn()
             .map_err(|e| format!("Sidecar-Spawn fehlgeschlagen: {e}"))?;
 
-        // Sidecar beendet sich nach der device_list-Zeile selbst.
-        // Wir warten max. 5 s, lesen aber auch schon früher, wenn
-        // der Prozess exited ist.
+        // stdout-Handle VOR kill() wegnehmen, damit die Pipe nicht
+        // geschlossen wird, bevor wir gelesen haben.
+        let mut stdout = child.stdout.take()
+            .ok_or_else(|| "Sidecar lieferte keinen Stdout-Stream.".to_string())?;
+        let mut stderr = child.stderr.take();
+
+        // Auf Prozess-Beendigung warten, max. 5 s.
         let start = std::time::Instant::now();
         let timeout = std::time::Duration::from_secs(5);
         loop {
             match child.try_wait() {
                 Ok(Some(_)) => break, // Prozess beendet
                 Ok(None) => {
-                    if start.elapsed() >= timeout { break; }
-                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    if start.elapsed() >= timeout {
+                        // Timeout: Prozess abwuergen, damit die
+                        // Pipes geschlossen werden und read_to_string
+                        // zurueckkehrt.
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(20));
                 }
                 Err(_) => break,
             }
         }
-        let _ = child.kill(); // sicherheitshalber
 
-        let mut stdout = String::new();
-        if let Some(mut out) = child.stdout.take() {
-            use std::io::Read;
-            let _ = out.read_to_string(&mut stdout);
+        use std::io::Read;
+        let mut out = String::new();
+        // read_to_string blockiert bis die Pipe geschlossen wird —
+        // das passiert automatisch, sobald der Sidecar exit ist.
+        let _ = stdout.read_to_string(&mut out);
+
+        if let Some(mut err) = stderr.take() {
+            let mut e = String::new();
+            let _ = err.read_to_string(&mut e);
+            if !e.trim().is_empty() {
+                eprintln!("Sidecar stderr: {e}");
+            }
         }
 
-        if stdout.trim().is_empty() {
+        if out.trim().is_empty() {
             return Ok(None);
         }
 
         // Parse: die Sidecar-Ausgabe ist genau eine JSON-Lines-Zeile
         // {"type":"device_list","payload":{...}}. Wir scannen alle
         // Zeilen und nehmen die erste mit type=="device_list".
-        for line in stdout.lines() {
+        for line in out.lines() {
             if line.trim().is_empty() { continue; }
             if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(line) {
                 let ty = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
@@ -347,6 +365,7 @@ struct SidecarDeviceSnapshot {
 }
 
 #[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "PascalCase")]
 struct SidecarDeviceInfo {
     id: String,
     name: String,
@@ -362,6 +381,31 @@ impl From<SidecarDeviceInfo> for DeviceInfo {
             flow: value.flow,
             is_default: value.is_default,
         }
+    }
+}
+
+#[cfg(test)]
+mod device_deser_tests {
+    use super::*;
+
+    #[test]
+    fn sidecar_device_snapshot_parses_pascal_case_payload() {
+        // Auszug aus der tatsächlichen Sidecar-Ausgabe (siehe device-list.log).
+        let line = r#"{"type":"device_list","payload":{"Inputs":[{"Id":"{0.0.1.00000000}.{abc}","Name":"Mikrofon","Flow":"input","IsDefault":true}],"Outputs":[{"Id":"{0.0.0.00000000}.{def}","Name":"Lautsprecher","Flow":"output","IsDefault":false}],"FetchedAtIso":"2026-06-27T22:00:00Z"}}"#;
+
+        let parsed: serde_json::Value = serde_json::from_str(line).expect("outer json");
+        let payload = parsed.get("payload").expect("payload field");
+        let snap: SidecarDeviceSnapshot = serde_json::from_value(payload.clone())
+            .expect("PascalCase deserialization must succeed");
+
+        assert_eq!(snap.inputs.len(), 1);
+        assert_eq!(snap.outputs.len(), 1);
+        assert_eq!(snap.inputs[0].id, "{0.0.1.00000000}.{abc}");
+        assert_eq!(snap.inputs[0].name, "Mikrofon");
+        assert_eq!(snap.inputs[0].flow, "input");
+        assert!(snap.inputs[0].is_default);
+        assert_eq!(snap.outputs[0].is_default, false);
+        assert_eq!(snap.fetched_at_iso, "2026-06-27T22:00:00Z");
     }
 }
 
