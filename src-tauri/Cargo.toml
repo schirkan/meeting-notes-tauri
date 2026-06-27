@@ -2,7 +2,7 @@
 name = "meeting-notes-tauri"
 version = "0.1.0"
 description = "Meeting Notes PoC (Tauri 2 + React + C# Sidecar)"
-authors = ["Martin Schirmer"]
+authors = ["Schirkan"]
 edition = "2021"
 rust-version = "1.77.2"
 
