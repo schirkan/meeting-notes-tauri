@@ -100,7 +100,7 @@ Eine detaillierte Begründung der Entscheidungen siehe `DECISIONS.md`; eine aktu
 
 ### Audio-Transport funktioniert in Electron-Variante, Proxy-Problem bleibt bestehen (aus `meeting-notes` übernommen)
 
-Das unter `projects/meeting-notes/PROJECT.md → Offene Probleme` dokumentierte Proxy-Problem gilt für diese Variante **sinngemäß gleich**:
+Das unter `projects/meeting-notes/AGENTS.md → Offene Probleme` dokumentierte Proxy-Problem gilt für diese Variante **sinngemäß gleich**:
 - Native Azure-SDK nutzt `setProxy()`-Properties im Node-Pfad nicht zuverlässig für WSS-Connect.
 - Im C#-Pfad verhält sich die native Speech-SDK (NuGet) tendenziell etwas kooperativer, aber die genaue Garantie muss in `specs/T-505-proxy-aware-azure-transport.md` für die C#-Variante neu validiert werden.
 - Workaround-Plan (Variante 3: Eigenbau eines WSS-Clients) wird in `specs/T-505` mit C#-Code-Skeleton skizziert.
