@@ -32,3 +32,4 @@ Nutzerentscheidung zwischen den Varianten, abhängig vom Ergebnis der C#-Validie
 
 ## Log
 - 2026-06-25: Spec angelegt (Migration aus `../meeting-notes/specs/T-505-proxy-aware-azure-transport.md`).
+- 2026-06-27: Anbieter-Alternativen geprüft (`gpt-4o-transcribe-diarize`, `gpt-realtime-whisper`) und verworfen — Continuous LID fehlt in beiden, Live-Diarization-Hybrid wäre doppelte Audio-Pipeline, Proxy-Problem bleibt. Azure bleibt Provider. Diese Spec bleibt damit relevant (Variante 3 = Eigenbau-WSS-Client in C# ist robuster Fallback). Siehe `PROJECT.md` → "Anbieter-Alternativen evaluiert" und `DECISIONS.md → AD-011`.
