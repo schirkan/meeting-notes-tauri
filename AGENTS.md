@@ -109,6 +109,21 @@ Das unter `projects/meeting-notes/PROJECT.md → Offene Probleme` dokumentierte 
 - DNS-Filterung auf Custom-Endpoints in Corporate-Netzen.
 - `https-proxy-agent` als möglicher Ersatz evaluiert, nicht eingebaut.
 
+### Anbieter-Alternativen evaluiert (OpenAI) — nicht verfolgt (2026-06-27)
+
+Als Reaktion auf den Proxy-Block des Azure-Cognitive-Services-Endpoints (`*.cognitiveservices.azure.com`, konkret `schir-mbpjdimi-swedencentral.cognitiveservices.azure.com`) wurden zwei OpenAI-Audio-Modelle als mögliche Alternative geprüft:
+
+- **`gpt-4o-transcribe-diarize`** (OpenAI, REST `POST /v1/audio/transcriptions`, seit Okt. 2025): Diarization via `diarized_json`, bekannte Sprecher-Referenzen (bis zu 4), `stream=true` möglich — Live-Deltas vorhanden, aber Speaker-Labels erst beim Segment-Final. Continuous LID nicht vorgesehen. Akzeptiert nur Container-Formate (mp3/m4a/wav/…), kein Raw-PCM. Upload ≤ 25 MB, `chunking_strategy` Pflicht > 30 s.
+- **`gpt-realtime-whisper`** (OpenAI Realtime API, Session-Type `transcription`, WebSocket/WebRTC): nativ streaming, transcript-deltas live, Latenz-Stufen `minimal/low/medium/high/xhigh`. Erwartet 24 kHz PCM (Sidecar-Resampling nötig). **Diarization im Transcription-Session nicht unterstützt** (Doku: Felder vor Live-Schaltung verifizieren). Continuous LID nicht vorgesehen, nur ein statischer `language`-Hint pro Session.
+
+**Warum verworfen:**
+
+1. **Continuous LID fehlt in beiden Modellen.** Azure Continuous LID ist Alleinstellung. Workaround (periodische `gpt-4o-mini-transcribe`-LID-Probes) wäre Eigenbau-Komplexität ohne Qualitätsgewinn.
+2. **Live-Interim + Diarization gleichzeitig** ist bei OpenAI nicht in einem Modell verfügbar. Hybrid (`gpt-realtime-whisper` für Deltas + rollende `gpt-4o-transcribe-diarize`-Passes auf 30-s-Chunks) ist machbar, aber doppelte Audio-Pipeline und Speaker-Mapping-Zusammenführung erforderlich — Aufwand > Nutzen.
+3. **Proxy-Problem wird nicht automatisch gelöst.** Wenn die Firmenfirewall `*.cognitiveservices.azure.com` blockt, ist `api.openai.com` mit hoher Wahrscheinlichkeit ebenfalls geblockt oder muss allowgelistet werden. OpenAI ist zusätzlich über **Azure OpenAI Service** deploybar — das wäre dann wieder ein Azure-Endpoint mit demselben Block-Potenzial.
+
+**Entscheidung:** Azure bleibt der Speech-Provider. Der Workaround-Pfad gemäß Specs **T-306** (C#-Validierung von `SpeechConfig.SetProxy`) und **T-505** (Variante 3: Eigenbau-WSS-Client in C#) wird weiterverfolgt. Begründung als Entscheidungs-Record: `DECISIONS.md → AD-011`.
+
 ## Migration aus `meeting-notes` (Schritt-für-Schritt-Plan)
 
 Der Migrationsplan ist bewusst **inkrementell** aufgebaut, sodass `meeting-notes` jederzeit lauffähig bleibt und dieses Projekt nie aus dem Nichts entsteht:
@@ -132,3 +147,4 @@ Der Migrationsplan ist bewusst **inkrementell** aufgebaut, sodass `meeting-notes
 - 25.06.2026, 22:30 UTC: Projektordner `meeting-notes-tauri` angelegt (`PROJECT.md`, `README.md`, `DECISIONS.md`, `SPEC-v0.1.md`, `specs/T-*.md`).
 - 25.06.2026, 22:30 UTC: Architekturziel dokumentiert (Tauri 2 + C#-Sidecar mit Azure Speech SDK in NuGet-Form).
 - 25.06.2026, 22:30 UTC: Migration in 5 Phasen geplant; Phase 0 (Doku) abgeschlossen, Phase 1 ff. warten auf Nutzer-Freigabe.
+- 2026-06-27, 09:21 UTC: Anbieter-Alternativen geprüft (`gpt-4o-transcribe-diarize`, `gpt-realtime-whisper`) und verworfen — Continuous LID fehlt in beiden, Hybrid wäre doppelte Audio-Pipeline, Proxy-Problem bleibt bestehen. Azure bleibt Provider. Doku-Update ohne Spike/Implementierung auf Nutzer-Wunsch (siehe neuer Abschnitt oben + `DECISIONS.md → AD-011`).
