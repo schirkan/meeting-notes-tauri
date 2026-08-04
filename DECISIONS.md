@@ -209,6 +209,30 @@ Architekturentscheidungen für die Tauri-Migration. Wird fortlaufend ergänzt, w
 
 ---
 
+## AD-011 · Azure bleibt Speech-Provider — OpenAI-Alternativen verworfen (2026-06-27)
+
+**Kontext:** Der Azure-Cognitive-Services-Endpoint `*.cognitiveservices.azure.com` (hier `schir-mbpjdimi-swedencentral.cognitiveservices.azure.com`) wird in der Firmenumgebung per Proxy/Firewall geblockt. Damit ist die zentrale Designannahme — Azure liefert Live-Transkription mit Diarization und Continuous LID — in der jetzigen Netzwerkumgebung nicht direkt nutzbar. Wir prüfen, ob ein Anbieterwechsel das Problem umgeht.
+
+**Evaluierte Alternativen:**
+- **`gpt-4o-transcribe-diarize`** (OpenAI, REST `POST /v1/audio/transcriptions`, seit Okt. 2025): Diarization via `diarized_json`, bekannte Sprecher-Referenzen (bis zu 4), `stream=true` möglich. Live-Deltas vorhanden, aber Speaker-Labels erst beim Segment-Final. Continuous LID nicht vorgesehen. Akzeptiert nur Container-Formate (mp3/m4a/wav/…), kein Raw-PCM. Upload ≤ 25 MB, `chunking_strategy` Pflicht > 30 s.
+- **`gpt-realtime-whisper`** (OpenAI Realtime API, Session-Type `transcription`): nativ streaming über WebSocket/WebRTC, transcript-deltas live, Latenz-Stufen `minimal/low/medium/high/xhigh`. Erwartet 24 kHz PCM (Sidecar-Resampling nötig). Diarization im Transcription-Session **nicht unterstützt**. Continuous LID nicht vorgesehen, nur ein statischer `language`-Hint pro Session.
+
+**Entscheidung:** Wir bleiben bei Azure Speech. OpenAI ist **kein** Ersatz für die aktuelle Anforderungsmenge.
+
+**Begründung:**
+- **Continuous LID ist Alleinstellung von Azure.** Beide OpenAI-Modelle haben kein Äquivalent. Workaround (periodische `gpt-4o-mini-transcribe`-LID-Probes) wäre Eigenbau-Komplexität ohne Qualitätsgewinn.
+- **Live-Interim + Diarization gleichzeitig** ist bei OpenAI nur als Hybrid-Pipeline möglich (zwei Modelle, doppelte Audio-Verarbeitung, Speaker-Mapping-Zusammenführung). Eigenbau-Aufwand > Nutzen.
+- **Proxy-Problem wird nicht gelöst.** Wenn `*.cognitiveservices.azure.com` per Firewall geblockt wird, ist `api.openai.com` mit hoher Wahrscheinlichkeit ebenfalls blockt oder muss allowgelistet werden. OpenAI ist zusätzlich via Azure OpenAI Service deploybar — das wäre dann wieder ein Azure-Endpoint mit demselben Block-Potenzial.
+- **Bestandsschutz:** Der C#-Sidecar-Konsolidierungspfad (AD-002) und der damit verbundene Migrationsaufwand sind bereits in der Roadmap eingeplant. Ein Anbieterwechsel würde diese Roadmap gegenstandslos machen, ohne die Kernprobleme zu lösen.
+
+**Stattdessen verfolgen wir weiter:**
+- Spec **T-306**: Validierung, ob `SpeechConfig.SetProxy()` in der C#-Variante zuverlässiger funktioniert als im Node-Pfad.
+- Spec **T-505** Variante 3: Eigenbau eines WSS-Clients in C# gegen den Azure-Speech-WSS-Endpoint direkt — umgeht das `setProxy()`-Limit der nativen SDK.
+
+**Offene Folgefrage:** Sollten die Workarounds in T-306/T-505 Variante 3 scheitern, ist ein **OpenAI-Hybrid** (`gpt-realtime-whisper` + rollende `gpt-4o-transcribe-diarize`-Passes auf 30-s-Chunks) die Plan-B-Option — dann aber mit akzeptiertem Verlust von Continuous LID und zusätzlicher Pipeline-Komplexität. Hybrid-Skizze ist in `PROJECT.md` → "Anbieter-Alternativen evaluiert" dokumentiert.
+
+---
+
 ## Offene Fragen
 
 | # | Frage | Status |
