@@ -79,6 +79,19 @@ export function SettingsPanel(props: SettingsPanelProps) {
           </select>
         </label>
 
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
+            checked={settings.diarization.mic}
+            onChange={(event) => setSettings((prev) => ({
+              ...prev,
+              diarization: { ...prev.diarization, mic: event.target.checked }
+            }))}
+            disabled={statusRunning}
+          />
+          <span>Sprechererkennung für Mikrofon</span>
+        </label>
+
         <label>
           Speaker Loopback
           <select
@@ -99,6 +112,20 @@ export function SettingsPanel(props: SettingsPanelProps) {
             ))}
           </select>
         </label>
+
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
+            checked={settings.diarization.speaker}
+            onChange={(event) => setSettings((prev) => ({
+              ...prev,
+              diarization: { ...prev.diarization, speaker: event.target.checked }
+            }))}
+            disabled={statusRunning}
+          />
+          <span>Sprechererkennung für Speaker</span>
+        </label>
+        <p className="meta">Änderungen gelten nach dem Speichern für die nächste Aufnahme.</p>
       </div>
 
       <button className="primary-button settings-save-button" type="button" onClick={() => void onSaveSettings()} disabled={statusRunning}>

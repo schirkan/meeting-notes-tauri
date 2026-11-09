@@ -35,11 +35,12 @@ public static class SpeechConfiguration
         return string.IsNullOrWhiteSpace(key) ? args.GetValueOrDefault("--speech-key") : key;
     }
 
-    public static SpeechConfig Create(AzureSpeechConfig config, string language)
+    public static SpeechConfig Create(AzureSpeechConfig config, string language, bool diarizeIntermediateResults = true)
     {
         var speech = SpeechConfig.FromEndpoint(new Uri(config.Endpoint), config.SpeechKey);
         speech.SpeechRecognitionLanguage = language;
-        speech.SetProperty("SpeechServiceResponse_DiarizeIntermediateResults", "true");
+        speech.SetProperty(PropertyId.SpeechServiceResponse_DiarizeIntermediateResults,
+            diarizeIntermediateResults ? "true" : "false");
         speech.SetProperty("SpeechServiceResponse_InterimResults", config.InterimResults ? "true" : "false");
         speech.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
         if (config.Proxy is { } proxy)

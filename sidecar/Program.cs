@@ -16,8 +16,8 @@ using NAudio.Wave;
 //      (WasapiLoopbackCapture). Each feeds a BufferedWaveProvider, which is
 //      drained by a MediaFoundationResampler to 16 kHz / 16-bit / mono.
 //   4. Forward the resampled PCM frames into AzureSpeechService, which owns
-//      two Recognizers (SpeechRecognizer for mic, ConversationTranscriber
-//      for speaker) and surfaces transcripts + errors via Logger.
+//      one recognizer per source, selected independently by diarization
+//      settings, and surfaces transcripts + errors via Logger.
 //   5. Emit everything (status, transcript, error, debug) as JSON-Lines
 //      on stdout for the Tauri main process to consume.
 //
@@ -45,6 +45,17 @@ if (argsMap.ContainsKey("--list-devices"))
     var snapshot = DeviceResolver.ListDevices();
     Logger.Event("device_list", snapshot);
     return 0;
+}
+
+DiarizationSettings diarization;
+try
+{
+    diarization = ArgsParser.ParseDiarization(argsMap);
+}
+catch (ArgumentException)
+{
+    Logger.Error("SIDECAR_START_FAILED", "Invalid diarization options: --diarization-mic and --diarization-speaker must be true or false.");
+    return 11;
 }
 
 AzureProxyConfig? proxy;
@@ -144,7 +155,7 @@ try
             SpeechKey: speechKey!,
             InterimResults: true,
             Proxy: proxy);
-        var userSettings = new UserSettings(language, new DeviceIds(micId, speakerId));
+        var userSettings = new UserSettings(language, new DeviceIds(micId, speakerId)) { Diarization = diarization };
         azure = new AzureSpeechService(azureConfig, userSettings);
         await azure.InitAsync();
         await azure.StartAsync(new AzureAudioFormat(sampleRate, 16, 1));

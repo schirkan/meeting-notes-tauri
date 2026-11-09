@@ -40,7 +40,7 @@ async function openApp(options) {
     const noSubscription = () => () => {}
     window.transcriptApi = {
       getStatus: async () => ({ running: input.running ?? false }),
-      getSettings: async () => ({ language: input.language ?? 'de-DE', devices: {} }),
+      getSettings: async () => ({ language: input.language ?? 'de-DE', devices: {}, diarization: input.diarization }),
       saveSettings: async (settings) => {
         window.lastSavedSettings = settings
         return settings
@@ -66,7 +66,11 @@ async function openApp(options) {
         }
         return input.connectivityResult
       },
-      onSegment: noSubscription,
+      copyTranscript: async (segments) => { window.lastCopiedSegments = segments },
+      onSegment: (callback) => {
+        window.emitSegment = callback
+        return () => { delete window.emitSegment }
+      },
       onError: noSubscription,
       onStatus: noSubscription,
       onDebugLog: noSubscription
@@ -207,6 +211,82 @@ test('language dropdown remains disabled during recording', async () => {
   try {
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
     assert.equal(await page.getByRole('combobox', { name: 'Sprache', exact: true }).isDisabled(), true)
+    assert.equal(await page.getByRole('checkbox', { name: 'Sprechererkennung für Mikrofon', exact: true }).isDisabled(), true)
+    assert.equal(await page.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).isDisabled(), true)
+  } finally {
+    await page.close()
+  }
+})
+
+test('diarization settings default on and independently save all source combinations', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+    const mic = page.getByRole('checkbox', { name: 'Sprechererkennung für Mikrofon', exact: true })
+    const speaker = page.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true })
+    assert.equal(await mic.isChecked(), true)
+    assert.equal(await speaker.isChecked(), true)
+    for (const settings of [{ mic: false, speaker: true }, { mic: true, speaker: false }, { mic: false, speaker: false }, { mic: true, speaker: true }]) {
+      await mic.setChecked(settings.mic)
+      await speaker.setChecked(settings.speaker)
+      await page.getByRole('button', { name: 'Einstellungen speichern', exact: true }).click()
+      await page.waitForFunction((value) => window.lastSavedSettings?.diarization.mic === value.mic && window.lastSavedSettings?.diarization.speaker === value.speaker, settings)
+      assert.equal(await mic.isChecked(), settings.mic)
+      assert.equal(await speaker.isChecked(), settings.speaker)
+    }
+    await page.getByRole('button', { name: 'Dialog schließen', exact: true }).click()
+    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+    assert.equal(await mic.isChecked(), true)
+    assert.equal(await speaker.isChecked(), true)
+  } finally {
+    await page.close()
+  }
+})
+
+test('saved disabled diarization options remain disabled on startup', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, diarization: { mic: false, speaker: false } })
+  try {
+    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+    assert.equal(await page.getByRole('checkbox', { name: 'Sprechererkennung für Mikrofon', exact: true }).isChecked(), false)
+    assert.equal(await page.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).isChecked(), false)
+  } finally {
+    await page.close()
+  }
+})
+
+test('Mic speakers get independent badges, aliases, interim handling and export labels', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.waitForFunction(() => typeof window.emitSegment === 'function')
+    const events = [
+      { source: 'mic', speaker: 'Guest-1', text: 'Mic erste Stimme.', state: 'final' },
+      { source: 'mic', speaker: 'Guest-2', text: 'Mic zweite Stimme.', state: 'final' },
+      { source: 'speaker', speaker: 'Guest-1', text: 'Speaker erste Stimme.', state: 'final' },
+      { source: 'mic', speaker: 'unknown', text: 'Vorläufig unbekannt.', state: 'interim' },
+      { source: 'mic', speaker: 'Guest-1', text: 'Vorläufig erste Stimme.', state: 'interim' },
+      { source: 'mic', speaker: 'Guest-2', text: 'Mic korrigierte zweite Stimme.', state: 'final' }
+    ]
+    for (const [index, event] of events.entries()) {
+      await page.evaluate((segment) => window.emitSegment(segment), { ...event, id: `segment-${index}`, language: 'de-DE', timestampIso: new Date(2026, 10, 9, 13, 0, index).toISOString() })
+    }
+    await page.locator('.segment.final').nth(3).waitFor()
+    assert.equal(await page.locator('.segment.interim').count(), 0)
+    assert.equal(await page.locator('.speaker-mapping-table tbody tr').count(), 3)
+    assert.deepEqual(await page.locator('.speaker-badge').allTextContents(), ['Mic · Guest-1', 'Mic · Guest-2', 'Speaker · Guest-1', 'Mic · Guest-2'])
+    const badges = await page.locator('.speaker-badge').evaluateAll((elements) => elements.map((element) => element.className))
+    assert.notEqual(badges[0], badges[1])
+    assert.notEqual(badges[0], badges[2])
+    await page.getByRole('textbox', { name: 'Anzeigename für Mic · Guest-1', exact: true }).fill('Anna')
+    await page.getByRole('textbox', { name: 'Anzeigename für Mic · Guest-2', exact: true }).fill('Clara')
+    await page.getByRole('textbox', { name: 'Anzeigename für Speaker · Guest-1', exact: true }).fill('Bert')
+    assert.deepEqual(await page.locator('.speaker-badge').allTextContents(), ['Anna', 'Clara', 'Bert', 'Clara'])
+    assert.equal(await page.locator('.hero-stats div').nth(1).locator('strong').innerText(), 'Clara')
+    await page.getByRole('button', { name: 'Transkript kopieren', exact: true }).click()
+    await page.waitForFunction(() => !!window.lastCopiedSegments)
+    const copied = await page.evaluate(() => window.lastCopiedSegments)
+    assert.deepEqual(copied.map((segment) => segment.speaker), ['Anna', 'Clara', 'Bert', 'Clara'])
+    assert.deepEqual(copied.map((segment) => segment.source), ['mic', 'mic', 'speaker', 'mic'])
+    assert.ok(copied.every((segment) => segment.state === 'final'))
   } finally {
     await page.close()
   }

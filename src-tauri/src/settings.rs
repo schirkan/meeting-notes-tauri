@@ -3,7 +3,7 @@
 //! Layout: config/ next to the application EXE (portable/release),
 //! or the repository's config/ directory in development.
 //!   config/azure.json          (Azure endpoint, region, speechKey, proxy)
-//!   config/user-settings.json  (language, device ids)
+//!   config/user-settings.json  (language, device ids, per-source diarization)
 //!
 //! Both files are written atomically (temp file + rename) so a crash
 //! mid-write never corrupts the on-disk config.
@@ -40,6 +40,21 @@ pub struct AzureProxyConfig {
 pub struct UserSettings {
     pub language: String,
     pub devices: DeviceIds,
+    #[serde(default)]
+    pub diarization: DiarizationSettings,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct DiarizationSettings {
+    pub mic: bool,
+    pub speaker: bool,
+}
+
+impl Default for DiarizationSettings {
+    fn default() -> Self {
+        Self { mic: true, speaker: true }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -91,6 +106,44 @@ mod config_path_tests {
     use super::*;
 
     #[test]
+    fn diarization_defaults_and_persistence_preserve_each_source() {
+        assert_eq!(default_user_settings().diarization, DiarizationSettings::default());
+        for (options, mic, speaker) in [
+            ("", true, true),
+            (r#", "diarization": {}"#, true, true),
+            (r#", "diarization": {"mic": false}"#, false, true),
+            (r#", "diarization": {"speaker": false}"#, true, false),
+            (r#", "diarization": {"mic": false, "speaker": false}"#, false, false),
+            (r#", "diarization": {"mic": true, "speaker": true}"#, true, true),
+        ] {
+            let raw = format!(r#"{{"language":"invalid","devices":{{}}{options}}}"#);
+            let settings = normalize_user_settings(serde_json::from_str(&raw).unwrap());
+            assert_eq!(settings.language, DEFAULT_LANGUAGE);
+            assert_eq!(settings.diarization, DiarizationSettings { mic, speaker });
+            let persisted = serde_json::to_string_pretty(&settings).unwrap();
+            let json: serde_json::Value = serde_json::from_str(&persisted).unwrap();
+            assert_eq!(json["diarization"], serde_json::json!({"mic": mic, "speaker": speaker}));
+            assert_eq!(serde_json::from_str::<UserSettings>(&persisted).unwrap().diarization,
+                settings.diarization);
+        }
+    }
+
+    #[tokio::test]
+    async fn diarization_persists_false_atomically() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target").join(format!("diarization-{}.json", uuid::Uuid::new_v4()));
+        let mut settings = default_user_settings();
+        settings.diarization = DiarizationSettings { mic: false, speaker: true };
+        let json = serde_json::to_string_pretty(&settings).unwrap();
+        write_atomic(&path, json.as_bytes()).await.unwrap();
+        let raw = tokio::fs::read_to_string(&path).await.unwrap();
+        tokio::fs::remove_file(&path).await.unwrap();
+        assert!(!path.with_extension("tmp").exists());
+        assert_eq!(serde_json::from_str::<UserSettings>(&raw).unwrap().diarization,
+            settings.diarization);
+    }
+
+    #[test]
     fn portable_config_is_next_to_exe() {
         let exe = Path::new(r"D:\Portable\Meeting Notes\meeting-notes-tauri.exe");
         assert_eq!(config_dir_for(exe, None).unwrap(), PathBuf::from(r"D:\Portable\Meeting Notes\config"));
@@ -130,6 +183,7 @@ pub fn default_user_settings() -> UserSettings {
     UserSettings {
         language: DEFAULT_LANGUAGE.into(),
         devices: DeviceIds { mic_id: None, speaker_loopback_id: None },
+        diarization: DiarizationSettings::default(),
     }
 }
 

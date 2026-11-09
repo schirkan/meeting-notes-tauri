@@ -38,6 +38,8 @@ impl From<tauri_plugin_shell::Error> for SidecarError {
 #[serde(rename_all = "camelCase")]
 pub struct SidecarOptions {
     pub sample_rate: u32,
+    #[serde(default)]
+    pub diarization: crate::settings::DiarizationSettings,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -65,6 +67,11 @@ pub struct SidecarOptions {
 pub struct SidecarHandle {
     pub child: Arc<Mutex<Option<CommandChild>>>,
     pub events_rx: mpsc::Receiver<CommandEvent>,
+}
+
+fn diarization_arguments(settings: &crate::settings::DiarizationSettings) -> [String; 4] {
+    ["--diarization-mic".into(), settings.mic.to_string(),
+        "--diarization-speaker".into(), settings.speaker.to_string()]
 }
 
 fn proxy_arguments(proxy: &crate::settings::AzureProxyConfig) -> Result<Vec<String>, SidecarError> {
@@ -158,6 +165,21 @@ mod connectivity_tests {
     use super::*;
 
     #[test]
+    fn diarization_arguments_forward_independent_explicit_booleans() {
+        for mic in [true, false] {
+            for speaker in [true, false] {
+                let settings = crate::settings::DiarizationSettings { mic, speaker };
+                assert_eq!(diarization_arguments(&settings),
+                    ["--diarization-mic".to_string(), mic.to_string(),
+                        "--diarization-speaker".to_string(), speaker.to_string()]);
+            }
+        }
+        let options: SidecarOptions = serde_json::from_str(r#"{"sampleRate":16000}"#).unwrap();
+        assert_eq!(diarization_arguments(&options.diarization),
+            ["--diarization-mic", "true", "--diarization-speaker", "true"]);
+    }
+
+    #[test]
     fn proxy_arguments_exclude_credentials() {
         let proxy = crate::settings::AzureProxyConfig {
             host: "proxy.test".into(), port: 8080,
@@ -186,7 +208,8 @@ pub async fn start<R: Runtime>(
     let mut command = app.shell().command(exe_path.to_string_lossy().as_ref());
 
     let sample_rate = options.sample_rate.clamp(8000, 48000);
-    command = command.args(["--sample-rate".to_string(), sample_rate.to_string()]);
+    command = command.args(["--sample-rate".to_string(), sample_rate.to_string()])
+        .args(diarization_arguments(&options.diarization));
 
     if let Some(language) = options.language.as_deref() {
         command = command.args(["--language".to_string(), language.into()]);

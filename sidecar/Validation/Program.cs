@@ -14,6 +14,12 @@ void Check(bool condition, string description)
     assertions++;
 }
 Dictionary<string, string?> Parse(params string[] args) => ArgsParser.Parse(args);
+DiarizationValidation.Run(Check);
+if (args.Contains("--diarization-only"))
+{
+    Console.WriteLine($"Diarization validation passed ({assertions} assertions).");
+    return;
+}
 try
 {
     foreach (var variable in variables) Environment.SetEnvironmentVariable(variable, null);

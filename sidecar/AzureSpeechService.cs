@@ -10,13 +10,11 @@ namespace MeetingNotes.Sidecar;
 
 /// <summary>
 /// C#-side port of the Node AzureTranscriptionService from meeting-notes.
-/// Owns one Recognizer per source (mic = SpeechRecognizer, speaker =
-/// ConversationTranscriber), feeds them from the audio resampler via
-/// PushAudioInputStream, and surfaces events as JSON-Lines to the
-/// Tauri main process.
-///
-/// Continuous Language ID is enabled; diarization for the speaker
-/// channel is exposed via SpeakerId on ConversationTranscriptionResults.
+/// Owns one recognizer per source: ConversationTranscriber when that
+/// source's diarization is enabled, otherwise SpeechRecognizer. Feeds
+/// resampled audio via PushAudioInputStream and emits JSON-Lines.
+/// Continuous Language ID is enabled; diarized interim and final events
+/// retain the SDK SpeakerId and source for frontend namespacing.
 /// </summary>
 public sealed class AzureSpeechService : IDisposable
 {
@@ -44,7 +42,8 @@ public sealed class AzureSpeechService : IDisposable
         if (_initialized) return;
         Logger.Info("azure", "init", "AzureSpeechService.init: SDK wird initialisiert.");
 
-        _speechConfig = SpeechConfiguration.Create(_config, _settings.Language);
+        _speechConfig = SpeechConfiguration.Create(_config, _settings.Language,
+            _settings.Diarization.Mic || _settings.Diarization.Speaker);
 
         if (_config.Proxy is not null)
             Logger.Info("azure", "proxy", "Azure Speech Proxy konfiguriert; Zugangsdaten werden nicht protokolliert.");
@@ -129,7 +128,7 @@ public sealed class AzureSpeechService : IDisposable
         var closeTasks = _streams.Values.Select(state => Task.Run(() => FinalizeStream(state))).ToArray();
         await Task.WhenAll(closeTasks);
         _streams.Clear();
-        _missingSpeakerIdLogged.Clear();
+        lock (_missingSpeakerIdLogged) _missingSpeakerIdLogged.Clear();
         _firstFrameLogged.Clear();
         _pushCounters.Clear();
     }
@@ -150,7 +149,7 @@ public sealed class AzureSpeechService : IDisposable
         var pushStream = AudioInputStream.CreatePushStream(audioFormat);
         var audioConfig = AudioConfig.FromStreamInput(pushStream);
         var autoDetect = AutoDetectSourceLanguageConfig.FromLanguages(GetLidCandidates());
-        var useConversation = source == SourceSpeaker;
+        var useConversation = GetRecognitionMode(source) == "conversationTranscriber";
 
         Logger.Info(
             "azure",
@@ -166,17 +165,14 @@ public sealed class AzureSpeechService : IDisposable
             {
                 var text = e.Result?.Text?.Trim();
                 if (!string.IsNullOrEmpty(text))
-                    EmitTranscript(source, text, "interim", 0.8, null, ExtractConversationLanguage(e.Result));
+                    EmitTranscript(source, text, "interim", 0.8, e.Result?.SpeakerId, ExtractConversationLanguage(e.Result));
             };
             recognizer.Transcribed += (_, e) =>
             {
                 var text = e.Result?.Text?.Trim();
                 if (!string.IsNullOrEmpty(text))
-                {
-                    var speaker = e.Result.SpeakerId?.Trim() ?? string.Empty;
-                    EmitTranscript(source, text, "final", 0.9, string.IsNullOrEmpty(speaker) ? null : speaker,
+                    EmitTranscript(source, text, "final", 0.9, e.Result?.SpeakerId,
                         ExtractConversationLanguage(e.Result));
-                }
             };
             recognizer.Canceled += (_, e) => HandleCanceled(source, "conversationTranscriber", e);
             var state = new StreamState(recognizer, pushStream, "conversationTranscriber", source);
@@ -279,20 +275,31 @@ public sealed class AzureSpeechService : IDisposable
         Logger.Event("transcript:error", new { code, message = $"[{source}/{mode}] {details}" });
     }
 
-    private void EmitTranscript(string source, string text, string state, double confidence, string? speaker, string? language)
+    internal string GetRecognitionMode(string source) =>
+        _settings.Diarization.IsEnabled(source) ? "conversationTranscriber" : "speechRecognizer";
+
+    internal void EmitTranscript(string source, string text, string state, double confidence, string? speaker, string? language)
     {
-        if (source == SourceSpeaker && string.IsNullOrEmpty(speaker) && _missingSpeakerIdLogged.Add(source))
+        var diarized = _settings.Diarization.IsEnabled(source);
+        if (diarized && string.IsNullOrWhiteSpace(speaker))
         {
-            Logger.Warn(
-                "azure", "missing_speaker",
-                $"ConversationTranscriber liefert für {source} aktuell keine speakerId. " +
-                "Prüfe Region, Feature-Verfügbarkeit und ob diarization-fähige Events eintreffen.");
+            lock (_missingSpeakerIdLogged)
+            {
+                if (_missingSpeakerIdLogged.Add(source))
+                    Logger.Warn(
+                        "azure", "missing_speaker",
+                        $"ConversationTranscriber liefert für {source} aktuell keine speakerId. " +
+                        "Prüfe Region, Feature-Verfügbarkeit und ob diarization-fähige Events eintreffen.");
+            }
         }
+        var speakerId = diarized
+            ? (string.IsNullOrWhiteSpace(speaker) ? "unknown" : speaker)
+            : (source == SourceMic ? "self" : "guest");
         Logger.Event("transcript", new
         {
             id = Guid.NewGuid().ToString(),
             source,
-            speaker = string.IsNullOrEmpty(speaker) ? "unknown" : speaker,
+            speaker = speakerId,
             language,
             timestampIso = DateTime.UtcNow.ToString("O"),
             text,
@@ -301,8 +308,9 @@ public sealed class AzureSpeechService : IDisposable
         });
     }
 
-    private string? ExtractSpeechLanguage(SpeechRecognitionResult result)
+    private string? ExtractSpeechLanguage(SpeechRecognitionResult? result)
     {
+        if (result is null) return null;
         try
         {
             var detected = AutoDetectSourceLanguageResult.FromResult(result);
@@ -312,8 +320,9 @@ public sealed class AzureSpeechService : IDisposable
         catch { return null; }
     }
 
-    private string? ExtractConversationLanguage(SpeechRecognitionResult result)
+    private string? ExtractConversationLanguage(SpeechRecognitionResult? result)
     {
+        if (result is null) return null;
         try
         {
             var detected = AutoDetectSourceLanguageResult.FromResult(result);
@@ -340,7 +349,20 @@ public sealed record AzureSpeechConfig(
 
 public sealed record AzureProxyConfig(string Host, int Port, string? Username, string? Password);
 
-public sealed record UserSettings(string Language, DeviceIds Devices);
+public sealed record UserSettings(string Language, DeviceIds Devices)
+{
+    public DiarizationSettings Diarization { get; init; } = new();
+}
+
+public sealed record DiarizationSettings(bool Mic = true, bool Speaker = true)
+{
+    public bool IsEnabled(string source) => source switch
+    {
+        AzureSpeechService.SourceMic => Mic,
+        AzureSpeechService.SourceSpeaker => Speaker,
+        _ => throw new ArgumentException("Unknown audio source.", nameof(source))
+    };
+}
 public sealed record DeviceIds(string? MicId, string? SpeakerLoopbackId);
 
 public sealed record AzureAudioFormat(int SampleRate, int BitsPerSample, int Channels);

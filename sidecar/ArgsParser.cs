@@ -8,6 +8,17 @@ namespace MeetingNotes.Sidecar;
 /// </summary>
 public static class ArgsParser
 {
+    public static DiarizationSettings ParseDiarization(IReadOnlyDictionary<string, string?> args)
+    {
+        bool Enabled(string key)
+        {
+            if (!args.TryGetValue(key, out var raw)) return true;
+            if (bool.TryParse(raw, out var enabled)) return enabled;
+            throw new System.ArgumentException($"{key} must be true or false.");
+        }
+        return new DiarizationSettings(Enabled("--diarization-mic"), Enabled("--diarization-speaker"));
+    }
+
     public static Dictionary<string, string?> Parse(string[] args)
     {
         var result = new Dictionary<string, string?>(System.StringComparer.OrdinalIgnoreCase);

@@ -86,6 +86,7 @@ pub async fn start_recording(
 
     let options = SidecarOptions {
         sample_rate: 16_000,
+        diarization: user.diarization.clone(),
         language: Some(user.language.clone()),
         speech_key,
         speech_region,

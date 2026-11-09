@@ -13,8 +13,14 @@ export interface AzureConfig {
   proxy?: AzureProxyConfig
 }
 
+export interface DiarizationSettings {
+  mic: boolean
+  speaker: boolean
+}
+
 export interface UserSettings {
   language: string
+  diarization: DiarizationSettings
   devices: {
     micId: string | null
     speakerLoopbackId: string | null
@@ -35,6 +41,7 @@ export interface AzureConfigState {
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   language: 'de-DE',
+  diarization: { mic: true, speaker: true },
   devices: {
     micId: null,
     speakerLoopbackId: null
@@ -47,12 +54,21 @@ export function isValidBcp47Language(input: unknown): input is string {
   return typeof input === 'string' && BCP47_PATTERN.test(input.trim())
 }
 
-export function normalizeUserSettings(input: Partial<UserSettings> | null | undefined): UserSettings {
+type UserSettingsInput = Partial<Omit<UserSettings, 'devices' | 'diarization'>> & {
+  devices?: Partial<UserSettings['devices']> | null
+  diarization?: Partial<DiarizationSettings> | null
+}
+
+export function normalizeUserSettings(input: UserSettingsInput | null | undefined): UserSettings {
   const language = input?.language?.trim()
   const safeLanguage = language && BCP47_PATTERN.test(language) ? language : DEFAULT_USER_SETTINGS.language
 
   return {
     language: safeLanguage,
+    diarization: {
+      mic: typeof input?.diarization?.mic === 'boolean' ? input.diarization.mic : DEFAULT_USER_SETTINGS.diarization.mic,
+      speaker: typeof input?.diarization?.speaker === 'boolean' ? input.diarization.speaker : DEFAULT_USER_SETTINGS.diarization.speaker
+    },
     devices: {
       micId: input?.devices?.micId ?? DEFAULT_USER_SETTINGS.devices.micId,
       speakerLoopbackId: input?.devices?.speakerLoopbackId ?? DEFAULT_USER_SETTINGS.devices.speakerLoopbackId

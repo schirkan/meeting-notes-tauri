@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { AzureConfigState, UserSettings } from '@shared/config-contract'
+import { DEFAULT_USER_SETTINGS, normalizeUserSettings, type AzureConfigState } from '@shared/config-contract'
+import { formatSpeakerKey, getSpeakerClass, getSpeakerKey } from './speaker-utils'
 import {
   type AudioDeviceSnapshot,
   type DebugLogEntry,
@@ -33,14 +34,6 @@ const initialStatus: TranscriptStatus = {
   running: false
 }
 
-const initialSettings: UserSettings = {
-  language: 'de-DE',
-  devices: {
-    micId: null,
-    speakerLoopbackId: null
-  }
-}
-
 const initialDevices: AudioDeviceSnapshot = {
   inputs: [],
   outputs: [],
@@ -52,7 +45,7 @@ export function useAppState() {
   const [segments, setSegments] = useState<TranscriptSegment[]>([])
   const [lastError, setLastError] = useState<TranscriptError | null>(null)
   const [runtimeIssue, setRuntimeIssue] = useState<string | null>(null)
-  const [settings, setSettings] = useState<UserSettings>(initialSettings)
+  const [settings, setSettings] = useState(DEFAULT_USER_SETTINGS)
   const [devices, setDevices] = useState<AudioDeviceSnapshot>(initialDevices)
   const [debugLog, setDebugLog] = useState<DebugLogEntry[]>([])
   const [settingsHint, setSettingsHint] = useState<string | null>(null)
@@ -117,7 +110,7 @@ export function useAppState() {
         if (disposed) return
         setStatus(nextStatus)
         setSessionStartedAt(nextStatus.startedAt ?? null)
-        setSettings(nextSettings)
+        setSettings(normalizeUserSettings(nextSettings))
         setDevices(nextDevices)
         setDebugLog(nextDebugLog)
       })
@@ -133,29 +126,20 @@ export function useAppState() {
         const sameSpeakerKey = (entry: TranscriptSegment) =>
           entry.source === segment.source && entry.speaker === segment.speaker
 
-        const isUnknownSpeaker = (speaker: string) => {
-          const normalized = speaker.trim().toLowerCase()
-          return normalized === 'unknown'
-        }
-
-        const withoutInterimForSpeaker = prev.filter(
-          (entry) => !(sameSpeakerKey(entry) && entry.state === 'interim')
-        )
-
-        const withoutUnknownInterimForSource = withoutInterimForSpeaker.filter(
-          (entry) => !(entry.source === segment.source && entry.state === 'interim' && isUnknownSpeaker(entry.speaker))
+        const withoutInterimForSource = prev.filter(
+          (entry) => !(entry.source === segment.source && entry.state === 'interim')
         )
 
         if (segment.state === 'final') {
-          const previousFinalIndex = [...withoutUnknownInterimForSource]
+          const previousFinalIndex = [...withoutInterimForSource]
             .reverse()
             .findIndex((entry) => sameSpeakerKey(entry) && entry.state === 'final')
 
           if (previousFinalIndex >= 0) {
-            const actualIndex = withoutUnknownInterimForSource.length - 1 - previousFinalIndex
-            const previousFinal = withoutUnknownInterimForSource[actualIndex]
+            const actualIndex = withoutInterimForSource.length - 1 - previousFinalIndex
+            const previousFinal = withoutInterimForSource[actualIndex]
 
-            if (actualIndex === withoutUnknownInterimForSource.length - 1) {
+            if (actualIndex === withoutInterimForSource.length - 1) {
               const mergedFinal: TranscriptSegment = {
                 ...segment,
                 id: previousFinal.id,
@@ -163,16 +147,16 @@ export function useAppState() {
                 timestampIso: segment.timestampIso
               }
 
-              return withoutUnknownInterimForSource
+              return withoutInterimForSource
                 .map((entry, index) => (index === actualIndex ? mergedFinal : entry))
                 .slice(-500)
             }
           }
 
-          return [...withoutUnknownInterimForSource, segment].slice(-500)
+          return [...withoutInterimForSource, segment].slice(-500)
         }
 
-        return [...withoutUnknownInterimForSource, segment].slice(-500)
+        return [...withoutInterimForSource, segment].slice(-500)
       })
     })
 
@@ -300,8 +284,8 @@ export function useAppState() {
       [
         ...new Set(
           segments
-            .map((segment) => segment.speaker.trim())
-            .filter((speaker) => speaker.length > 0 && speaker.toLowerCase() !== 'unknown')
+            .filter((segment) => segment.speaker.trim().length > 0 && segment.speaker.trim().toLowerCase() !== 'unknown')
+            .map(getSpeakerKey)
         )
       ],
     [segments]
@@ -402,7 +386,7 @@ export function useAppState() {
   const onSaveSettings = async () => {
     try {
       const saved = await window.transcriptApi.saveSettings(settings)
-      setSettings(saved)
+      setSettings(normalizeUserSettings(saved))
       const refreshedDevices = await window.transcriptApi.getDevices()
       setDevices(refreshedDevices)
       setSettingsHint(null)
@@ -481,7 +465,10 @@ export function useAppState() {
 
   const onCopyTranscript = async () => {
     try {
-      await window.transcriptApi.copyTranscript(segments)
+      await window.transcriptApi.copyTranscript(segments.map((segment) => ({
+        ...segment,
+        speaker: getSpeakerLabel(getSpeakerKey(segment))
+      })))
       setToast({ message: 'Finales Transkript wurde in die Zwischenablage kopiert.', variant: 'info', persistent: false })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Kopieren fehlgeschlagen.'
@@ -500,29 +487,9 @@ export function useAppState() {
     }
   }
 
-  const getSpeakerClass = (speaker: string) => {
-    const normalized = speaker.toLowerCase()
-
-    if (normalized.includes('unknown')) return 'speaker-unknown'
-    if (normalized.includes('self')) return 'speaker-mic-self'
-
-    const numberedSpeakerMatch = normalized.match(/(?:guest|speaker|participant|user)[\s:_-]?(\d{1,3})/)
-    if (numberedSpeakerMatch) {
-      const parsed = Number(numberedSpeakerMatch[1])
-      if (Number.isFinite(parsed) && parsed >= 1) {
-        const normalizedIndex = ((parsed - 1) % 30) + 1
-        return `speaker-guest-${normalizedIndex}`
-      }
-    }
-
-    if (normalized.includes('guest')) return 'speaker-guest-1'
-
-    return ''
-  }
-
   const getSpeakerLabel = (speaker: string) => {
     const alias = speakerAliases[speaker]?.trim()
-    return alias && alias.length > 0 ? alias : speaker
+    return alias && alias.length > 0 ? alias : formatSpeakerKey(speaker)
   }
 
   return {

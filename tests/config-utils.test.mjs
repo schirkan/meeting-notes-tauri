@@ -16,7 +16,7 @@ import { register } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL as toUrl } from 'node:url'
-import { readFileSync, writeFileSync, unlinkSync } from 'node:fs'
+import { readFileSync, writeFileSync, unlinkSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -39,10 +39,12 @@ async function compileAndImport() {
   const utilsPath = join(tmp, 'renderer', 'src', 'config-utils.js')
   const contract = await import(toUrl(contractPath).href)
   const utils = await import(toUrl(utilsPath).href)
-  return { contract, utils }
+  const speakers = await import(toUrl(join(tmp, 'renderer', 'src', 'speaker-utils.js')).href)
+  rmSync(tmp, { recursive: true, force: true })
+  return { contract, utils, speakers }
 }
 
-const { contract, utils } = await compileAndImport()
+const { contract, utils, speakers } = await compileAndImport()
 
 test('isValidBcp47Language accepts canonical codes', () => {
   assert.equal(contract.isValidBcp47Language('de-DE'), true)
@@ -75,6 +77,50 @@ test('normalizeUserSettings accepts valid BCP-47', () => {
 test('normalizeUserSettings handles null/undefined input', () => {
   assert.equal(contract.normalizeUserSettings(null).language, contract.DEFAULT_USER_SETTINGS.language)
   assert.equal(contract.normalizeUserSettings(undefined).language, contract.DEFAULT_USER_SETTINGS.language)
+})
+
+test('diarization defaults enable both sources for legacy and partial settings', () => {
+  for (const input of [null, undefined, {}, { language: 'en-US' }, { diarization: null }, { diarization: {} }]) {
+    assert.deepEqual(contract.normalizeUserSettings(input).diarization, { mic: true, speaker: true })
+  }
+  assert.deepEqual(contract.normalizeUserSettings({ diarization: { mic: false } }).diarization, { mic: false, speaker: true })
+  assert.deepEqual(contract.normalizeUserSettings({ diarization: { speaker: false } }).diarization, { mic: true, speaker: false })
+})
+
+test('diarization normalization preserves every independent boolean combination', () => {
+  for (const mic of [true, false]) {
+    for (const speaker of [true, false]) {
+      const settings = contract.normalizeUserSettings({ diarization: { mic, speaker } })
+      assert.deepEqual(settings.diarization, { mic, speaker })
+      assert.deepEqual(contract.normalizeUserSettings(JSON.parse(JSON.stringify(settings))).diarization, { mic, speaker })
+    }
+  }
+})
+
+test('malformed diarization values do not become truthy checkbox settings', () => {
+  assert.deepEqual(contract.normalizeUserSettings({ diarization: { mic: 'false', speaker: 0 } }).diarization, { mic: true, speaker: true })
+})
+
+test('speaker identities are scoped to their audio source', () => {
+  assert.equal(speakers.getSpeakerKey({ source: 'mic', speaker: ' Guest-1 ' }), 'mic:Guest-1')
+  assert.equal(speakers.getSpeakerKey({ source: 'speaker', speaker: 'Guest-1' }), 'speaker:Guest-1')
+  assert.equal(speakers.getSpeakerKey({ source: 'mic', speaker: ' ' }), 'mic:unknown')
+  assert.notEqual(speakers.getSpeakerKey({ source: 'mic', speaker: 'Guest-1' }), speakers.getSpeakerKey({ source: 'speaker', speaker: 'Guest-1' }))
+})
+
+test('speaker labels retain source and complete SDK identity', () => {
+  assert.equal(speakers.formatSpeakerKey('mic:Guest-1'), 'Mic · Guest-1')
+  assert.equal(speakers.formatSpeakerKey('speaker:Guest:1'), 'Speaker · Guest:1')
+})
+
+test('speaker colors cycle over 30 slots with distinct Mic and Speaker palettes', () => {
+  assert.equal(speakers.getSpeakerClass('speaker:Guest-1'), 'speaker-guest-1')
+  assert.equal(speakers.getSpeakerClass('mic:Guest-1'), 'speaker-guest-16')
+  assert.equal(speakers.getSpeakerClass('speaker:Guest-31'), 'speaker-guest-1')
+  assert.equal(speakers.getSpeakerClass('mic:Guest-31'), 'speaker-guest-16')
+  assert.equal(speakers.getSpeakerClass('mic:self'), 'speaker-mic-self')
+  assert.equal(speakers.getSpeakerClass('speaker:guest'), 'speaker-guest-1')
+  assert.equal(speakers.getSpeakerClass('mic:Unknown'), 'speaker-unknown')
 })
 
 test('validateAzureConfig accepts minimal valid config', () => {

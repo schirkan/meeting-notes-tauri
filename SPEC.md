@@ -3,7 +3,7 @@
 Stand: 09.11.2026
 Status: Implementierungsstand fortgeschrieben; reale Azure-/Corporate-Netz-, Latenz- und Clean-Machine-Akzeptanz offen.
 
-Lokaler Stand: Portable-Build 20.79 MB (27 Dateien, 26 geprüfte Hashes), 12 erfolgreiche Settings-/Diagnose-UI-Tests, fokussierte TypeScript-/Rust-Prüfungen und native Negativdiagnose. Nicht jede ursprüngliche Audio-/Protokoll-Anforderung ist damit als abgenommen bestätigt; Einzelstatus siehe [Specs](./specs/).
+Lokaler Stand: aktueller Portable-Build 20.79 MB (27 Dateien, 26 geprüfte Hashes), einschließlich der neuen unabhängigen Mic-/Speaker-Diarization; Build-Smoke inklusive Sidecar-Geräteabfrage erfolgreich. Dafür sind TypeScript, 23 Unit-Tests, drei Rust-Tests und 334 C#-Assertions erfolgreich; neue UI-Szenarien wurden im integrierten Browser mit gemockter Bridge geprüft. Der aktuelle CLI-Lauf der 18 UI-Tests scheitert vor den Assertions am headless-Edge-Start (Exit 21). Frühere Settings-/Diagnose-UI-Prüfungen und native Negativdiagnose bleiben dokumentiert. Nicht jede ursprüngliche Audio-/Protokoll-Anforderung ist als abgenommen bestätigt; Einzelstatus siehe [Specs](./specs/).
 
 Diese Spezifikation ist die **Tauri-Variante** von `../meeting-notes/SPEC-v0.1.md`. Architekturziel: Tauri 2 + React + C#-Sidecar (mit Azure Speech SDK in NuGet-Form).
 
@@ -47,9 +47,11 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 ## 4. Transkription
 - API: Azure Speech
 - Mehrsprecher-Differenzierung (Diarization): Nice-to-have (Best Effort)
-- Recognizer-Strategie (wie bisher in `meeting-notes`):
-  - Mic-Kanal: `SpeechRecognizer`
-  - Speaker-Kanal: `ConversationTranscriber` (fest, kein separater `recognitionMode`-Schalter)
+- Recognizer-Strategie ist pro Quelle unabhängig konfigurierbar:
+  - `diarization.mic` und `diarization.speaker`: aktiviert → `ConversationTranscriber`; deaktiviert → `SpeechRecognizer`.
+  - Beide Optionen sind standardmäßig `true`, auch bei alten oder teilweise ergänzten Konfigurationen; explizites `false` bleibt erhalten.
+  - Aktiviert: SDK-Speaker-IDs in Interim-/Final-Segmenten, mit `unknown` bei noch fehlender ID. Deaktiviert: feste IDs `self` (Mic) bzw. `guest` (Speaker).
+  - Reale Mehrsprecherqualität und Continuous-LID-Verhalten bleiben getrennte Akzeptanztests; siehe [T-205](./specs/T-205-continuous-lid-und-diarization-in-c-sharp.md).
 - Continuous Language Identification (LID) aktiviert (entspricht `meeting-notes`).
 - **Implementierung:** NuGet-Paket `Microsoft.CognitiveServices.Speech` (C#) im Sidecar.
 - Der Stop-Pfad muss je nach Recognizer-Typ korrekt erfolgen (`stopContinuousRecognitionAsync` vs. `stopTranscribingAsync`).
@@ -59,12 +61,13 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 ## 5. UI (React)
 - Anzeige der Transkripte mit Sprecher/Quelle, Zeitstempel, Text (sofern verfügbar).
 - Verbesserte Sprecherdarstellung über Speaker-Badges/Farben.
-- Sprecher-Alias-Mapping im UI.
+- Sprecher-Alias-Mapping im UI für beide Quellen. Identitäten sind quellenspezifisch (`mic:Guest-1`, `speaker:Guest-1`), Standardlabels zeigen `Mic · Guest-1` bzw. `Speaker · Guest-1`; gleiche SDK-IDs verschiedener Quellen teilen keinen Alias. Nummerierte Mic-IDs nutzen einen Offset von 15 innerhalb der 30 zyklischen Farbslots.
+- Bei geänderter SDK-Sprecher-ID ersetzt ein neues Interim-/Final-Event ältere Interims derselben Quelle; andere Quellen und finale Segmente bleiben erhalten. Die letzter-Sprecher-Anzeige berücksichtigt Aliase.
 - Diagnostikbereich mit laufendem Debug-Log (App/Sidecar/IPC).
 - Diagnostikbereich mit separaten Öffnen-/Schließen-Aktionen und manueller Log-Leerung.
 - Einstellungen haben drei responsive Bereiche: **Allgemein**, **Azure-Konfiguration**, **Proxy** (rechts). Unterhalb aller Bereiche stehen die tatsächlichen Backend-Pfade zu beiden Config-Dateien. Bis 960 px Fensterbreite stehen die Bereiche untereinander.
 - Nutzer kann Sprache/Devices sowie Azure-Konfiguration und Proxy bearbeiten. Proxy wird gemeinsam mit Azure gespeichert; **Verbindung testen** und laufende/letzte Ergebnisse öffnen liegen im Azure-Bereich.
-- Spracheinstellung wird über Neustarts hinweg persistiert.
+- Spracheinstellung und unabhängige Sprechererkennung für Mic/Speaker werden über Neustarts hinweg persistiert. Beide Diarization-Checkboxen stehen bei den jeweiligen Geräten im Bereich **Allgemein** und sind während der Aufnahme deaktiviert. Gespeicherte Änderungen gelten für die nächste Aufnahme.
 - Bei fehlender, nicht lesbarer oder unvollständiger Azure-Konfiguration öffnen sich Einstellungen beim Start automatisch; schließbarer Bottom-Toast ohne Verschiebung des Hauptinhalts. Das ist lokale Pflichtfeldprüfung, keine Azure-Key-Verifikation.
 - Separater Diagnose-Dialog mit Transportstatus und vollständiger Schritttabelle nach Abschluss. Schließen kehrt zu Einstellungen zurück, ohne einen laufenden Test abzubrechen; Ergebnisse können wieder geöffnet werden.
 - F12 öffnet/schließt DevTools auch im Release-/Portable-Build.
@@ -73,6 +76,7 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 ## 6. Konfiguration
 - Azure-Konfiguration liegt in `config/azure.json`, Benutzeroptionen in `config/user-settings.json`: im Release neben der EXE, in Entwicklung im Repository neben den Templates. Unabhängig vom Start-Arbeitsverzeichnis, ohne AppData-Migration/-Fallback.
 - Azure-Key bleibt direkt im Feld `speechKey`; Azure-/Proxy-Werte sind im Settings-Dialog editierbar. `AzureConfigState` liefert `exists`, `path`, `userSettingsPath` und optional `config`.
+- User-Settings enthalten `diarization: { "mic": true, "speaker": true }`. Fehlende Felder werden je Quelle als `true` normalisiert. Rust reicht die gespeicherten Optionen beim Start über `--diarization-mic true|false` und `--diarization-speaker true|false` an den Sidecar weiter.
 - Optionaler HTTP-CONNECT-Proxy über `proxy.host`, `proxy.port` (1–65535), optional `username`/`password`. Host ohne Schema/Pfad. Rust lädt die Dateien und reicht Einstellungen an HTTPS-Diagnose und Sidecar weiter; der Sidecar lädt sie nicht selbst.
 - Sidecar erhält Speech-Key/Proxy-Zugangsdaten über prozesslokale Umgebungsvariablen, nicht Credential-CLI-Argumente. Host/Port/Endpoint/Region/Sprache sind nicht geheime CLI-Args.
 - **Verbindung testen** nutzt aktuelle, auch ungespeicherte Werte und Sitzungssprache. `test_azure_connectivity` führt parallel System-DNS/TCP/HTTPS in Rust und native Speech/WSS-Diagnose in einem separaten Sidecar ohne Audio-Capture aus.
@@ -110,7 +114,7 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 ## 7. Export
 - Kein Dateiexport im PoC vorgesehen.
 - Vollständiges Transkript per Copy-to-Clipboard als TXT.
-- Exportinhalt: YAML-ähnlicher Header (`datum`, `startzeit`, `dauer`) plus Segmentliste mit Sprecher/Uhrzeit/Text.
+- Exportinhalt: YAML-ähnlicher Header (`datum`, `startzeit`, `dauer`) plus finale Segmentliste mit Sprecher/Uhrzeit/Text. Sprecherlabels berücksichtigen quellenspezifische UI-Aliase; ohne Alias wird die Quelle mit ausgegeben, z. B. `Mic · Guest-1`.
 - Zeitformat: deutsches Datums-/Zeitformat.
 
 ## 8. Entwicklungsumgebung (Stabilitätsvorgabe)
@@ -151,7 +155,7 @@ Die MVPs des Electron-Projekts bleiben die funktionale Grundlage; umgesetzt wird
 ### MVP 2 (Tauri)
 - Sidecar mit Audio-Capture (NAudio, WASAPI Mic + Loopback) anbinden.
 - Azure Speech SDK NuGet im Sidecar integrieren.
-- Pipeline A (Mic → `SpeechRecognizer`) und Pipeline B (Speaker → `ConversationTranscriber`) laufen.
+- Pipeline A (Mic) und Pipeline B (Speaker) laufen mit unabhängig gewähltem Recognizer-Typ (`ConversationTranscriber` bei aktivierter Diarization, sonst `SpeechRecognizer`).
 - JSON-Lines-Events fließen vom Sidecar durch den Tauri-Main in den Renderer.
 - Loopback-Blocker-Regel mit finalen Fehlercodes.
 - UI/Export auf reale Daten und finale Fehlerpfade gehärtet.

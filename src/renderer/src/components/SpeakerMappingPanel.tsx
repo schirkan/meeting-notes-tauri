@@ -1,3 +1,5 @@
+import { formatSpeakerKey } from '../speaker-utils'
+
 type SpeakerMappingPanelProps = {
   knownSpeakers: string[]
   speakerAliases: Record<string, string>
@@ -28,7 +30,7 @@ export function SpeakerMappingPanel(props: SpeakerMappingPanelProps) {
             <tbody>
               {knownSpeakers.map((speaker) => (
                 <tr key={speaker}>
-                  <td className="speaker-mapping-id">{speaker}</td>
+                  <td className="speaker-mapping-id">{formatSpeakerKey(speaker)}</td>
                   <td>
                     <input
                       type="text"
@@ -40,6 +42,7 @@ export function SpeakerMappingPanel(props: SpeakerMappingPanelProps) {
                         }))
                       }
                       placeholder="Anzeigename"
+                      aria-label={`Anzeigename für ${formatSpeakerKey(speaker)}`}
                     />
                   </td>
                 </tr>

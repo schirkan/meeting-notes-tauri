@@ -1,5 +1,6 @@
 import type { RefObject } from 'react'
 import type { TranscriptSegment } from '@shared/transcript-contract'
+import { getSpeakerKey } from '../speaker-utils'
 
 type TranscriptPanelProps = {
   segments: TranscriptSegment[]
@@ -31,7 +32,7 @@ export function TranscriptPanel(props: TranscriptPanelProps) {
               <div className="segment-meta">
                 <span className="meta">{new Date(segment.timestampIso).toLocaleTimeString('de-DE')}</span>
                 <span className="meta">{segment.language}</span>
-                <span className={`speaker-badge ${getSpeakerClass(segment.speaker)}`.trim()}>{getSpeakerLabel(segment.speaker)}</span>
+                <span className={`speaker-badge ${getSpeakerClass(getSpeakerKey(segment))}`.trim()}>{getSpeakerLabel(getSpeakerKey(segment))}</span>
               </div>
             </li>
           ))}

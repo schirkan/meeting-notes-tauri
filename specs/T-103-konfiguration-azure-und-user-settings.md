@@ -13,6 +13,7 @@ Konfigurationsmodell aus `../meeting-notes` übernehmen und in der Tauri-Variant
 - [x] `config/azure.json` und `config/user-settings.json` sind in `.gitignore`.
 - [x] Tauri-Main lädt beide Config-Dateien direkt aus dem relativen `config/`-Ordner neben der EXE bzw. im Dev-Build aus dem Repository. Fehlende, nicht lesbare oder unvollständige Azure-Konfiguration öffnet die Einstellungen automatisch und zeigt einen Toast unten. Implementierung in `src-tauri/src/settings.rs` und `src/renderer/src/use-app-state.ts`.
 - [x] User-Settings werden via Tauri-Command `save_user_settings()` geschrieben.
+- [x] `diarization.mic` und `diarization.speaker` werden als unabhängige Boolean-Optionen persistiert und beim nächsten Aufnahmestart an den Sidecar übergeben. Beide sind standardmäßig `true`, auch für alte oder teilweise ergänzte Konfigurationen; explizites `false` bleibt erhalten.
 - [x] Spracheinstellung wird über Neustarts hinweg persistiert (atomar via temp-file + rename, siehe `settings.rs` Header-Comment).
 - [x] Azure-Proxy (`proxy.host`/`proxy.port` + optional `username`/`password`) wird an Aufnahme-Sidecar und beide Diagnosepfade weitergereicht. Host/Port sind CLI-Args; Speech-Key und Proxy-Zugangsdaten werden nur über prozesslokale Umgebungsvariablen übergeben.
 - [x] `AzureConfigState` enthält `exists`, `path`, `userSettingsPath` und optional `config`. Beide tatsächlichen Dateipfade werden vom Rust-Backend geliefert und im Settings-Footer unterhalb der drei Bereiche angezeigt, auch wenn die Azure-Datei noch fehlt.
@@ -22,6 +23,8 @@ Konfigurationsmodell aus `../meeting-notes` übernehmen und in der Tauri-Variant
 - Pfade: `config/` neben der EXE (Release/Portable), neben den Templates im Repository (Dev). Keine Migration nach AppData und kein AppData-Fallback.
 - Azure-Key bleibt direkt im `speechKey`-Feld (wie in `meeting-notes`). Automatischer Startup-Dialog basiert auf lokaler Pflichtfeld-/Proxy-Validierung, nicht auf einer Live-Prüfung des Keys.
 - Legacy-Pfad `azure.fixed.json` ist obsolet und wird in Doku explizit nicht erwähnt.
+- Sidecar-CLI: `--diarization-mic true|false` und `--diarization-speaker true|false`. Die Optionen steuern je Quelle Transcriber versus Recognizer; Details siehe [T-205](./T-205-continuous-lid-und-diarization-in-c-sharp.md).
+- Konfigurationsnormalisierung und alle vier Boolean-Kombinationen sind in [Unit-Tests](../tests/config-utils.test.mjs) und drei Rust-Tests abgedeckt.
 
 ## Log
 - 2026-06-25: Spec angelegt.

@@ -12,10 +12,11 @@ Dieses Projekt ist die **Tauri-Migration** des bestehenden Electron-Projekts `pr
 - Speaker-Badges/Farben inkl. Alias-Mapping
 - Fehler-/Status-Events via Tauri-Bridge
 - Debug-Log im UI (separate Öffnen/Schließen-Aktionen + Log löschen)
-- Persistente Einstellungen (Sprache, Devices)
+- Persistente Einstellungen (Sprache, Devices, Sprechererkennung separat für Mic und Speaker)
 - TXT-Clipboard-Export mit Header-Metadaten
 - C#-Sidecar (NAudio WASAPI Mic + Loopback, Azure Speech SDK, JSON-Lines nach Tauri)
-- Azure Speech: Mic via `SpeechRecognizer`, Speaker via `ConversationTranscriber`
+- Azure Speech: pro Quelle unabhängig `ConversationTranscriber` mit Sprechererkennung oder `SpeechRecognizer` ohne Sprechererkennung. Beide Optionen sind standardmäßig aktiviert, auch bei älteren Konfigurationen ohne diese Felder.
+- Mic- und Speaker-IDs werden getrennt angezeigt und zugeordnet: z. B. `Mic · Guest-1` und `Speaker · Guest-1`. Aliase gelten auch für die Anzeige des letzten Sprechers und den Clipboard-Export.
 - Optionale Proxy-Konfiguration für Azure Speech
 - Sidecar-Resampling auf 16 kHz / 16-bit / mono
 - Einstellungen mit drei Bereichen: **Allgemein**, **Azure-Konfiguration** und **Proxy** (rechts daneben; bei schmalen Fenstern untereinander). Proxy-Einstellungen befinden sich im Proxy-Bereich, **Verbindung testen** in der Azure-Konfiguration. Gespeichert werden Azure- und Proxy-Einstellungen gemeinsam über **Azure-Konfiguration speichern**. Die Pfade zu `azure.json` und `user-settings.json` werden unterhalb aller drei Bereiche angezeigt.
@@ -51,7 +52,7 @@ Beim Start mit fehlender, nicht lesbarer oder unvollständiger Azure-Konfigurati
 
 ### Benutzereinstellungen (optional)
 1. `config/user-settings.example.json` → `config/user-settings.json` kopieren
-2. Bei Bedarf `language` (BCP-47, z. B. `de-DE`, `en-US`) und `devices` anpassen
+2. Bei Bedarf `language` (BCP-47, z. B. `de-DE`, `en-US`), `devices` und `diarization: { "mic": true, "speaker": true }` anpassen. Fehlende Diarization-Felder werden einzeln als `true` behandelt; ausdrücklich gespeichertes `false` bleibt erhalten. Im Settings-Bereich **Allgemein** stehen zwei unabhängige Checkboxen. Gespeicherte Änderungen gelten für die nächste Aufnahme; während einer Aufnahme sind beide Checkboxen deaktiviert.
 3. Beide Dateien werden direkt im relativen `config/`-Ordner gelesen und gespeichert: im Release-/Portable-Build neben der EXE, im Dev-Build im Repository (neben den Templates). Das Arbeitsverzeichnis des startenden Prozesses spielt keine Rolle. Es wird nichts nach AppData kopiert und keine AppData-Konfiguration als Fallback geladen. Bisher nur in AppData gespeicherte Werte bei Bedarf manuell in diesen `config/`-Ordner übernehmen.
 
 ## Entwicklung

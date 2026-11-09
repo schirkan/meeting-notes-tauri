@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <Compile Remove="Validation\**\*.cs" />
+    <InternalsVisibleTo Include="MeetingNotes.Sidecar.Validation" />
   </ItemGroup>
 
   <ItemGroup>

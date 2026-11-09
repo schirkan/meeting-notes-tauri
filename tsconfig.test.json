@@ -13,6 +13,7 @@
   },
   "include": [
     "src/shared/config-contract.ts",
-    "src/renderer/src/config-utils.ts"
+    "src/renderer/src/config-utils.ts",
+    "src/renderer/src/speaker-utils.ts"
   ]
 }

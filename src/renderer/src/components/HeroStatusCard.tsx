@@ -1,4 +1,5 @@
 import type { TranscriptStatus, TranscriptSegment } from '@shared/transcript-contract'
+import { getSpeakerKey } from '../speaker-utils'
 
 type HeroStatusCardProps = {
   status: TranscriptStatus
@@ -65,7 +66,7 @@ export function HeroStatusCard(props: HeroStatusCardProps) {
         </div>
         <div>
           <span>Letzter Sprecher</span>
-          <strong>{latestSegment ? getSpeakerLabel(latestSegment.speaker) : '---'}</strong>
+          <strong>{latestSegment ? getSpeakerLabel(getSpeakerKey(latestSegment)) : '---'}</strong>
         </div>
         <div>
           <span>Dauer</span>

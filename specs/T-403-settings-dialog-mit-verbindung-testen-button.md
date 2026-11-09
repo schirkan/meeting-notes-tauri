@@ -12,6 +12,7 @@ Azure-, Benutzer- und Proxy-Einstellungen bearbeiten und HTTPS sowie native Spee
 - [x] Drei Bereiche stehen nebeneinander: **Allgemein**, **Azure-Konfiguration**, **Proxy** (rechts). Bei Fensterbreiten bis 960 px stehen sie untereinander.
 - [x] Proxy-Aktivierung, Host, Port und optionale Zugangsdaten befinden sich ausschließlich im Proxy-Bereich. Azure- und Proxy-Werte werden gemeinsam über **Azure-Konfiguration speichern** gespeichert.
 - [x] Die Sprachauswahl im Bereich **Allgemein** ist ein Dropdown mit den bisherigen Sprachoptionen. Bereits konfigurierte weitere Sprachcodes bleiben erhalten; während einer Aufnahme ist die Auswahl deaktiviert.
+- [x] Im Bereich **Allgemein** stehen **Sprechererkennung für Mikrofon** und **Sprechererkennung für Speaker** jeweils beim zugehörigen Gerät. Beide Checkboxen sind unabhängig, standardmäßig aktiviert und während einer Aufnahme deaktiviert. Alte Konfigurationen ohne Felder aktivieren beide; gespeichertes `false` bleibt erhalten. **Einstellungen speichern** persistiert beide Werte; ein Hinweis erklärt die Anwendung auf die nächste Aufnahme.
 - [x] **Verbindung testen** sowie das Wiederöffnen des laufenden/letzten Tests befinden sich im Bereich **Azure-Konfiguration**. Die Aktionen haben auch bei Zeilenumbrüchen mindestens 12 px Abstand.
 - [x] Beide Konfigurationspfade werden unterhalb aller Bereiche im Dialog-Footer angezeigt, nicht innerhalb einzelner Panels; die tatsächlichen Pfade stammen aus dem Backend.
 - [x] Fehlende, nicht lesbare oder unvollständige Azure-Konfiguration öffnet beim Start automatisch die Einstellungen. Der schließbare Hinweis erscheint als Toast unten, ohne Layout-Verschiebung. Manuelles Schließen öffnet den Dialog nicht erneut.
@@ -27,7 +28,8 @@ Azure-, Benutzer- und Proxy-Einstellungen bearbeiten und HTTPS sowie native Spee
 - Ergebnisanzeige nutzt den `invoke()`-Return-Wert. Das Backend emittiert zusätzlich `transcript:connectivity-result`; ein Event-Abonnement ist für den Dialog nicht erforderlich.
 - **Keine Live-Einzelsteps:** Die Tabelle erscheint erst nach Rückkehr der Diagnose. Währenddessen wird nur der laufende Gesamt-/Transportstatus angezeigt.
 - TLS-Verhalten und Proxy-Validierung siehe [T-304](./T-304-connectivity-diagnose-in-rust.md) und [T-306](./T-306-proxy-aware-azure-transport.md).
-- 15 [UI-Regressionstests](../tests/startup-ui.test.mjs) prüfen Startup, Toast-Position, drei responsive Bereiche, Footer-Pfade, Sprach-Dropdown (Speichern, weitere Sprachcodes, Aufnahmesperre), Save-/Test-Payloads, Fehlerdetails und Wiederöffnen. Geometrische Prüfungen sichern volle Diagnosebreite bei 1280/800/560 px Fensterbreite und den Button-Abstand auf Desktop und schmalem Fenster ab.
+- 18 [UI-Regressionstests](../tests/startup-ui.test.mjs) decken Startup, Toast-Position, drei responsive Bereiche, Footer-Pfade, Sprach-Dropdown, Aufnahmesperre, Save-/Test-Payloads, Fehlerdetails und Wiederöffnen ab. Drei neue Tests prüfen unabhängige Diarization-Optionen und Mic-/Speaker-Anzeige, Aliase und Export. Geometrische Prüfungen sichern volle Diagnosebreite bei 1280/800/560 px Fensterbreite und den Button-Abstand ab.
+- Aktuelle Validierung: TypeScript und 23 Unit-Tests erfolgreich. Der CLI-Browserlauf scheitert vor den Assertions am Start von headless Edge (Exit 21). Die neuen Diarization-Szenarien wurden deshalb separat im integrierten Browser mit gemockter Tauri-Bridge erfolgreich geprüft; keine Live-Azure-Abnahme.
 
 ## Log
 - 2026-06-25: Spec angelegt.
