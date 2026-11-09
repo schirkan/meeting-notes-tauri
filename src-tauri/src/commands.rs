@@ -22,6 +22,15 @@ use crate::state::{
 #[allow(unused_imports)]
 pub use crate::state::{DebugLogEntryLevel as Level, DebugLogEntrySource as Source};
 
+#[tauri::command]
+pub fn toggle_devtools(window: tauri::WebviewWindow) {
+    if window.is_devtools_open() {
+        window.close_devtools();
+    } else {
+        window.open_devtools();
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceInfo {
@@ -81,6 +90,7 @@ pub async fn start_recording(
         speech_key,
         speech_region,
         speech_endpoint,
+        proxy: azure.as_ref().and_then(|a| a.proxy.clone()),
         mic_device_id: user.devices.mic_id.clone(),
         speaker_device_id: user.devices.speaker_loopback_id.clone(),
     };
@@ -464,16 +474,13 @@ pub async fn test_azure_connectivity(
     payload: Option<serde_json::Value>,
 ) -> Result<connectivity::ConnectivityResult, String> {
     let value = payload.unwrap_or(serde_json::Value::Null);
-    let endpoint = value
-        .get("endpoint")
-        .and_then(|v| v.as_str())
-        .ok_or("endpoint fehlt")?
-        .to_string();
-    let speech_key = value
-        .get("speechKey")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
+    let config: AzureConfig = serde_json::from_value(value.clone())
+        .map_err(|error| format!("Ungültige Azure-Konfiguration: {error}. Endpoint, Region, Speech Key und Proxy prüfen."))?;
+    if let Some(proxy) = config.proxy.as_ref() {
+        connectivity::configured_proxy(proxy)?;
+    }
+    let endpoint = &config.endpoint;
+    let speech_key = &config.speech_key;
     let language = value
         .get("language")
         .and_then(|v| v.as_str())
@@ -488,7 +495,29 @@ pub async fn test_azure_connectivity(
         format!("test_azure_connectivity(endpoint={endpoint}) aufgerufen."),
     );
 
-    let result = connectivity::diagnose(&endpoint, &speech_key, &language).await;
+    let start = std::time::Instant::now();
+    let (mut result, speech) = tokio::join!(
+        connectivity::diagnose(endpoint, speech_key, &language, config.proxy.as_ref()),
+        sidecar::diagnose_speech(&app, &config, &language),
+    );
+    match speech {
+        Ok(speech) => {
+            result.speech_reachable = speech.reachable;
+            result.steps.extend(speech.steps);
+        }
+        Err(error) => result.steps.push(connectivity::Step {
+            step: "speech-wss".into(),
+            status: connectivity::StepStatus::Error,
+            detail: error,
+        }),
+    }
+    result.reachable = result.https_reachable && result.speech_reachable;
+    result.latency_ms = start.elapsed().as_millis() as u64;
+    if !result.reachable {
+        result.error = Some(format!("HTTPS: {}; Speech/WSS: {}. Siehe getrennte Diagnose-Schritte.",
+            if result.https_reachable { "erreichbar" } else { "fehlgeschlagen" },
+            if result.speech_reachable { "erreichbar" } else { "fehlgeschlagen" }));
+    }
 
     // Bridge-Event: Renderer kann zuhören statt zu pollen
     events::emit_connectivity_result(&app, &result);

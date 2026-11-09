@@ -29,6 +29,7 @@ export interface ResolvedAppConfig {
 export interface AzureConfigState {
   exists: boolean
   path: string
+  userSettingsPath: string
   config: AzureConfig | null
 }
 
@@ -92,7 +93,7 @@ export function validateAzureConfig(input: unknown): input is AzureConfig {
     const proxy = candidate.proxy as Partial<AzureProxyConfig>
 
     return typeof proxy.host === 'string' && proxy.host.length > 0 &&
-      typeof proxy.port === 'number' && Number.isFinite(proxy.port) && proxy.port > 0 &&
+      typeof proxy.port === 'number' && Number.isInteger(proxy.port) && proxy.port > 0 && proxy.port <= 65535 &&
       (proxy.username === undefined || typeof proxy.username === 'string') &&
       (proxy.password === undefined || typeof proxy.password === 'string')
   })()

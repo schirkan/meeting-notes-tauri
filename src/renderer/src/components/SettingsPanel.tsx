@@ -1,11 +1,6 @@
 import type { AudioDeviceSnapshot } from '@shared/transcript-contract'
 import type { UserSettings } from '@shared/config-contract'
 
-type LanguageOption = {
-  value: string
-  label: string
-}
-
 const languageOptions = [
   { value: 'de-DE', label: 'Deutsch' },
   { value: 'en-US', label: 'Englisch' },
@@ -47,22 +42,21 @@ export function SettingsPanel(props: SettingsPanelProps) {
       {statusRunning && <div className="settings-inline-hint">Stop first to change settings.</div>}
 
       <div className="settings-block">
-        <span className="field-label">Sprache</span>
-        <div className="language-grid" role="radiogroup" aria-label="Sprache auswählen">
-          {languageOptions.map((option) => (
-            <label key={option.value} className={`language-option ${settings.language === option.value ? 'active' : ''}`}>
-              <input
-                type="radio"
-                name="language"
-                value={option.value}
-                checked={settings.language === option.value}
-                onChange={(event) => setSettings((prev) => ({ ...prev, language: event.target.value }))}
-                disabled={statusRunning}
-              />
-              <span>{option.label}</span>
-            </label>
-          ))}
-        </div>
+        <label>
+          Sprache
+          <select
+            value={settings.language}
+            onChange={(event) => setSettings((prev) => ({ ...prev, language: event.target.value }))}
+            disabled={statusRunning}
+          >
+            {!languageOptions.some((option) => option.value === settings.language) && (
+              <option value={settings.language}>{settings.language}</option>
+            )}
+            {languageOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
 
         <label>
           Mikrofon

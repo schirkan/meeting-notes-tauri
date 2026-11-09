@@ -8,6 +8,20 @@ import {
   type TranscriptStatus
 } from '@shared/transcript-contract'
 import { type ConfigDraft, draftToConfig, isConfigComplete, toConfigDraft } from './config-utils'
+import type { ConnectivityResult } from './components/ConnectivityDialog'
+
+function errorDetail(error: unknown, fallback: string): string {
+  if (error instanceof Error) return error.message || fallback
+  if (typeof error === 'string') return error.trim() || fallback
+  if (error != null) {
+    try {
+      return JSON.stringify(error) || fallback
+    } catch {
+      return fallback
+    }
+  }
+  return fallback
+}
 
 type ToastState = {
   message: string
@@ -67,23 +81,48 @@ export function useAppState() {
       return
     }
 
+    let disposed = false
+
+    void transcriptApi.getConfig()
+      .then((nextConfig) => {
+        if (disposed) return
+        setConfigState(nextConfig)
+        setConfigDraft(toConfigDraft(nextConfig.config))
+        if (!nextConfig.exists || !isConfigComplete(nextConfig.config)) {
+          setSettingsDialogOpen(true)
+          setToast({
+            message: 'Azure-Konfiguration fehlt oder ist unvollständig. Bitte in den Einstellungen ergänzen und speichern.',
+            variant: 'error',
+            persistent: true
+          })
+        }
+      })
+      .catch(() => {
+        if (disposed) return
+        setSettingsDialogOpen(true)
+        setToast({
+          message: 'Azure-Konfiguration konnte nicht geladen werden. Bitte in den Einstellungen prüfen und speichern.',
+          variant: 'error',
+          persistent: true
+        })
+      })
+
     void Promise.all([
       transcriptApi.getStatus(),
       transcriptApi.getSettings(),
       transcriptApi.getDevices(),
-      transcriptApi.getDebugLog(),
-      transcriptApi.getConfig()
+      transcriptApi.getDebugLog()
     ])
-      .then(([nextStatus, nextSettings, nextDevices, nextDebugLog, nextConfig]) => {
+      .then(([nextStatus, nextSettings, nextDevices, nextDebugLog]) => {
+        if (disposed) return
         setStatus(nextStatus)
         setSessionStartedAt(nextStatus.startedAt ?? null)
         setSettings(nextSettings)
         setDevices(nextDevices)
         setDebugLog(nextDebugLog)
-        setConfigState(nextConfig)
-        setConfigDraft(toConfigDraft(nextConfig.config))
       })
       .catch((error) => {
+        if (disposed) return
         const message = error instanceof Error ? error.message : 'Initialdaten konnten nicht geladen werden.'
         setRuntimeIssue(message)
         setToast({ message, variant: 'error', persistent: true })
@@ -155,6 +194,7 @@ export function useAppState() {
     })
 
     return () => {
+      disposed = true
       unsubSegment()
       unsubError()
       unsubStatus()
@@ -240,7 +280,7 @@ export function useAppState() {
   const statusLabel = useMemo(() => {
     if (isStarting) return 'Startet'
     if (status.running) return 'Läuft'
-    if (configState && !isConfigComplete(configState.config)) return 'Konfiguration unvollständig'
+    if (configState && !isConfigComplete(configState.config)) return 'Fehler'
     if (lastError) return 'Fehler'
     return 'Gestoppt'
   }, [configState, isStarting, lastError, status.running])
@@ -387,25 +427,28 @@ export function useAppState() {
     }
   }
 
-  const [connectivityResult, setConnectivityResult] = useState<{
-    reachable: boolean
-    httpStatus?: number
-    httpStatusText?: string
-    latencyMs: number
-    error?: string
-    probeUrl?: string
-    testedAtIso: string
-    steps: Array<{ step: string; status: 'ok' | 'warn' | 'error'; detail: string }>
-  } | null>(null)
+  const [connectivityResult, setConnectivityResult] = useState<ConnectivityResult | null>(null)
   const [isTestingConnectivity, setIsTestingConnectivity] = useState(false)
+  const [connectivityDialogOpen, setConnectivityDialogOpen] = useState(false)
 
   const onTestConnectivity = async () => {
+    if (isTestingConnectivity) return
+    setSettingsDialogOpen(false)
+    setConnectivityDialogOpen(true)
+    setConnectivityResult(null)
+    setToast(null)
     setIsTestingConnectivity(true)
+    const startedAt = Date.now()
+    let requestSubmitted = false
     try {
       // Aktuelle Draft-Werte (auch ungespeicherte Änderungen) testen.
-      const result = await window.transcriptApi.testAzureConnectivity(configDraft)
+      const payload = { ...draftToConfig(configDraft), language: settings.language }
+      requestSubmitted = true
+      const result = await window.transcriptApi.testAzureConnectivity(payload)
       setConnectivityResult({
         reachable: result.reachable,
+        httpsReachable: result.httpsReachable,
+        speechReachable: result.speechReachable,
         httpStatus: result.httpStatus,
         httpStatusText: result.httpStatusText,
         latencyMs: result.latencyMs,
@@ -415,24 +458,22 @@ export function useAppState() {
         steps: result.steps ?? []
       })
 
-      if (result.reachable) {
-        const status = result.httpStatus ? `HTTP ${result.httpStatus} ${result.httpStatusText ?? ''}` : 'erreichbar'
-        setToast({
-          message: `Azure-Endpoint erreichbar (${status}, ${result.latencyMs} ms).`,
-          variant: 'info',
-          persistent: false
-        })
-      } else {
-        const firstError = result.steps?.find((s) => s.status === 'error')?.detail
-        setToast({
-          message: `Azure-Endpoint nicht erreichbar: ${firstError ?? result.error ?? 'unbekannter Fehler'}`,
-          variant: 'error',
-          persistent: true
-        })
-      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Verbindungstest fehlgeschlagen.'
-      setToast({ message, variant: 'error', persistent: true })
+      const message = errorDetail(error, 'Verbindungstest fehlgeschlagen.')
+      setConnectivityResult({
+        reachable: false,
+        httpsReachable: false,
+        speechReachable: false,
+        latencyMs: Date.now() - startedAt,
+        probeUrl: '',
+        error: message,
+        testedAtIso: new Date().toISOString(),
+        steps: [{
+          step: requestSubmitted ? 'IPC / Diagnose starten' : 'Konfiguration prüfen',
+          status: 'error',
+          detail: message
+        }]
+      })
     } finally {
       setIsTestingConnectivity(false)
     }
@@ -507,6 +548,15 @@ export function useAppState() {
     onTestConnectivity,
     isTestingConnectivity,
     connectivityResult,
+    connectivityDialogOpen,
+    onOpenConnectivityDialog: () => {
+      setSettingsDialogOpen(false)
+      setConnectivityDialogOpen(true)
+    },
+    closeConnectivityDialog: () => {
+      setConnectivityDialogOpen(false)
+      setSettingsDialogOpen(true)
+    },
     onToggleRecording,
     runtimeIssue,
     segments,

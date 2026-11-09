@@ -5,6 +5,7 @@
 // in sync — no string drift between `invoke('foo')` and `#[tauri::command] fn foo`.
 
 export const TAURI_COMMANDS = {
+  toggleDevtools: 'toggle_devtools',
   startRecording: 'start_recording',
   stopRecording: 'stop_recording',
   resetTranscript: 'reset_transcript',
@@ -48,6 +49,8 @@ export interface FixedConfigStatus {
 export interface ConnectivityResultEvent {
   probeUrl: string
   reachable: boolean
+  httpsReachable: boolean
+  speechReachable: boolean
   httpStatus?: number
   httpStatusText?: string
   latencyMs: number

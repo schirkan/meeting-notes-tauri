@@ -12,11 +12,16 @@ Vollständige QA-Strecke für die Tauri-Variante: Smoke-Test, Latency-Messung, D
 ## Done When
 - [x] Smoke-Test deckt Build-Artefakte + Sidecar-Spawn ab (T-501, headless ohne WebDriver).
 - [ ] Latency-Messung dokumentiert < 5 s End-to-End (T-502) — **offen**: erfordert Live-Azure-Credentials + Audio-Input.
-- [x] `tauri build` produziert MSI/NSIS-Installer (T-503, verifiziert: `src-tauri/target/release/bundle/{msi,nsis}/*.exe`).
-- [x] Portable-Build ist lauffähig (T-504, verifiziert: 33.38 MB in `dist/portable/`).
-- [x] Bundle-Größe ist ≤ 30 MB (T-EXE: 26.64 MB, Sidecar: 6.74 MB, Gesamt: 33.38 MB — **Tauri-EXE allein** unter Zielwert, Gesamt-Distribution mit Sidecar + DLLs knapp darüber).
+- [x] MSI/NSIS-Builds wurden zuvor verifiziert (T-503); heutige Rebuilds verwenden `--no-bundle`. Aktuelle Installer-Parität ist dadurch nicht erneut nachgewiesen.
+- [x] Aktueller Portable-Build ist lokal lauffähig (T-504; kein Clean-Machine-Nachweis).
+- [x] **Gesamte Portable-Distribution** ist ≤ 30 MB: Stand 2026-11-09 Haupt-EXE 14.03 MB, Sidecar 6.76 MB, Gesamt 20.79 MB einschließlich Templates und Hashdatei. 27 Dateien, 26 geprüfte SHA256-Summen.
 - [ ] Proxy-Workaround (T-505) ist in restriktiver Umgebung validiert — **offen**.
-- [x] Unit-Tests für Pure-Functions (`tests/config-utils.test.mjs`, 15 Tests grün via `npm run test:unit`).
+- [x] Konfigurations-Regressionen lokal erfolgreich (`tests/config-utils.test.mjs`); gesamter Test-Runner: `npm run test:unit`.
+- [x] 12 Browser-UI-Regressionstests: Startup bei fehlender/ungültiger Config, Bottom-Toast ohne Layout-Verschiebung, drei responsive Settings-Bereiche, zwei Footer-Pfade, Proxy-Save-/Test-Payloads und detaillierter Diagnose-Dialog einschließlich Schließen/Wiederöffnen.
+- [x] TypeScript-Prüfung und drei fokussierte Rust-Tests für relative Config-Pfade und beide serialisierten Pfade erfolgreich.
+- [x] Native lokale Prüfung: Release-F12, Laden/Speichern neben der EXE bei fremdem Arbeitsverzeichnis sowie kontrollierte HTTPS-/Speech-Fehler im separaten Dialog. Kein echter Azure-Erfolg durch den Loopback-Negativtest behauptet.
+- [ ] Erfolgreiche Aufnahme, End-to-End-Latenz und positiver Corporate-Proxy-/Speech-Test mit echten Zugangsdaten.
+- [ ] Aktueller Portable-Build auf sauberem Windows-11-Zielsystem geprüft.
 
 ## Approach
 - T-501 bis T-505 sequenziell umsetzen.
@@ -24,3 +29,4 @@ Vollständige QA-Strecke für die Tauri-Variante: Smoke-Test, Latency-Messung, D
 
 ## Log
 - 2026-06-25: Spec angelegt.
+- 2026-11-09: Aktuelle UI-/Config-/Diagnose-Validierung und Portable-Messwerte dokumentiert; reale Netz-, Aufnahme-, Latenz- und Clean-Machine-Tests ausdrücklich offen gehalten.

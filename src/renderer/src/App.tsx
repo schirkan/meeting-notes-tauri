@@ -1,6 +1,8 @@
 import { ConfigPanel } from './components/ConfigPanel'
+import { ConnectivityDialog } from './components/ConnectivityDialog'
 import { DebugLogPanel } from './components/DebugLogPanel'
 import { HeroStatusCard } from './components/HeroStatusCard'
+import { ProxyPanel } from './components/ProxyPanel'
 import { SettingsDialog } from './components/SettingsDialog'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SpeakerMappingPanel } from './components/SpeakerMappingPanel'
@@ -31,6 +33,9 @@ export function App() {
     onTestConnectivity,
     isTestingConnectivity,
     connectivityResult,
+    connectivityDialogOpen,
+    onOpenConnectivityDialog,
+    closeConnectivityDialog,
     onToggleRecording,
     openDebugPanel,
     runtimeIssue,
@@ -55,12 +60,6 @@ export function App() {
 
   return (
     <main className="container">
-      {configState?.exists === false && (
-        <section className="hint">
-          Azure-Konfiguration fehlt. Bitte <code>config/azure.json</code> im Formular unten speichern.
-        </section>
-      )}
-
       <div className="layout-grid">
         <TranscriptPanel
           segments={segments}
@@ -103,7 +102,17 @@ export function App() {
         onClearDebug={onClearDebugLog}
       />
 
-      <SettingsDialog isOpen={settingsDialogOpen} onClose={closeSettingsDialog}>
+      <SettingsDialog
+        isOpen={settingsDialogOpen}
+        onClose={closeSettingsDialog}
+        columns={3}
+        footer={configState && (
+          <>
+            <p className="meta-path">Azure-Konfiguration: {configState.path}</p>
+            <p className="meta-path">Allgemeine Einstellungen: {configState.userSettingsPath}</p>
+          </>
+        )}
+      >
         <SettingsPanel
           statusRunning={status.running}
           settings={settings}
@@ -120,10 +129,24 @@ export function App() {
           setConfigDraft={setConfigDraft}
           onSaveConfig={onSaveConfig}
           onTestConnectivity={onTestConnectivity}
+          onOpenConnectivityDialog={onOpenConnectivityDialog}
           isTestingConnectivity={isTestingConnectivity}
           connectivityResult={connectivityResult}
         />
+
+        <ProxyPanel
+          configDraft={configDraft}
+          statusRunning={status.running}
+          setConfigDraft={setConfigDraft}
+        />
       </SettingsDialog>
+
+      <ConnectivityDialog
+        isOpen={connectivityDialogOpen}
+        isTesting={isTestingConnectivity}
+        result={connectivityResult}
+        onClose={closeConnectivityDialog}
+      />
 
       {toast && (
         toast.persistent ? (

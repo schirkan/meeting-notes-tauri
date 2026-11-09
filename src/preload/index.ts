@@ -27,6 +27,8 @@ import type { AzureConfig, AzureConfigState, UserSettings } from '@shared/config
 export type ConnectivityResult = {
   probeUrl: string
   reachable: boolean
+  httpsReachable: boolean
+  speechReachable: boolean
   httpStatus?: number
   httpStatusText?: string
   latencyMs: number

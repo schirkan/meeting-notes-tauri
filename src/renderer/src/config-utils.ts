@@ -51,7 +51,7 @@ export function draftToConfig(draft: ConfigDraft): AzureConfig {
   }
 
   const parsedPort = Number(proxyPort)
-  if (!Number.isFinite(parsedPort) || parsedPort <= 0) {
+  if (!Number.isInteger(parsedPort) || parsedPort <= 0 || parsedPort > 65535) {
     throw new Error('Proxy-Port ist ungültig.')
   }
 
@@ -82,5 +82,5 @@ export function isConfigComplete(config: AzureConfig | null): boolean {
     return true
   }
 
-  return config.proxy.host.trim().length > 0 && Number.isFinite(config.proxy.port) && config.proxy.port > 0
+  return config.proxy.host.trim().length > 0 && Number.isInteger(config.proxy.port) && config.proxy.port > 0 && config.proxy.port <= 65535
 }

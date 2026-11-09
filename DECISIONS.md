@@ -77,6 +77,8 @@ Architekturentscheidungen für die Tauri-Migration. Wird fortlaufend ergänzt, w
 - **Komplettes UI-Redesign für Tauri** — kein sichtbarer Mehrwert; UX-Stabilität ist wichtiger.
 - **Astro/Svelte/Solid statt React** — neue Toolchain ohne klaren Vorteil.
 
+**Fortschreibung 2026-11-09:** Auf Nutzerwunsch bewusst keine strikte 1:1-Portierung der Settings-/Diagnose-UX: drei responsive Bereiche Allgemein/Azure-Konfiguration/Proxy, Test- und Ergebnisaktionen im Azure-Bereich, beide Config-Pfade unterhalb aller Bereiche, Startup-Settings bei fehlender/ungültiger Konfiguration mit Bottom-Toast und separater wiederöffnbarer Diagnose-Dialog. Keine Live-Einzelstep-Events; Ergebnis nach Abschluss über Command-Return. Übrige UI bleibt auf bestehendem Verhalten aufgebaut. Siehe [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md).
+
 ---
 
 ## AD-005 · Kein Mobile-Build (2026-06-25)
@@ -103,13 +105,17 @@ Architekturentscheidungen für die Tauri-Migration. Wird fortlaufend ergänzt, w
 - Zielsystem-Voraussetzung bleibt einfach: .NET 8 Runtime.
 - Tauri-Resource-System ist gut dokumentiert und für genau diesen Use Case gedacht.
 
+**Mess-/Deploymentstand 2026-11-09:** Sidecar-Publish inklusive EXE/DLLs 6.76 MB; gesamte Portable-Distribution 20.79 MB (Haupt-EXE 14.03 MB). Sidecar-DLLs liegen extern, nicht eingebettet in der Tauri-EXE. Gesamten Portable-Ordner verteilen; .NET 8 Runtime (win-x64) und WebView2 bleiben Voraussetzungen. Frisches Zielsystem noch nicht geprüft.
+
 ---
 
 ## AD-007 · Schritt-für-Schritt-Migration, kein Big-Bang (2026-06-25)
 
 **Kontext:** Migration eines funktionierenden Projekts birgt das Risiko, beide Projekte gleichzeitig kaputtzumachen.
 
-**Entscheidung:** Die Migration erfolgt in 4 Phasen (siehe `PROJECT.md → Migration aus meeting-notes`). Phase 0 (Doku) ist abgeschlossen; Phase 1 startet erst nach Nutzer-Freigabe. Phase 1 verändert **zunächst nur `meeting-notes`**, nicht dieses Projekt.
+**Historische Entscheidung:** Die Migration war in 4 Phasen geplant (siehe [AGENTS.md](./AGENTS.md), historischer Migrationsplan), zunächst mit einem Konsolidierungsschritt in `meeting-notes`.
+
+**Fortschreibung 2026-11-09:** Implementierung und heutige Änderungen erfolgen ausschließlich in dieser Tauri-Variante. Die Electron-Referenz bleibt unverändert; der historische Phase-1-Plan ist keine Anweisung, sie zu bearbeiten.
 
 **Update 2026-06-25:** Phase 5 (Decommission `meeting-notes`) wurde gestrichen. Das Electron-Projekt bleibt dauerhaft als Referenz bestehen — die Variante wird also **parallel** weitergepflegt, nicht abgelöst.
 
@@ -133,7 +139,7 @@ Architekturentscheidungen für die Tauri-Migration. Wird fortlaufend ergänzt, w
 - **Weniger Code:** ~150 Zeilen Boilerplate entfallen (`NamedPipeServerStream` in C#, `tokio::net::windows::named_pipe` in Rust).
 - **Bidirektional out-of-the-box:** stdin/stdout sind natürlich bidirektional; Named Pipe bräuchte zwei separate Server.
 - **Tauri-Lifecycle:** Tauri managt Process-Spawn, Buffering, Reconnects, Crash-Detection nativ.
-- **Debug-Komfort:** `npm run dev` zeigt Sidecar-stdout/-stderr direkt im Terminal.
+- **Debug-Komfort:** `npm run tauri -- dev` startet die native App mit Sidecar-Diagnose; `npm run dev` allein startet nur Vite.
 - **Konsolen-Pop-up beherrschbar:** Über `creation_flags = CREATE_NO_WINDOW` in `T-301` und Newline-Flushing im C#-Sidecar.
 
 **Alternativen, die verworfen wurden:**
@@ -147,7 +153,7 @@ Architekturentscheidungen für die Tauri-Migration. Wird fortlaufend ergänzt, w
 - **`specs/T-301`** verliert `--pipe-name`-CLI-Arg.
 - **`specs/T-102`** Pipe-Handshake → stdin-Handshake.
 - **`specs/T-200`** Named-Pipe-Erwähnungen entfernt.
-- **Architektur-Diagramm** in `PROJECT.md` und Tech-Stack-Tabelle aktualisiert.
+- **Architektur-Diagramm** und Tech-Stack-Tabelle im Projektstatus aktualisiert (heute [AGENTS.md](./AGENTS.md)).
 
 ---
 
@@ -205,7 +211,7 @@ Architekturentscheidungen für die Tauri-Migration. Wird fortlaufend ergänzt, w
 
 **Konsequenzen für bestehende ADs und Specs:**
 - **`specs/T-302`** verliert `copy_transcript` aus der Command-Liste (war ohnehin nur informell dort).
-- **`PROJECT.md` Tech-Stack** verliert `tauri-plugin-clipboard-manager` (war nicht explizit aufgeführt, wird aber via Bereinigung deutlicher).
+- **Projektstatus-Tech-Stack** verliert `tauri-plugin-clipboard-manager` (heute [AGENTS.md](./AGENTS.md); war nicht explizit aufgeführt, wird aber via Bereinigung deutlicher).
 
 ---
 
@@ -229,7 +235,26 @@ Architekturentscheidungen für die Tauri-Migration. Wird fortlaufend ergänzt, w
 - Spec **T-306**: Validierung, ob `SpeechConfig.SetProxy()` in der C#-Variante zuverlässiger funktioniert als im Node-Pfad.
 - Spec **T-505** Variante 3: Eigenbau eines WSS-Clients in C# gegen den Azure-Speech-WSS-Endpoint direkt — umgeht das `setProxy()`-Limit der nativen SDK.
 
-**Offene Folgefrage:** Sollten die Workarounds in T-306/T-505 Variante 3 scheitern, ist ein **OpenAI-Hybrid** (`gpt-realtime-whisper` + rollende `gpt-4o-transcribe-diarize`-Passes auf 30-s-Chunks) die Plan-B-Option — dann aber mit akzeptiertem Verlust von Continuous LID und zusätzlicher Pipeline-Komplexität. Hybrid-Skizze ist in `PROJECT.md` → "Anbieter-Alternativen evaluiert" dokumentiert.
+**Offene Folgefrage:** Sollten die Workarounds in T-306/T-505 Variante 3 scheitern, ist ein **OpenAI-Hybrid** (`gpt-realtime-whisper` + rollende `gpt-4o-transcribe-diarize`-Passes auf 30-s-Chunks) die Plan-B-Option — dann aber mit akzeptiertem Verlust von Continuous LID und zusätzlicher Pipeline-Komplexität. Die historische Alternative ist im Abschnitt "Anbieter-Alternativen evaluiert" in [AGENTS.md](./AGENTS.md) dokumentiert.
+
+**Fortschreibung 2026-11-09:** `SetProxy()` und native Diagnosesitzungen sind implementiert; erfolgreiche Verbindung im Corporate-Netz steht aus. Ein eigenes WSS-Protokoll ist weder implementiert noch als nötig/zuverlässig bestätigt. T-505 bleibt die bedingte Entscheidung nach dem echten Netztest.
+
+---
+
+## AD-012 · Expliziter Proxy, getrennte Transportdiagnose und relative Config (2026-11-09)
+
+**Kontext:** HTTPS-Erreichbarkeit darf nicht mit nativem Speech/WSS-Erfolg verwechselt werden. Generische IPC-Fehler, automatische Umgebungsproxies und AppData-Pfade erschweren die portable Diagnose. Nutzerwunsch: Proxy an beide Pfade weiterreichen und Zertifikate soweit möglich ignorieren.
+
+**Entscheidung:**
+- Rust lädt/speichert `config/azure.json` und `config/user-settings.json` neben der Release-EXE, im Dev-Build im Repository. Unabhängig vom Arbeitsverzeichnis, ohne AppData-Fallback/Migration. Beide Backend-Pfade werden im Settings-Footer angezeigt.
+- HTTPS-Diagnose: expliziter HTTP-CONNECT-Proxy mit optionaler Basic-Authentifizierung; ohne Proxy `.no_proxy()`. System-DNS/TCP prüfen Proxy oder direkten Endpoint, kein öffentlicher DNS-Fallback.
+- **HTTPS-Zertifikatsprüfung wird ausschließlich in der Diagnose immer ignoriert (bewusst unsicher).** Kein Redirect-Following. Native Windows-Speech-SDK-Zertifikatsprüfung bleibt aktiv: kein offiziell unterstützter .NET-Bypass für Speech SDK 1.44 gefunden.
+- **Risiko:** Der HTTPS-Bypass kann den Speech-Key einem nicht vertrauenswürdigen Proxy offenlegen. Positives HTTPS ist keine Aussage zu TLS-Vertrauen, gültigem Key oder Speech/WSS. Bei TLS-Inspection gegebenenfalls Unternehmens-Root-CA/Allowlisting für den nativen Transport erforderlich.
+- Separate native Diagnose ohne Capture nutzt denselben `SpeechConfiguration`-Builder wie Aufnahme (`SetProxy`, Endpoint, Sprache, Continuous LID) und verlangt `Connected` plus `SessionStarted` für Recognizer und Transcriber. Credentials nur über child-lokale Env-Variablen, Host/Port über nicht geheime CLI-Args.
+- HTTPS und Speech werden parallel geprüft; Gesamterfolg verlangt beide. HTTP 401/403 zählt nur als HTTPS-Erreichbarkeit. DNS/TCP/HTTP jeweils 5 s Timeout; nativer Prozess maximal 45 s ab Spawn, keine garantierte Gesamt-UI-Zeitgrenze.
+- Separater Dialog zeigt Schritte/Fehlerdetails nach Abschluss, inklusive String-/Objekt-IPC-Rejections. Schließen beendet den Test nicht; kein Live-Step-Streaming.
+
+**Validierung:** 12 Browser-UI-Regressionstests, fokussierte TypeScript-/Rust-Prüfungen, Portable-Smoke und nativer lokaler Negativtest erfolgreich. Positiver Corporate-Proxy-/Azure-Test bleibt offen; eigener WSS-Transport nicht implementiert. Siehe [T-304](./specs/T-304-connectivity-diagnose-in-rust.md), [T-306](./specs/T-306-proxy-aware-azure-transport.md) und [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md).
 
 ---
 

@@ -135,6 +135,8 @@ export interface TranscriptApi {
   testAzureConnectivity: (payload?: unknown) => Promise<{
     probeUrl: string
     reachable: boolean
+    httpsReachable: boolean
+    speechReachable: boolean
     httpStatus?: number
     httpStatusText?: string
     latencyMs: number

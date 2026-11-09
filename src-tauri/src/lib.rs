@@ -55,6 +55,7 @@ pub fn run() {
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
+      commands::toggle_devtools,
       commands::start_recording,
       commands::stop_recording,
       commands::reset_transcript,

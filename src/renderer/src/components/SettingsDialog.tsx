@@ -4,6 +4,9 @@ type SettingsDialogProps = {
   isOpen: boolean
   onClose: () => void
   children: React.ReactNode
+  title?: string
+  columns?: 2 | 3
+  footer?: React.ReactNode
 }
 
 const FOCUSABLE_SELECTOR = [
@@ -16,7 +19,7 @@ const FOCUSABLE_SELECTOR = [
 ].join(',')
 
 export function SettingsDialog(props: SettingsDialogProps) {
-  const { isOpen, onClose, children } = props
+  const { isOpen, onClose, children, title = 'Einstellungen', columns = 2, footer } = props
   const dialogRef = useRef<HTMLElement | null>(null)
   // Ref statt State, damit onClose-Wechsel den Initial-Focus-Effekt nicht
   // erneut auslösen. Außerdem den Initial-Fokus nur einmalig pro Open-Phase
@@ -107,14 +110,14 @@ export function SettingsDialog(props: SettingsDialogProps) {
     <div className="settings-dialog-overlay" role="presentation" onClick={onClose}>
       <section
         ref={dialogRef}
-        className="settings-dialog"
+        className={columns === 3 ? 'settings-dialog settings-dialog-three-columns' : 'settings-dialog'}
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-dialog-title"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="settings-dialog-header">
-          <h2 id="settings-dialog-title">Einstellungen</h2>
+          <h2 id="settings-dialog-title">{title}</h2>
           <button className="settings-dialog-close" type="button" onClick={onClose} aria-label="Dialog schließen">
             ×
           </button>
@@ -123,6 +126,8 @@ export function SettingsDialog(props: SettingsDialogProps) {
         <div className="settings-dialog-grid">
           {children}
         </div>
+
+        {footer && <div className="settings-dialog-footer">{footer}</div>}
       </section>
     </div>
   )

@@ -1,7 +1,9 @@
 # Spezifikation v0.1 — Meeting Notes (Tauri-Variante)
 
-Stand: 25.06.2026
-Status: Entwurf (Doku-Phase, vor Implementierung)
+Stand: 09.11.2026
+Status: Implementierungsstand fortgeschrieben; reale Azure-/Corporate-Netz-, Latenz- und Clean-Machine-Akzeptanz offen.
+
+Lokaler Stand: Portable-Build 20.79 MB (27 Dateien, 26 geprüfte Hashes), 12 erfolgreiche Settings-/Diagnose-UI-Tests, fokussierte TypeScript-/Rust-Prüfungen und native Negativdiagnose. Nicht jede ursprüngliche Audio-/Protokoll-Anforderung ist damit als abgenommen bestätigt; Einzelstatus siehe [Specs](./specs/).
 
 Diese Spezifikation ist die **Tauri-Variante** von `../meeting-notes/SPEC-v0.1.md`. Architekturziel: Tauri 2 + React + C#-Sidecar (mit Azure Speech SDK in NuGet-Form).
 
@@ -40,7 +42,7 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - **Frontend:** React 19 + TypeScript 6 + Vite 8 (im Tauri-Renderer-WebView2).
 - **IPC Sidecar ↔ App:** `stdin/stdout` über `tauri-plugin-shell` mit JSON-Lines (siehe `DECISIONS.md → AD-008`). Named Pipe entfällt.
 - **IPC App ↔ Renderer:** Tauri-`invoke()` für Commands + Tauri-`listen()` für Events (typed JSON).
-- **Distribution:** Tauri-`tauri build` (NSIS-/MSI-Installer), Sidecar als Resource eingebunden.
+- **Distribution:** NSIS-/MSI-Installer oder gesamter Portable-Ordner. Sidecar-EXE und verwaltete/native DLLs werden extern ausgeliefert, nicht in die Haupt-EXE eingebettet. Zielsystem braucht .NET 8 Runtime (win-x64) und WebView2.
 
 ## 4. Transkription
 - API: Azure Speech
@@ -60,18 +62,25 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - Sprecher-Alias-Mapping im UI.
 - Diagnostikbereich mit laufendem Debug-Log (App/Sidecar/IPC).
 - Diagnostikbereich mit separaten Öffnen-/Schließen-Aktionen und manueller Log-Leerung.
-- Nutzer kann in der UI ändern:
-  - Sprache
-  - Audio-Devices (wenn nicht Default)
+- Einstellungen haben drei responsive Bereiche: **Allgemein**, **Azure-Konfiguration**, **Proxy** (rechts). Unterhalb aller Bereiche stehen die tatsächlichen Backend-Pfade zu beiden Config-Dateien. Bis 960 px Fensterbreite stehen die Bereiche untereinander.
+- Nutzer kann Sprache/Devices sowie Azure-Konfiguration und Proxy bearbeiten. Proxy wird gemeinsam mit Azure gespeichert; **Verbindung testen** und laufende/letzte Ergebnisse öffnen liegen im Azure-Bereich.
 - Spracheinstellung wird über Neustarts hinweg persistiert.
-- **Komponenten werden 1:1 aus `meeting-notes` portiert** (siehe `DECISIONS.md → AD-004`).
+- Bei fehlender, nicht lesbarer oder unvollständiger Azure-Konfiguration öffnen sich Einstellungen beim Start automatisch; schließbarer Bottom-Toast ohne Verschiebung des Hauptinhalts. Das ist lokale Pflichtfeldprüfung, keine Azure-Key-Verifikation.
+- Separater Diagnose-Dialog mit Transportstatus und vollständiger Schritttabelle nach Abschluss. Schließen kehrt zu Einstellungen zurück, ohne einen laufenden Test abzubrechen; Ergebnisse können wieder geöffnet werden.
+- F12 öffnet/schließt DevTools auch im Release-/Portable-Build.
+- Bestehende UI bleibt Grundlage; Settings-/Diagnose-UX ist eine bewusste Ausnahme zur ursprünglichen 1:1-Portierung (siehe [DECISIONS.md](./DECISIONS.md), Fortschreibung AD-004 und [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md)).
 
 ## 6. Konfiguration
-- API-Konfiguration über fest verdrahtete JSON-Datei.
-- Azure-Konfiguration liegt in `config/azure.json`; der Azure-Key wird dort direkt im Feld `speechKey` hinterlegt.
-- Optionaler Azure-Proxy über `proxy.host`, `proxy.port` sowie optional `proxy.username`/`proxy.password`.
-- Kein vollwertiger Konfigurationseditor in der UI für den PoC.
-- **Verbindung testen**-Button in den Azure-Einstellungen: führt DNS-/TCP-/HTTPS-Diagnose gegen den konfigurierten Endpoint aus, Result-Karte zeigt alle Schritte und Fehlermeldungen. Modul `src-tauri/src/connectivity.rs` (Pendant zu `meeting-notes/src/main/azure-connectivity.ts`), Tauri-Command `test_azure_connectivity`.
+- Azure-Konfiguration liegt in `config/azure.json`, Benutzeroptionen in `config/user-settings.json`: im Release neben der EXE, in Entwicklung im Repository neben den Templates. Unabhängig vom Start-Arbeitsverzeichnis, ohne AppData-Migration/-Fallback.
+- Azure-Key bleibt direkt im Feld `speechKey`; Azure-/Proxy-Werte sind im Settings-Dialog editierbar. `AzureConfigState` liefert `exists`, `path`, `userSettingsPath` und optional `config`.
+- Optionaler HTTP-CONNECT-Proxy über `proxy.host`, `proxy.port` (1–65535), optional `username`/`password`. Host ohne Schema/Pfad. Rust lädt die Dateien und reicht Einstellungen an HTTPS-Diagnose und Sidecar weiter; der Sidecar lädt sie nicht selbst.
+- Sidecar erhält Speech-Key/Proxy-Zugangsdaten über prozesslokale Umgebungsvariablen, nicht Credential-CLI-Argumente. Host/Port/Endpoint/Region/Sprache sind nicht geheime CLI-Args.
+- **Verbindung testen** nutzt aktuelle, auch ungespeicherte Werte und Sitzungssprache. `test_azure_connectivity` führt parallel System-DNS/TCP/HTTPS in Rust und native Speech/WSS-Diagnose in einem separaten Sidecar ohne Audio-Capture aus.
+- HTTPS nutzt expliziten Proxy mit optionaler Basic-Authentifizierung, ansonsten `.no_proxy()`; kein öffentlicher DNS-Fallback. DNS/TCP prüfen den Proxy, sonst den Endpoint mit dessen Port oder 443. HTTPS-HEAD folgt keinen Redirects.
+- **HTTPS-Diagnose ignoriert Zertifikatsprüfungen immer (unsicher, Speech-Key-Abfangrisiko). Native Windows-Speech-SDK-Prüfung bleibt aktiv.** Kein offiziell dokumentierter .NET-Bypass für Speech SDK 1.44 gefunden.
+- `httpsReachable` bedeutet HTTP-Antwort auch bei 401/403; `speechReachable` verlangt `Connected` und `SessionStarted` für Recognizer **und** Transcriber. `reachable` verlangt beide Transporte.
+- Diagnoseprozess: 45 s Grenze; DNS/TCP/HTTPS jeweils 5 s Timeout, keine garantierte 45-s-Obergrenze des vollständigen UI-Aufrufs. Native Proben können Azure-Kosten verursachen.
+- Ergebnis wird zurückgegeben und als `transcript:connectivity-result` emittiert; UI nutzt Return-Wert. Separater Dialog zeigt alle Status/Details erst nach Abschluss, einschließlich Validierungs-/IPC-Fehlern, nicht live gestreamte Einzelsteps. Siehe [T-304](./specs/T-304-connectivity-diagnose-in-rust.md).
 
 ## 6.1 Audioformat für Azure-Ingest (unverändert)
 - Sidecar resampelt Mic- und Speaker-Frames auf ein einheitliches Zielformat:
@@ -94,8 +103,9 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - **Versionierung:** `protocol_version` im ersten Handshake-Objekt auf stdout (siehe `specs/T-201`).
 
 ## 6.4 Bekannte Netzwerk-Einschränkungen
-- Die native Azure-Speech-SDK (Node- und C#-Variante) zeigt in restriktiven Netzwerkumgebungen identisches Verhalten: die per `setProxy()` gesetzten Proxy-Properties werden nicht zuverlässig für den ausgehenden WSS-Connect genutzt. In Corporate-Netzen mit erzwungenem HTTP-Proxy und ausgehender Firewall kommt keine Verbindung zustande.
-- Diagnose-Hilfsmittel und Workarounds siehe `TROUBLESHOOTING.md` (zu erstellen) und `specs/T-505-proxy-aware-azure-transport.md`.
+- Proxy-Probleme mit dem nativen Node-Speech-Pfad sind aus der Electron-Referenz übernommen. Ob dasselbe Verhalten im C#-Pfad auftritt, ist **nicht bestätigt**; `SpeechConfig.SetProxy()` ist implementiert, Erfolg im Firmenproxy noch offen.
+- HTTPS-Erreichbarkeit bei ignorierten Zertifikaten beweist weder vertrauenswürdiges TLS noch native Speech/WSS-Funktion. Bei TLS-Inspection können Unternehmens-Root-CA und Allowlisting erforderlich sein.
+- Corporate-Netzvalidierung und gegebenenfalls Entscheidung über eigenen WSS-Transport siehe [T-306](./specs/T-306-proxy-aware-azure-transport.md) und [T-505](./specs/T-505-proxy-aware-azure-transport.md). Eigener WSS-Client ist nicht implementiert.
 
 ## 7. Export
 - Kein Dateiexport im PoC vorgesehen.
@@ -104,18 +114,20 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - Zeitformat: deutsches Datums-/Zeitformat.
 
 ## 8. Entwicklungsumgebung (Stabilitätsvorgabe)
-- Standard für lokale Entwicklung: Node 22 LTS (`.nvmrc`).
+- Standard für lokale Entwicklung: Node 22 LTS ≥22.12.0; zulässige Versionen gemäß `package.json` (auch ≥24.0.0 <24.16.0).
 - Rust-Toolchain (stable, Edition 2021).
 - .NET 8 SDK (für Sidecar-Build) lokal.
 - Tauri-CLI (2.x) als devDependency.
-- Zulässige Node-Versionen im Projekt: identisch zu `meeting-notes` (siehe `../meeting-notes/SPEC-v0.1.md` Abschnitt 8).
+- Native Entwicklung: `npm run tauri -- dev`; `npm run dev` startet nur Vite/Renderer. Build-/Test-Kommandos siehe [README.md](./README.md).
 
 ## 8.1 Sidecar-Deployment (Runtime-Anforderung)
 - Lokale Entwicklung/Build: .NET 8 SDK erforderlich, um das Sidecar zu veröffentlichen.
 - Zielsystem: .NET 8 Runtime (win-x64) ausreichend; SDK ist dort nicht erforderlich.
 - Build-/Start-Flow:
-  - Dev: `dotnet publish` → `sidecar/publish/sidecar/MeetingNotes.Sidecar.exe`, von Tauri gestartet.
-  - Build: Tauri-`tauri build` bündelt das Sidecar-EXE als Resource.
+  - Dev: `build.rs` publiziert Sidecar automatisch, danach Start durch Tauri.
+  - Installer: `npm run tauri -- build` bündelt Sidecar-EXE **und DLLs** als externe Resources.
+  - Portable: `npm run tauri -- build --no-bundle`, nach Erfolg `npm run dist:portable` und `npm run test:smoke`; gesamter Ordner erforderlich, nicht nur Haupt-EXE.
+  - Lokaler letzter Portable-Build: 20.79 MB, alle 26 Hashes geprüft. Aktuelle MSI/NSIS- und Clean-Machine-Validierung nicht erneut durchgeführt.
 
 ## 9. Nicht-Ziele
 - Code-Signing
@@ -127,7 +139,7 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 
 ## 10. MVP-Rollout
 
-Die MVPs des Electron-Projekts werden in der Tauri-Variante **funktional beibehalten**, aber der Migrationsplan aus `PROJECT.md → Migration aus meeting-notes` strukturiert die Umsetzung:
+Die MVPs des Electron-Projekts bleiben die funktionale Grundlage; umgesetzt wird ausschließlich in dieser Tauri-Variante, die Electron-Referenz bleibt unverändert. Aktuelle Teilabnahme siehe [T-500](./specs/T-500-qualitaetssicherung-und-akzeptanztests.md):
 
 ### MVP 1 (Tauri)
 - Tauri-2-Anwendung startet lokal mit React-Renderer.
@@ -149,14 +161,15 @@ Die MVPs des Electron-Projekts werden in der Tauri-Variante **funktional beibeha
 - **Verbindung testen**-Button + Diagnose-Modul.
 - Proxy-Workaround (T-505) je nach Entscheidung.
 
-## 11. Offene Entscheidungen
-1. `t-201`: Sidecar-EXE-Name und Command-Pipe-Trennung (siehe `DECISIONS.md → Offene Fragen`).
-2. `T-505`: Proxy-Workaround-Variante (Node → C# Pfad; ggf. WSS-Eigenbau in C# statt Node).
-3. `OQ-4`: macOS-/Linux-Build optional vorbereiten oder hardcoded Windows-only?
-4. Tauri-Bundle-Format: NSIS vs. MSI vs. beides?
+## 11. Offene Entscheidungen und Akzeptanz
+1. [T-505](./specs/T-505-proxy-aware-azure-transport.md): Erst nach echtem Firmenproxy-/C#-WSS-Test gegebenenfalls über Workaround entscheiden.
+2. Reale Aufnahme/Latenz und Clean-Machine-Deployment sowie aktuelle Installer-Parität prüfen ([T-500](./specs/T-500-qualitaetssicherung-und-akzeptanztests.md)).
+3. Historisch offene Sidecar-Benennung: aktuell `MeetingNotes.Sidecar.exe`; keine Umbenennung in den heutigen Änderungen.
+
+Bereits festgelegt: stdin/stdout statt Named Pipe, Windows-only; Installer-Konfiguration NSIS und MSI, daneben Portable-Ordner. Heute nur Portable neu gebaut.
 
 ## 12. Querverweise
-- Architekturziele: `PROJECT.md`
-- Architekturentscheidungen: `DECISIONS.md`
-- Tasks: `specs/`
-- Quell-Projekt (Electron): `../meeting-notes/`
+- Aktueller Projektstatus: [README.md](./README.md)
+- Architekturentscheidungen: [DECISIONS.md](./DECISIONS.md)
+- Tasks und Akzeptanzstatus: [specs/](./specs/)
+- Quell-Projekt (Electron): `../meeting-notes/` (unveränderte Referenz)

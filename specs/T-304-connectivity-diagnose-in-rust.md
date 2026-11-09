@@ -6,22 +6,28 @@ Priorität: high
 Abhängigkeiten: T-302
 
 ## Goal
-DNS-/TCP-/HTTPS-Diagnose gegen den konfigurierten Azure-Endpoint als Tauri-Command verfügbar machen.
+Proxy-aware DNS-/TCP-/HTTPS-Diagnose und getrennte native Speech/WSS-Validierung als Tauri-Command verfügbar machen.
 
 ## Done When
-- [x] Modul `src-tauri/src/connectivity.rs` mit `pub async fn diagnose(endpoint, subscription_key, language) -> ConnectivityResult`.
-- [x] Diagnose-Schritte: System-DNS-Lookup → Fallback-DNS-Lookup → TCP-Connect auf Port 443 → HTTPS-HEAD-Probe. Jeder Schritt landet als `Step { step, status, detail }` im Result.
-- [x] Tauri-Command `test_azure_connectivity` ruft die Diagnose auf und gibt das Result-Karte-Objekt zurück (Payload: `{ endpoint, speechKey, language }`).
-- [x] Result-Karte enthält: `reachable` (bool), `httpStatus?`, `httpStatusText?`, `latencyMs`, `probeUrl`, `error?`, `steps: Vec<Step>` mit `Ok`/`Warn`/`Error`-Status.
-- [x] Funktioniert unabhängig davon, ob der Sidecar läuft (HTTP-Probe via `reqwest`).
-- [ ] Bridge-Event `transcript:connectivity-result` (siehe T-303) — **offen**: aktuell liefert der Command das Result nur als Return-Wert; ein zusätzliches Emit entfällt, weil der Renderer den Wert direkt nach `invoke()` erhält.
+- [x] [connectivity.rs](../src-tauri/src/connectivity.rs) bietet `diagnose(endpoint, subscription_key, language, proxy) -> ConnectivityResult`.
+- [x] DNS/TCP prüfen den konfigurierten Proxy-Host/-Port, andernfalls den Endpoint mit seinem expliziten Port oder 443. System-DNS nutzt `tokio::net::lookup_host`; es gibt keinen öffentlichen Fallback-DNS-Lookup. DNS-/TCP-Fehler sind Warnungen, die HTTPS-Probe ist maßgeblich.
+- [x] `reqwest` nutzt einen expliziten HTTP-CONNECT-Proxy mit optionaler Basic-Authentifizierung. Ohne Proxy wird `.no_proxy()` gesetzt; automatische Umgebungsproxies werden nicht übernommen.
+- [x] Die HTTPS-HEAD-Probe ignoriert Zertifikatsprüfungen immer und folgt keinen Redirects. Probe-URL nutzt HTTPS, den Azure-Speech-Pfad und die Sitzungssprache; Endpoint-Zugangsdaten in der URL werden abgelehnt.
+- [x] `test_azure_connectivity` akzeptiert `{ endpoint, region, speechKey, interimResults, proxy?, language? }`, validiert den Payload und führt HTTPS sowie native Speech/WSS-Diagnose parallel aus.
+- [x] Speech/WSS wird durch einen separaten Sidecar-Prozess mit `--test-connectivity` geprüft, ohne Mikrofon/Loopback. `SpeechRecognizer` und `ConversationTranscriber` müssen jeweils `Connected` und `SessionStarted` erreichen.
+- [x] Ergebnis enthält `reachable`, `httpsReachable`, `speechReachable`, `httpStatus?`, `httpStatusText?`, `latencyMs`, `probeUrl`, `error?`, `steps` mit `ok`/`warn`/`error`. `reachable = httpsReachable && speechReachable`.
+- [x] HTTP 401/403 bestätigt nur HTTP-Erreichbarkeit, nicht gültige Zugangsdaten oder funktionierendes Speech/WSS.
+- [x] Rückgabe über `invoke()` und zusätzliches Event `transcript:connectivity-result` (siehe [T-303](./T-303-tauri-events.md)). Aufnahme-Sidecar muss nicht laufen.
+- [x] HTTPS-Fehler enthalten die Fehlerursachenkette; fehlende Sidecar-Ergebnisse enthalten stderr/Prozessfehler und Exit-Code, unter Redaktion von Speech-Key und Proxy-Zugangsdaten.
 
 ## Approach
-- Crates: `hickory-resolver 0.24` für DNS, `tokio::net::TcpStream` für TCP, `reqwest` (mit `rustls-tls`-Feature) für HTTPS-HEAD. — Die in 0.24 entfernte `TokioResolver`-Statik-API wurde durch `hickory_resolver::TokioAsyncResolver::tokio(config, opts)` ersetzt; beide `dns_lookup_system` und `dns_lookup_fallback` rufen diesen Konstruktor mit `ResolverConfig::default()` / `ResolverOpts::default()` auf (semantisch aktuell identisch, weil `system` und `fallback` denselben Resolver-Typ verwenden — eine echte Differenzierung über system-DNS vs. Cloudflare/Google ist als Folgeaufgabe offen).
-- Diagnose ist `async` und mit Timeout pro Schritt (5 s — `PROBE_TIMEOUT`).
-- Bestehende Diagnose-Logik aus `../meeting-notes/src/main/azure-connectivity.ts` dient als Vorlage (gleiche Schritte, gleiche Fehlerklassifizierung).
-- Result wird im UI als Karte mit aufklappbarer Step-Liste dargestellt (Komponente 1:1 portiert).
+- HTTPS: `tokio::net` + `reqwest` (`rustls-tls`), 5 s Timeout pro DNS-/TCP-/HTTP-Probe. Kein Cloudflare-/Google-DNS-Bypass für Corporate-Netze.
+- Native Diagnose: [sidecar.rs](../src-tauri/src/sidecar.rs) begrenzt den Diagnoseprozess auf 45 s und beendet ihn anschließend. Dies ist kein separater Timeout für jeden UI-Schritt.
+- **TLS-Grenze:** Der HTTPS-Zertifikatsbypass ist unsicher und kann den Speech-Key einem nicht vertrauenswürdigen Proxy offenlegen. Er gilt ausschließlich für die HTTPS-Diagnose. Native Windows-Speech-SDK-Zertifikatsprüfung bleibt aktiv; siehe [T-306](./T-306-proxy-aware-azure-transport.md).
+- [T-403](./T-403-settings-dialog-mit-verbindung-testen-button.md) definiert den separaten Ergebnisdialog. Alle Schritte werden nach Abschluss angezeigt, nicht live einzeln gestreamt.
+- Positive Verbindung im realen Corporate-Netz bleibt separat zu validieren ([T-505](./T-505-proxy-aware-azure-transport.md)).
 
 ## Log
 - 2026-06-25: Spec angelegt.
 - 2026-06-26: hickory-API-Drift korrigiert (`TokioResolver::build` → `TokioAsyncResolver::tokio`, `use url::Url` raus, `format!`-Borrow-Lifetime-Fix in `probe_url_from_endpoint`).
+- 2026-11-09: Expliziten Proxy, System-DNS ohne externen Fallback, getrennte HTTPS-/Speech-WSS-Ergebnisse, TLS-Grenzen und detaillierte Fehler dokumentiert. Lokaler nativer Negativtest erfolgreich; Firmenproxy/Azure noch nicht live validiert.

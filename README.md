@@ -2,9 +2,9 @@
 
 PoC zur strukturierten Erfassung von Meeting-Transkripten (**Tauri 2** + React + C# Sidecar).
 
-Dieses Projekt ist die **Tauri-Migration** des bestehenden Electron-Projekts `projects/meeting-notes`. Vollständiger Migrationsplan und Architekturziele siehe `PROJECT.md` und `DECISIONS.md`.
+Dieses Projekt ist die **Tauri-Migration** des bestehenden Electron-Projekts `projects/meeting-notes`, das als Referenz unverändert bleibt. Architektur und aktueller Funktionsumfang siehe [SPEC.md](./SPEC.md) und [DECISIONS.md](./DECISIONS.md).
 
-> ⚠️ **Status: Doku-Phase.** Es existieren noch keine Quelldateien. Die Spezifikationen unter `specs/` bilden den verbindlichen Bauplan für die Implementierung.
+> **Stand 2026-11-09:** Implementierung und lokaler Portable-Build vorhanden. Settings-/Diagnose-Regressionen und Build-Smoke sind geprüft; erfolgreicher Corporate-Proxy-/Azure-Betrieb, Aufnahme-Latenz und Clean-Machine-Deployment bleiben offen. Die [Specs](./specs/) unterscheiden implementierte Funktionen von ausstehenden Akzeptanztests.
 
 ## Features (Ziel)
 - Start/Stop Recording im UI
@@ -18,38 +18,49 @@ Dieses Projekt ist die **Tauri-Migration** des bestehenden Electron-Projekts `pr
 - Azure Speech: Mic via `SpeechRecognizer`, Speaker via `ConversationTranscriber`
 - Optionale Proxy-Konfiguration für Azure Speech
 - Sidecar-Resampling auf 16 kHz / 16-bit / mono
-- **Verbindung testen**-Button in den Azure-Einstellungen
+- Einstellungen mit drei Bereichen: **Allgemein**, **Azure-Konfiguration** und **Proxy** (rechts daneben; bei schmalen Fenstern untereinander). Proxy-Einstellungen befinden sich im Proxy-Bereich, **Verbindung testen** in der Azure-Konfiguration. Gespeichert werden Azure- und Proxy-Einstellungen gemeinsam über **Azure-Konfiguration speichern**. Die Pfade zu `azure.json` und `user-settings.json` werden unterhalb aller drei Bereiche angezeigt.
 
-## Voraussetzungen (Soll)
-- Node gemäß `.nvmrc` (Empfehlung: 22 LTS)
+## Voraussetzungen
+- Node gemäß `package.json`: ≥22.12.0 <23 oder ≥24.0.0 <24.16.0 (Empfehlung: 22 LTS)
 - Rust Toolchain (für Tauri 2)
 - .NET 8 SDK (lokal für Sidecar-Build)
 - .NET 8 Runtime (auf Zielsystemen)
 - Windows 11 mit WebView2 (auf Zielsystemen)
 
-## Setup (Soll, ab Phase 2)
-```bash
-nvm use
-npm install
-# Tauri-CLI global oder via devDependency
+## Setup
+```powershell
+npm ci
 ```
+Die Tauri-CLI ist eine devDependency; keine globale Installation erforderlich.
 
 ### Azure konfigurieren
 1. `config/azure.example.json` → `config/azure.json` kopieren
 2. Speech-Key direkt im Feld `speechKey` eintragen
-3. Optional: Proxy unter `proxy.host`/`proxy.port` (+ optional `username`/`password`)
+3. Optional: Proxy unter `proxy.host`/`proxy.port` (+ optional `username`/`password`). Host ohne `http://` oder Pfad, Port 1–65535. Der HTTP-Proxy tunnelt HTTPS und Speech/WSS mittels CONNECT. Proxy-Zugangsdaten werden dem Sidecar über prozesslokale Umgebungsvariablen statt CLI-Argumenten übergeben.
+
+Beim Start mit fehlender, nicht lesbarer oder unvollständiger Azure-Konfiguration öffnen sich die Einstellungen automatisch. Der Hinweis erscheint als schließbarer Toast unten, ohne den Hauptinhalt zu verschieben. Nach manuellem Schließen bleibt der Dialog geschlossen; eine vollständige Konfiguration öffnet ihn beim Start nicht.
+
+### HTTPS und Speech/WSS getrennt testen
+- **Verbindung testen** nutzt die aktuellen, auch ungespeicherten UI-Werte einschließlich Proxy und Sitzungssprache.
+- Rust prüft DNS/TCP zum Proxy (oder direkt zum Endpoint bei deaktiviertem Proxy) und führt eine HTTPS-HEAD-Probe aus. Deaktivierter Proxy bedeutet explizite Direktverbindung, ohne automatische Umgebungsproxies. DNS am Ziel-Endpoint muss im Proxy-Modus lokal nicht funktionieren.
+- **Die HTTPS-Diagnose ignoriert Zertifikatsprüfungen immer (unsicher).** Ein nicht vertrauenswürdiger Proxy kann dadurch den Speech-Key abfangen. Redirects werden nicht verfolgt. Dieses Verhalten ist nur für die Diagnose vorgesehen und kein Nachweis vertrauenswürdiger TLS-Verbindungen.
+- Ein separater Sidecar-Diagnoseprozess öffnet native Speech-SDK-Sitzungen für `SpeechRecognizer` und `ConversationTranscriber`, ohne Mikrofon oder Loopback aufzunehmen. Er verwendet dieselben Endpoint-/Proxy-Einstellungen wie die Aufnahme. HTTPS-Erreichbarkeit allein beweist weder gültige Azure-Zugangsdaten noch Speech/WSS-Erreichbarkeit.
+- Ein separater **Verbindungstest-Dialog** zeigt den laufenden Test sowie anschließend alle Diagnose-Schritte mit Status und kopierbaren Fehlerdetails, HTTP-Status, Endpoint und Dauer. HTTPS und Speech/WSS werden getrennt ausgewiesen; insgesamt erfolgreich ist der Test nur, wenn beide funktionieren. Auch als Strings oder Objekte zurückgewiesene IPC-Aufrufe werden mit ihren Details angezeigt, nicht nur als generischer Fehler. Der Dialog lässt sich schließen und aus den Einstellungen wieder öffnen, ohne den laufenden Test abzubrechen. Ein HTTP 401/403 bestätigt lediglich HTTP-Erreichbarkeit, nicht erfolgreiche Speech-Authentifizierung.
+- Speech/WSS behält unter Windows die native Zertifikatsprüfung bei: Für das verwendete .NET Speech-SDK 1.44 wurde kein offiziell dokumentierter Abschaltmechanismus gefunden. OpenSSL-/CRL-Schalter für Linux werden nicht als Windows-Zertifikatsbypass verwendet. Bei TLS-Inspection müssen die Firmenzertifikate daher weiterhin für den nativen SDK-Transport vertrauenswürdig sein. Die WSS-Proben erwarten sowohl `Connected` als auch `SessionStarted`; bloßes lokales Starten reicht nicht für ein positives Ergebnis.
+- Der native Diagnoseprozess ist auf 45 Sekunden begrenzt; DNS-/TCP-/HTTPS-Proben haben jeweils 5 Sekunden Timeout. Dies ist keine garantierte 45-Sekunden-Obergrenze des gesamten UI-Aufrufs einschließlich Prozessstart. Einzelne Schritte erscheinen erst nach Abschluss, nicht live während der Prüfung. Der Test kann Azure-Verbindungen und gegebenenfalls Kosten verursachen, sendet aber keine aufgenommenen Audiodaten. Firmenproxy-Allowlisting, CONNECT-Unterstützung und Authentifizierung sind separat im Zielnetz zu prüfen.
 
 ### Benutzereinstellungen (optional)
 1. `config/user-settings.example.json` → `config/user-settings.json` kopieren
 2. Bei Bedarf `language` (BCP-47, z. B. `de-DE`, `en-US`) und `devices` anpassen
-3. Hinweis: Die echten Konfigurationsdateien (`config/azure.json`, `config/user-settings.json`) werden zur Laufzeit in das App-Config-Verzeichnis kopiert (`app_config_dir()`), siehe `src-tauri/src/settings.rs`. Die Repo-Dateien dienen nur als Initial-Templates.
+3. Beide Dateien werden direkt im relativen `config/`-Ordner gelesen und gespeichert: im Release-/Portable-Build neben der EXE, im Dev-Build im Repository (neben den Templates). Das Arbeitsverzeichnis des startenden Prozesses spielt keine Rolle. Es wird nichts nach AppData kopiert und keine AppData-Konfiguration als Fallback geladen. Bisher nur in AppData gespeicherte Werte bei Bedarf manuell in diesen `config/`-Ordner übernehmen.
 
-## Entwicklung (Soll)
-```bash
-npm run dev          # Tauri-Dev (Sidecar wird automatisch via src-tauri/build.rs gebaut)
-npm run typecheck    # TS-Lint
-npm run build        # Renderer-Build
-npm run tauri build  # MSI/NSIS-Installer (Sidecar-Publish läuft in src-tauri/build.rs)
+## Entwicklung
+```powershell
+npm run tauri -- dev    # Native App; Sidecar-Publish automatisch via build.rs
+npm run dev            # Nur Vite/Renderer, kein Tauri-Backend
+npm run typecheck      # TypeScript-Prüfung
+npm run build          # TypeScript + Renderer-Build
+npm run tauri -- build # MSI/NSIS-Installer inklusive Sidecar
 ```
 
 > Das C#-Sidecar wird seit `src-tauri/build.rs` automatisch per
@@ -57,11 +68,24 @@ npm run tauri build  # MSI/NSIS-Installer (Sidecar-Publish läuft in src-tauri/b
 > manuelle Schritt `npm run publish:sidecar` ist nicht mehr nötig —
 > das Skript existiert weiterhin für Ad-hoc-Rebuilds ohne Tauri-Build.
 
-## Portable Build (Soll)
-```bash
+UI-Regressionstests: `node --test tests/startup-ui.test.mjs` (lokaler Vite-Testserver und headless Microsoft Edge; keine Azure-Verbindungen).
+
+### Entwicklerwerkzeuge
+F12 öffnet bzw. schließt die WebView2-DevTools, auch im Release-/Portable-Build. Dazu ist das Tauri-Feature `devtools` aktiviert.
+
+## Portable Build
+Bestehende VS-Code-Aufgabe **Build portable distribution** verwenden oder nach dem Setup:
+```powershell
+npm run tauri -- build --no-bundle
+# Nur nach erfolgreichem Build:
 npm run dist:portable
+npm run test:smoke
 ```
-Artefakte: `dist/portable/` bzw. `src-tauri/target/release/bundle/`.
+`dist:portable` verpackt bereits gebaute Artefakte; es kompiliert keine aktualisierte EXE. Portable-Ausgabe: [dist/portable/](./dist/portable/). Installer entstehen separat durch `npm run tauri -- build`.
+
+**Den gesamten Portable-Ordner verteilen.** Sidecar-EXE und alle verwalteten/nativen DLLs liegen extern in `sidecar/`, nicht eingebettet in `meeting-notes-tauri.exe`. .NET 8 Runtime (win-x64) und WebView2 müssen auf dem Zielsystem vorhanden sein.
+
+Letzter verifizierter Portable-Build (2026-11-09): **20.79 MB gesamt**, davon Haupt-EXE 14.03 MB und Sidecar 6.76 MB; 27 Dateien einschließlich 2 Templates und SHA256SUMS, alle 26 Hashes geprüft. 12 UI-Regressionstests sowie fokussierte TypeScript-/Rust-Prüfungen erfolgreich. Native lokale Tests bestätigen F12, relative Config-Pfade und detaillierte negative Transportdiagnosen; kein positiver Azure-/Firmenproxy- oder Clean-Machine-Nachweis. MSI/NSIS wurden heute nicht neu gebaut.
 
 ## Bekannte Einschränkungen
 - In restriktiven Netzwerkumgebungen mit erzwungenem HTTP-Proxy: native Azure-Speech-SDK (auch in der C#-Variante) muss separat validiert werden. Siehe `specs/T-505-proxy-aware-azure-transport.md`.
@@ -69,6 +93,9 @@ Artefakte: `dist/portable/` bzw. `src-tauri/target/release/bundle/`.
 
 ## Querverweise
 - Bestehendes Electron-Projekt: `../meeting-notes/`
-- Architekturentscheidungen: `DECISIONS.md`
-- Spezifikation: `SPEC-v0.1.md`
-- Tasks: `specs/`
+- Architekturentscheidungen: [DECISIONS.md](./DECISIONS.md)
+- Spezifikation: [SPEC.md](./SPEC.md)
+- Tasks und Akzeptanzstatus: [specs/](./specs/)
+- Settings-/Diagnose-UX: [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md)
+- Transportdiagnose: [T-304](./specs/T-304-connectivity-diagnose-in-rust.md)
+- Offene Corporate-Netzvalidierung: [T-505](./specs/T-505-proxy-aware-azure-transport.md)

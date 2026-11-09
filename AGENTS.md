@@ -8,7 +8,10 @@
 - 25.06.2026: **Phase 5 (Decommission `meeting-notes`) aus dem Migrationsplan gestrichen.** Das Electron-Projekt bleibt dauerhaft als Referenz bestehen. Migrationsplan ist jetzt **4 Phasen** (Phase 1–4 nach Phase 0 = Doku).
 - 25.06.2026: **OQ-4 entschieden → Windows-only (hardcoded).** macOS-/Linux-Builds werden nicht vorbereitet (kein Cross-Compile, keine plattformneutralen Pfade).
 - 25.06.2026: **OQ-2 entschieden + AD-008 ergänzt → IPC via stdin/stdout über `tauri-plugin-shell`.** Named Pipe als Transport entfällt komplett (siehe DECISIONS.md → AD-008). Betrifft: `specs/T-201` (komplett umgeschrieben), `specs/T-301` (Args angepasst), `specs/T-102`/`T-200` (Erwähnungen), Architektur-Diagramm und Tech-Stack-Tabelle in diesem Dokument.
-- **Bisher keine Implementierung.** Nur Dokumentation und Spezifikationen.
+- 2026-11-09: **Implementierung vorhanden, lokal gebaut und teilweise validiert.** Portable: 20.79 MB gesamt, 27 Dateien/26 geprüfte Hashes. Tauri-Haupt-EXE benötigt den externen Sidecar-Ordner mit DLLs, .NET 8 Runtime und WebView2.
+- 2026-11-09: Settings mit Allgemein/Azure-Konfiguration/Proxy, Azure-Testbutton und beiden Config-Pfaden im Footer. Release liest/schreibt `config/` neben der EXE, Dev im Repository; kein AppData-Fallback. Fehlende/ungültige Azure-Konfiguration öffnet Settings automatisch mit Bottom-Toast. F12-DevTools funktionieren auch im Release.
+- 2026-11-09: HTTPS-Diagnose nutzt expliziten CONNECT-Proxy und ignoriert Zertifikatsprüfungen bewusst nur dort (unsicher). Separate native Speech/WSS-Diagnose prüft Recognizer/Transcriber ohne Capture; native Zertifikatsprüfung bleibt aktiv. Credentials werden prozesslokal per Env übergeben. Separater Dialog zeigt Schritte erst nach Abschluss und bleibt wiederöffnbar.
+- 2026-11-09: 12 UI-Regressionstests, fokussierte TypeScript-/Rust-Prüfungen, Build-Smoke und native lokale Negativdiagnose erfolgreich. **Offen:** positiver Firmenproxy-/Azure-Test, Aufnahme-Latenz, Clean-Machine-Deployment und aktuelle Installer-Parität. Specs unterscheiden `implemented`, `partial` und offene Akzeptanz; ursprüngliche Draft-Notizen oben sind historisch.
 
 ## Ziel der Migration
 
@@ -18,7 +21,7 @@ Das bestehende Electron-Projekt (`projects/meeting-notes`) hat zwei erkannte Sch
 2. **Audio- + Speech-SDK verteilt.** Heute läuft Audio-Capture in C# (NAudio), Azure-Speech-Transkription in Node (`microsoft-cognitiveservices-speech-sdk`) im Electron-Main. Audio-Frames werden via Named Pipe vom C#-Sidecar in den Node-Main übertragen, der sie in die Azure-PushStream einspeist. Das ist ein zusätzlicher Hop pro Frame.
    - **Im Tauri-Projekt** wandert **Azure Speech SDK komplett in den C#-Sidecar** (NuGet `Microsoft.CognitiveServices.Speech`). Audio und Speech laufen damit in **einem** Prozess, ohne Pipe-Marshalling der PCM-Frames. Tauri-Main (Rust) empfängt nur noch **fertige Transkript-Events** per JSON-Lines über **stdin/stdout** über `tauri-plugin-shell` (siehe `DECISIONS.md → AD-008`).
 
-Eine detaillierte Begründung der Entscheidungen siehe `DECISIONS.md`; eine aktualisierte Fassung der Spezifikation siehe `SPEC-v0.1.md`.
+Eine detaillierte Begründung der Entscheidungen siehe [DECISIONS.md](./DECISIONS.md); aktuelle Spezifikation siehe [SPEC.md](./SPEC.md).
 
 ## Architektur (Soll)
 
@@ -124,9 +127,11 @@ Als Reaktion auf den Proxy-Block des Azure-Cognitive-Services-Endpoints (`*.cogn
 
 **Entscheidung:** Azure bleibt der Speech-Provider. Der Workaround-Pfad gemäß Specs **T-306** (C#-Validierung von `SpeechConfig.SetProxy`) und **T-505** (Variante 3: Eigenbau-WSS-Client in C#) wird weiterverfolgt. Begründung als Entscheidungs-Record: `DECISIONS.md → AD-011`.
 
-## Migration aus `meeting-notes` (Schritt-für-Schritt-Plan)
+## Migration aus `meeting-notes` (historischer Schritt-für-Schritt-Plan)
 
-Der Migrationsplan ist bewusst **inkrementell** aufgebaut, sodass `meeting-notes` jederzeit lauffähig bleibt und dieses Projekt nie aus dem Nichts entsteht:
+**Fortschreibung 2026-11-09:** Der ursprüngliche Plan unten beschreibt den Entwurfsstand. Aktuelle Änderungen erfolgen ausschließlich in diesem Tauri-Projekt; das Electron-Projekt bleibt unveränderte Referenz. Implementierung und Teilabnahme stehen in [SPEC.md](./SPEC.md) und [T-500](./specs/T-500-qualitaetssicherung-und-akzeptanztests.md).
+
+Der ursprüngliche Migrationsplan war bewusst **inkrementell** aufgebaut, sodass `meeting-notes` jederzeit lauffähig bleibt und dieses Projekt nie aus dem Nichts entsteht:
 
 1. **Phase 0 (dieser Stand):** Doku + Specs vollständig, kein Code.
 2. **Phase 1 — Sidecar-Konsolidierung (in `meeting-notes`):**

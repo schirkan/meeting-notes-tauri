@@ -95,6 +95,20 @@ while let Some(line) = reader.next().await {
 }
 ```
 
+### Implementierter Diagnose-Untervertrag (2026-11-09)
+
+Ein separat mit `--test-connectivity` gestarteter Sidecar schreibt das Diagnoseergebnis auf stdout, ohne Audio-Capture und ohne den geplanten Aufnahme-Handshake vorauszusetzen:
+
+```json
+{"type":"speech_connectivity","payload":{"reachable":false,"steps":[{"step":"speech_recognizer_wss","status":"error","detail":"Verbindung konnte nicht aufgebaut werden."}]}}
+```
+
+- `steps` enthalten `step`, `status` (`ok`, `warn`, `error`) und `detail`, insbesondere TLS-/Proxy-Hinweise und Ergebnisse für Recognizer und ConversationTranscriber.
+- `reachable` verlangt erfolgreiche Verbindung und Session-Start beider Clients. Keine PCM-Frames im Ergebnis.
+- Rust verarbeitet das Ergebnis getrennt vom Aufnahme-Eventstream; stderr/Exit-Code dienen bei ausbleibendem Ergebnis zur Fehlerdiagnose.
+- Speech-Key/Proxy-Zugangsdaten werden als prozesslokale Umgebungsvariablen übergeben, nicht im Diagnoseprotokoll. Details werden vor Weitergabe redigiert.
+- Die übrigen offenen Handshake-/Reconnect-Kriterien und Skizzen dieser Spec werden dadurch nicht als implementiert bestätigt.
+
 ### EXE-Name
 
 Bleibt `MeetingNotes.Sidecar.exe` (siehe OQ-1). Vermeidet unnötige Doppelpflege.

@@ -23,14 +23,6 @@ public sealed class AzureSpeechService : IDisposable
     public const string SourceMic = "mic";
     public const string SourceSpeaker = "speaker";
 
-    // Mirrors the Node default list — keeps continuous-LID candidates stable
-    // for the C# port. Settings.language is prepended by GetLidCandidates().
-    private static readonly string[] ContinuousLidCandidates =
-    {
-        "de-DE", "en-US", "fr-FR", "es-ES", "it-IT",
-        "pt-BR", "nl-NL", "pl-PL", "tr-TR", "ja-JP"
-    };
-
     private readonly AzureSpeechConfig _config;
     private readonly UserSettings _settings;
     private readonly Dictionary<string, StreamState> _streams = new();
@@ -52,20 +44,10 @@ public sealed class AzureSpeechService : IDisposable
         if (_initialized) return;
         Logger.Info("azure", "init", "AzureSpeechService.init: SDK wird initialisiert.");
 
-        _speechConfig = SpeechConfig.FromSubscription(_config.SpeechKey, _config.Region);
-        _speechConfig.SpeechRecognitionLanguage = _settings.Language;
-        _speechConfig.SetProperty("SpeechServiceConnection_Endpoint", _config.Endpoint);
-        _speechConfig.SetProperty("SpeechServiceResponse_DiarizeIntermediateResults", "true");
-        _speechConfig.SetProperty(
-            "SpeechServiceResponse_InterimResults",
-            _config.InterimResults ? "true" : "false");
-        _speechConfig.SetProperty("SpeechServiceConnection_LanguageIdMode", "Continuous");
+        _speechConfig = SpeechConfiguration.Create(_config, _settings.Language);
 
-        if (_config.Proxy is { } proxy)
-        {
-            _speechConfig.SetProxy(proxy.Host, proxy.Port, proxy.Username ?? string.Empty, proxy.Password ?? string.Empty);
-            Logger.Info("azure", "proxy", $"Azure Speech Proxy konfiguriert ({proxy.Host}:{proxy.Port}).");
-        }
+        if (_config.Proxy is not null)
+            Logger.Info("azure", "proxy", "Azure Speech Proxy konfiguriert; Zugangsdaten werden nicht protokolliert.");
 
         _initialized = true;
         Logger.Info(
@@ -229,8 +211,6 @@ public sealed class AzureSpeechService : IDisposable
     private async Task StartStreamAsync(StreamState state)
     {
         if (state.Started) return;
-        var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-
         if (state.Mode == "conversationTranscriber")
         {
             var recognizer = (ConversationTranscriber)state.RecognizerBase;
@@ -245,7 +225,6 @@ public sealed class AzureSpeechService : IDisposable
             state.Started = true;
             Logger.Info("azure", "stream_start", $"startContinuousRecognitionAsync gestartet für {state.Source}.");
         }
-        await tcs.Task;
     }
 
     private void FinalizeStream(StreamState state)
@@ -346,10 +325,7 @@ public sealed class AzureSpeechService : IDisposable
 
     private string[] GetLidCandidates()
     {
-        var preferred = _settings.Language?.Trim() ?? string.Empty;
-        var result = new List<string> { preferred };
-        result.AddRange(ContinuousLidCandidates);
-        return result.Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToArray();
+        return SpeechConfiguration.LidCandidates(_settings.Language?.Trim() ?? string.Empty);
     }
 }
 

@@ -47,6 +47,8 @@ pub struct SidecarOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub speech_endpoint: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub proxy: Option<crate::settings::AzureProxyConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mic_device_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub speaker_device_id: Option<String>,
@@ -65,6 +67,117 @@ pub struct SidecarHandle {
     pub events_rx: mpsc::Receiver<CommandEvent>,
 }
 
+fn proxy_arguments(proxy: &crate::settings::AzureProxyConfig) -> Result<Vec<String>, SidecarError> {
+    crate::connectivity::configured_proxy(proxy).map_err(SidecarError::Spawn)?;
+    Ok(vec!["--proxy-host".into(), proxy.host.trim().into(),
+        "--proxy-port".into(), proxy.port.to_string()])
+}
+
+fn apply_proxy(
+    mut command: tauri_plugin_shell::process::Command,
+    proxy: Option<&crate::settings::AzureProxyConfig>,
+) -> Result<tauri_plugin_shell::process::Command, SidecarError> {
+    command = command.env("MEETING_NOTES_PROXY_USERNAME", "")
+        .env("MEETING_NOTES_PROXY_PASSWORD", "");
+    if let Some(proxy) = proxy {
+        command = command.args(proxy_arguments(proxy)?)
+            .env("MEETING_NOTES_PROXY_USERNAME", proxy.username.as_deref().unwrap_or(""))
+            .env("MEETING_NOTES_PROXY_PASSWORD", proxy.password.as_deref().unwrap_or(""));
+    }
+    Ok(command)
+}
+
+#[derive(Deserialize)]
+pub struct SpeechConnectivityResult {
+    pub reachable: bool,
+    pub steps: Vec<crate::connectivity::Step>,
+}
+
+pub async fn diagnose_speech<R: Runtime>(
+    app: &AppHandle<R>,
+    config: &crate::settings::AzureConfig,
+    language: &str,
+) -> Result<SpeechConnectivityResult, String> {
+    let exe_path = resolve_sidecar_path(app).map_err(|e| e.to_string())?;
+    let command = app.shell().command(exe_path.to_string_lossy().as_ref())
+        .args(["--test-connectivity", "--speech-region", &config.region,
+            "--speech-endpoint", &config.endpoint, "--language", language])
+        .env("MEETING_NOTES_SPEECH_KEY", &config.speech_key);
+    let command = apply_proxy(command, config.proxy.as_ref()).map_err(|e| e.to_string())?;
+    let (mut rx, child) = command.spawn().map_err(|e| e.to_string())?;
+    let result = tokio::time::timeout(Duration::from_secs(45), async {
+        let mut stderr = String::new();
+        let mut exit_code = None;
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(line) => {
+                    if let Some(result) = parse_speech_result(&line) {
+                        return Ok(result);
+                    }
+                }
+                CommandEvent::Stderr(line) => {
+                    if stderr.len() < 8192 {
+                        stderr.push_str(&String::from_utf8_lossy(&line));
+                        stderr.push('\n');
+                    }
+                }
+                CommandEvent::Error(error) => {
+                    stderr.push_str(&error);
+                    stderr.push('\n');
+                }
+                CommandEvent::Terminated(payload) => {
+                    exit_code = payload.code;
+                }
+                _ => {}
+            }
+        }
+        let mut detail = format!("Speech/WSS-Diagnose lieferte kein Ergebnis (Exit-Code: {exit_code:?}). {}", stderr.trim());
+        for secret in [Some(config.speech_key.as_str()),
+            config.proxy.as_ref().and_then(|p| p.username.as_deref()),
+            config.proxy.as_ref().and_then(|p| p.password.as_deref())].into_iter().flatten() {
+            if !secret.is_empty() {
+                detail = detail.replace(secret, "[redacted]");
+            }
+        }
+        Err(detail)
+    }).await;
+    let _ = child.kill();
+    result.map_err(|_| "Speech/WSS-Diagnose: Timeout nach 45 s".to_string())?
+}
+
+fn parse_speech_result(line: &[u8]) -> Option<SpeechConnectivityResult> {
+    let event: serde_json::Value = serde_json::from_slice(line).ok()?;
+    if event.get("type")?.as_str()? != "speech_connectivity" {
+        return None;
+    }
+    serde_json::from_value(event.get("payload")?.clone()).ok()
+}
+
+#[cfg(test)]
+mod connectivity_tests {
+    use super::*;
+
+    #[test]
+    fn proxy_arguments_exclude_credentials() {
+        let proxy = crate::settings::AzureProxyConfig {
+            host: "proxy.test".into(), port: 8080,
+            username: Some("test-user".into()), password: Some("test-password".into()),
+        };
+        assert_eq!(proxy_arguments(&proxy).unwrap(),
+            vec!["--proxy-host", "proxy.test", "--proxy-port", "8080"]);
+    }
+
+    #[test]
+    fn parses_only_native_speech_diagnostic_events() {
+        let line = br#"{"type":"speech_connectivity","payload":{"reachable":true,"steps":[{"step":"speech-wss-mic","status":"ok","detail":"connected"}]}}"#;
+        let result = parse_speech_result(line).unwrap();
+        assert!(result.reachable);
+        assert_eq!(result.steps.len(), 1);
+        assert!(parse_speech_result(br#"{"type":"debug","payload":{}}"#).is_none());
+        assert!(parse_speech_result(b"not json").is_none());
+    }
+}
+
 pub async fn start<R: Runtime>(
     app: &AppHandle<R>,
     options: SidecarOptions,
@@ -78,9 +191,7 @@ pub async fn start<R: Runtime>(
     if let Some(language) = options.language.as_deref() {
         command = command.args(["--language".to_string(), language.into()]);
     }
-    if let Some(key) = options.speech_key.as_deref() {
-        command = command.args(["--speech-key".to_string(), key.into()]);
-    }
+    command = command.env("MEETING_NOTES_SPEECH_KEY", options.speech_key.as_deref().unwrap_or(""));
     if let Some(region) = options.speech_region.as_deref() {
         command = command.args(["--speech-region".to_string(), region.into()]);
     }
@@ -94,6 +205,7 @@ pub async fn start<R: Runtime>(
         command = command.args(["--speaker-device-id".to_string(), spk.into()]);
     }
 
+    command = apply_proxy(command, options.proxy.as_ref())?;
     let (mut rx, child) = command.spawn().map_err(|e| SidecarError::Spawn(e.to_string()))?;
 
     let (events_tx, events_rx) = mpsc::channel::<CommandEvent>(128);

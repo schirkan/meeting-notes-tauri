@@ -25,12 +25,37 @@ using NAudio.Wave;
 // and reads stdout as JSON-Lines; commands flow back over stdin.
 
 var argsMap = ArgsParser.Parse(args);
+Logger.ConfigureSecrets(
+    argsMap.GetValueOrDefault("--speech-key"),
+    argsMap.GetValueOrDefault("--proxy-username"),
+    argsMap.GetValueOrDefault("--proxy-password"),
+    Environment.GetEnvironmentVariable("MEETING_NOTES_SPEECH_KEY"),
+    Environment.GetEnvironmentVariable("MEETING_NOTES_PROXY_USERNAME"),
+    Environment.GetEnvironmentVariable("MEETING_NOTES_PROXY_PASSWORD"));
+
+if (argsMap.ContainsKey("--test-connectivity"))
+{
+    var result = await SpeechConnectivityDiagnostic.RunFromArgsAsync(argsMap);
+    Logger.Event("speech_connectivity", result);
+    return result.reachable ? 0 : 1;
+}
 
 if (argsMap.ContainsKey("--list-devices"))
 {
     var snapshot = DeviceResolver.ListDevices();
     Logger.Event("device_list", snapshot);
     return 0;
+}
+
+AzureProxyConfig? proxy;
+try
+{
+    proxy = ProxyOptions.Parse(argsMap);
+}
+catch (ArgumentException)
+{
+    Logger.Error("SIDECAR_START_FAILED", "Invalid proxy configuration: provide a hostname/IP and port 1-65535.");
+    return 11;
 }
 
 if (!argsMap.TryGetValue("--sample-rate", out var srRaw) || string.IsNullOrWhiteSpace(srRaw))
@@ -47,7 +72,7 @@ if (!int.TryParse(srRaw, out var sampleRate) || sampleRate < 8000 || sampleRate 
 var micId = argsMap.GetValueOrDefault("--mic-device-id");
 var speakerId = argsMap.GetValueOrDefault("--speaker-device-id");
 var language = argsMap.GetValueOrDefault("--language") ?? "de-DE";
-var speechKey = argsMap.GetValueOrDefault("--speech-key");
+var speechKey = SpeechConfiguration.GetSpeechKey(argsMap);
 var speechRegion = argsMap.GetValueOrDefault("--speech-region");
 var speechEndpoint = argsMap.GetValueOrDefault("--speech-endpoint");
 var azureEnabled = !string.IsNullOrWhiteSpace(speechKey)
@@ -118,7 +143,7 @@ try
             Region: speechRegion!,
             SpeechKey: speechKey!,
             InterimResults: true,
-            Proxy: null);
+            Proxy: proxy);
         var userSettings = new UserSettings(language, new DeviceIds(micId, speakerId));
         azure = new AzureSpeechService(azureConfig, userSettings);
         await azure.InitAsync();

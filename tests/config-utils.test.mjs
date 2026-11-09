@@ -181,6 +181,28 @@ test('draftToConfig requires proxy host/port when useProxy=true', () => {
   }), /Port/)
 })
 
+test('proxy port must fit the Rust u16 contract', () => {
+  for (const port of [0, -1, 1.5, 65536, Infinity]) {
+    const config = {
+      endpoint: 'https://example.test', region: 'r', speechKey: 'k', interimResults: true,
+      proxy: { host: 'proxy.test', port }
+    }
+    assert.equal(contract.validateAzureConfig(config), false)
+    assert.equal(utils.isConfigComplete(config), false)
+    assert.throws(() => utils.draftToConfig(utils.toConfigDraft(config)), /Port/)
+  }
+})
+
+test('diagnostic draft normalization preserves proxy credentials and drops disabled proxy', () => {
+  const config = {
+    endpoint: 'https://example.test', region: 'r', speechKey: 'k', interimResults: true,
+    proxy: { host: 'proxy.test', port: 8080, username: 'u', password: 'p' }
+  }
+  const draft = utils.toConfigDraft(config)
+  assert.deepEqual(utils.draftToConfig(draft), config)
+  assert.equal(utils.draftToConfig({ ...draft, useProxy: false }).proxy, undefined)
+})
+
 test('isConfigComplete recognises minimal + proxy configs', () => {
   assert.equal(utils.isConfigComplete(null), false)
   assert.equal(utils.isConfigComplete({

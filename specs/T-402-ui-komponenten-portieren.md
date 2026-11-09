@@ -9,18 +9,18 @@ Abhängigkeiten: T-401
 Alle UI-Komponenten aus `../meeting-notes/src/renderer/src/components/` portieren.
 
 ## Done When
-- [ ] `HeroStatusCard.tsx` ist portiert (Verbindung-testen-Ergebnis-Anzeige funktioniert via Tauri-Event).
+- [ ] `HeroStatusCard.tsx` ist portiert (Status und Aufnahmeaktionen; Verbindungstestergebnisse erscheinen separat gemäß [T-403](./T-403-settings-dialog-mit-verbindung-testen-button.md)).
 - [ ] `TranscriptPanel.tsx` ist portiert (Auto-Scroll-Pausierung bleibt erhalten, Speaker-Badges identisch).
-- [ ] `SettingsDialog.tsx` ist portiert (Escape-Handler, Focus-Trap, Initial-Fokus bleiben funktional).
-- [ ] `SettingsPanel.tsx` ist portiert (Sprachauswahl, Device-Auswahl, Alias-Mapping).
-- [ ] `ConfigPanel.tsx` ist portiert (Azure-Config-Form, Verbindung-testen-Button bleibt funktional).
+- [x] `SettingsDialog.tsx` bietet Escape, Focus-Trap und Initial-Fokus sowie drei responsive Bereiche und einen Footer mit beiden Config-Pfaden.
+- [ ] `SettingsPanel.tsx` ist portiert (Sprach-/Device-Auswahl; Alias-Mapping ist im `SpeakerMappingPanel`).
+- [x] `ConfigPanel.tsx` enthält Azure-Form, gemeinsames Azure-/Proxy-Speichern und Test-/Ergebnisaktionen. `ProxyPanel.tsx` enthält die ausgelagerten Proxy-Felder; `ConnectivityDialog.tsx` zeigt Diagnose und Fehlerdetails separat.
 - [ ] `DebugLogPanel.tsx` ist portiert (separate Öffnen/Schließen-Aktionen, Log-leeren).
 - [ ] `SpeakerMappingPanel.tsx` ist portiert (30 Speaker-Farben, Alias-Mapping).
-- [ ] Visuelles Verhalten ist identisch zur Electron-Variante.
+- [ ] Visuelles Verhalten bleibt außerhalb der bewusst geänderten Settings-/Diagnose-UX funktional identisch zur Electron-Variante.
 
 ## Approach
-- Reine 1:1-Kopie der Dateien aus `../meeting-notes/src/renderer/src/components/`.
-- Nur Anpassung der Imports: `electronAPI` → `tauriAPI` (siehe T-401).
+- Bestehende Komponenten als Grundlage portieren; bewusste Ausnahme gemäß [DECISIONS.md](../DECISIONS.md), Fortschreibung AD-004: drei Settings-Bereiche, Config-Pfade im Footer, Startup-Dialog mit Bottom-Toast und separater Diagnose-Dialog.
+- Tauri-Bridge hinter `window.transcriptApi` halten (siehe T-401); Diagnose-Dialog verwendet den Command-Return-Wert statt einer Hero-Ergebnis-Karte.
 - Spezielle Edge-Cases (Focus-Trap, Auto-Scroll-Pause bei ≥32 px Scroll-Distanz) müssen bei der Port-Validierung gegengetestet werden.
 
 ## Log

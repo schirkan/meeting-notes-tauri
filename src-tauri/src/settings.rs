@@ -1,17 +1,17 @@
 //! Persistent settings on disk (T-305).
 //!
-//! Layout under the OS-standard app config dir returned by Tauri:
-//!   %APPDATA%\de.schirkan.meeting-notes-tauri\
-//!       azure.json          (Azure endpoint, region, speechKey, proxy)
-//!       user-settings.json  (language, device ids)
+//! Layout: config/ next to the application EXE (portable/release),
+//! or the repository's config/ directory in development.
+//!   config/azure.json          (Azure endpoint, region, speechKey, proxy)
+//!   config/user-settings.json  (language, device ids)
 //!
 //! Both files are written atomically (temp file + rename) so a crash
 //! mid-write never corrupts the on-disk config.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -56,6 +56,7 @@ pub struct DeviceIds {
 pub struct AzureConfigState {
     pub exists: bool,
     pub path: String,
+    pub user_settings_path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config: Option<AzureConfig>,
 }
@@ -70,8 +71,49 @@ pub enum SettingsError {
     Json(#[from] serde_json::Error),
 }
 
-fn config_dir(app: &AppHandle) -> Result<PathBuf, SettingsError> {
-    app.path().app_config_dir().map_err(|_| SettingsError::NoConfigDir)
+fn config_dir_for(exe: &Path, development_root: Option<&Path>) -> Result<PathBuf, SettingsError> {
+    let root = development_root.or_else(|| exe.parent()).ok_or(SettingsError::NoConfigDir)?;
+    Ok(root.join("config"))
+}
+
+fn config_dir(_app: &AppHandle) -> Result<PathBuf, SettingsError> {
+    let exe = std::env::current_exe()?;
+    let development_root = if cfg!(debug_assertions) {
+        Path::new(env!("CARGO_MANIFEST_DIR")).parent()
+    } else {
+        None
+    };
+    config_dir_for(&exe, development_root)
+}
+
+#[cfg(test)]
+mod config_path_tests {
+    use super::*;
+
+    #[test]
+    fn portable_config_is_next_to_exe() {
+        let exe = Path::new(r"D:\Portable\Meeting Notes\meeting-notes-tauri.exe");
+        assert_eq!(config_dir_for(exe, None).unwrap(), PathBuf::from(r"D:\Portable\Meeting Notes\config"));
+    }
+
+    #[test]
+    fn config_state_serializes_both_file_paths() {
+        let state = AzureConfigState {
+            exists: false,
+            path: r"D:\Portable\config\azure.json".into(),
+            user_settings_path: r"D:\Portable\config\user-settings.json".into(),
+            config: None,
+        };
+        let json = serde_json::to_value(state).unwrap();
+        assert_eq!(json["path"], r"D:\Portable\config\azure.json");
+        assert_eq!(json["userSettingsPath"], r"D:\Portable\config\user-settings.json");
+    }
+
+    #[test]
+    fn development_config_uses_repository_templates_directory() {
+        let exe = Path::new(r"D:\repo\src-tauri\target\debug\meeting-notes-tauri.exe");
+        assert_eq!(config_dir_for(exe, Some(Path::new(r"D:\repo"))).unwrap(), PathBuf::from(r"D:\repo\config"));
+    }
 }
 
 fn azure_path(app: &AppHandle) -> Result<PathBuf, SettingsError> {
@@ -134,6 +176,7 @@ pub async fn get_azure_config_state(app: &AppHandle) -> Result<AzureConfigState,
     Ok(AzureConfigState {
         exists: config.is_some(),
         path: path.to_string_lossy().into_owned(),
+        user_settings_path: user_settings_path(app)?.to_string_lossy().into_owned(),
         config,
     })
 }

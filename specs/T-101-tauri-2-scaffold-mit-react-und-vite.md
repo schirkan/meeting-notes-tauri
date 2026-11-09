@@ -16,6 +16,10 @@ Lauffähiges Tauri-2-Projekt mit React-Frontend, das ein leeres Fenster öffnet 
 - [ ] Eine Stub-Rust-Funktion `start_recording()` ist über `tauri::command` aus dem React-Renderer aufrufbar und loggt in die Rust-Konsole.
 - [ ] Eine Rust-Funktion `spawn_stub_sidecar()` startet einen Dummy-Prozess (z. B. `cmd /c echo hello`) über das offizielle `tauri-plugin-shell`-Crate.
 
+## Release-DevTools (Fortschreibung 2026-11-09)
+- [x] F12 öffnet/schließt WebView2-DevTools auch im Release-/Portable-Build: Tauri-Feature `devtools`, registrierter `toggle_devtools`-Command und Frontend-Key-Handler.
+- [x] Im nativen portablen Build geprüft; unabhängig von Vite-Dev-Modus. Dies bestätigt nicht automatisch die übrigen offenen Scaffold-Kriterien.
+
 ## Approach
 - `tauri.conf.json`: Window-Größe, Identifier (`de.schirkan.meeting-notes-tauri`), Bundle-Identifier, Resources-Verzeichnis für den Sidecar.
 - Rust-Crate-Dependencies (Minimum): `tauri = "2"`, `tauri-plugin-shell = "2"`, `serde`, `serde_json`, `tokio` (für Async-Pipes).
