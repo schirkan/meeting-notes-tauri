@@ -1,13 +1,14 @@
 [package]
-name = "meeting-notes-tauri"
+name = "meeting-notes"
 version = "0.1.0"
-description = "Meeting Notes PoC (Tauri 2 + React + C# Sidecar)"
-authors = ["Schirkan"]
+description = "Meeting Notes (Windows-Desktop-App fuer Meeting-Transkripte)"
+authors = ["Martin Pietschmann <martin.pietschmann@itergo.com>"]
+license = "MIT"
 edition = "2021"
 rust-version = "1.77.2"
 
 [lib]
-name = "meeting_notes_tauri_lib"
+name = "meeting_notes_lib"
 # Tauri 2 linkt die Lib statisch in die EXE — `cdylib` würde nur eine
 # ~28 MB große DLL erzeugen, die niemand lädt (sie landete bisher
 # trotzdem im Release-Ordner und wurde von dist-portable.mjs blind

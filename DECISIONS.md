@@ -1,6 +1,6 @@
-# Decisions — meeting-notes-tauri
+# Decisions — Meeting Notes
 
-Architekturentscheidungen für die Tauri-Migration. Wird fortlaufend ergänzt, wenn weitere Fragen auftauchen.
+Architekturentscheidungen für die Windows-Variante (Tauri-Container). Wird fortlaufend ergänzt, wenn weitere Fragen auftauchen.
 
 ---
 
@@ -77,7 +77,7 @@ Architekturentscheidungen für die Tauri-Migration. Wird fortlaufend ergänzt, w
 - **Komplettes UI-Redesign für Tauri** — kein sichtbarer Mehrwert; UX-Stabilität ist wichtiger.
 - **Astro/Svelte/Solid statt React** — neue Toolchain ohne klaren Vorteil.
 
-**Fortschreibung 2026-11-09:** Auf Nutzerwunsch bewusst keine strikte 1:1-Portierung der Settings-/Diagnose-UX: drei responsive Bereiche Allgemein/Azure-Konfiguration/Proxy, Test- und Ergebnisaktionen im Azure-Bereich, beide Config-Pfade unterhalb aller Bereiche, Startup-Settings bei fehlender/ungültiger Konfiguration mit Bottom-Toast und separater wiederöffnbarer Diagnose-Dialog. Keine Live-Einzelstep-Events; Ergebnis nach Abschluss über Command-Return. Übrige UI bleibt auf bestehendem Verhalten aufgebaut. Siehe [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md).
+**Fortschreibung 2026-11-09:** Auf Nutzerwunsch bewusst keine strikte 1:1-Portierung der Settings-/Diagnose-UX: drei responsive Bereiche Allgemein/Azure-Konfiguration/Proxy, Test- und Ergebnisaktionen im Azure-Bereich, der Config-Pfad unterhalb aller Bereiche, Startup-Settings bei fehlender/ungültiger Konfiguration mit Bottom-Toast und separater wiederöffnbarer Diagnose-Dialog. Keine Live-Einzelstep-Events; Ergebnis nach Abschluss über Command-Return. Übrige UI bleibt auf bestehendem Verhalten aufgebaut. Siehe [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md).
 
 ---
 
@@ -253,6 +253,8 @@ Architekturentscheidungen für die Tauri-Migration. Wird fortlaufend ergänzt, w
 - Separate native Diagnose ohne Capture nutzt denselben `SpeechConfiguration`-Builder wie Aufnahme (`SetProxy`, Endpoint, Sprache, Continuous LID) und verlangt `Connected` plus `SessionStarted` für Recognizer und Transcriber. Credentials nur über child-lokale Env-Variablen, Host/Port über nicht geheime CLI-Args.
 - HTTPS und Speech werden parallel geprüft; Gesamterfolg verlangt beide. HTTP 401/403 zählt nur als HTTPS-Erreichbarkeit. DNS/TCP/HTTP jeweils 5 s Timeout; nativer Prozess maximal 45 s ab Spawn, keine garantierte Gesamt-UI-Zeitgrenze.
 - Separater Dialog zeigt Schritte/Fehlerdetails nach Abschluss, inklusive String-/Objekt-IPC-Rejections. Schließen beendet den Test nicht; kein Live-Step-Streaming.
+
+**Fortschreibung 2026-11-11:** Beide Dateien sind zu **einer** Datei `meeting-notes.config.json` zusammengeführt (Abschnitte `azure` und `user`), die direkt neben der EXE liegt. Das Speichern eines Abschnitts ersetzt nur diesen; der andere bleibt erhalten. Details siehe [T-103](./specs/T-103-konfiguration-azure-und-user-settings.md), [T-305](./specs/T-305-settings-persistenz-im-tauri-main.md) und [T-506](./specs/T-506-transkript-markdown-export-und-frontmatter.md).
 
 **Validierung:** 12 Browser-UI-Regressionstests, fokussierte TypeScript-/Rust-Prüfungen, Portable-Smoke und nativer lokaler Negativtest erfolgreich. Positiver Corporate-Proxy-/Azure-Test bleibt offen; eigener WSS-Transport nicht implementiert. Siehe [T-304](./specs/T-304-connectivity-diagnose-in-rust.md), [T-306](./specs/T-306-proxy-aware-azure-transport.md) und [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md).
 

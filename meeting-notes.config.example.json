@@ -1,0 +1,34 @@
+{
+  "_comment": "Beispielkonfiguration. Diese Datei nach 'meeting-notes.config.json' kopieren und anpassen. Die echte Datei liegt direkt neben der EXE (Release) bzw. im Repository-Root (Dev) und ist in .gitignore. Quelle: src/shared/config-contract.ts -> AppConfig.",
+
+  "azure": {
+    "endpoint": "wss://westeurope.stt.speech.microsoft.com/speech/universal/v2",
+    "region": "westeurope",
+    "speechKey": "<HIER-DEINEN-AZURE-SPEECH-KEY-EINTRAGEN>",
+    "interimResults": true,
+    "proxy": {
+      "host": "",
+      "port": 0,
+      "username": "",
+      "password": ""
+    }
+  },
+
+  "user": {
+    "language": "de-DE",
+    "diarization": {
+      "mic": true,
+      "speaker": true
+    },
+    "devices": {
+      "micId": null,
+      "speakerLoopbackId": null
+    },
+    "transcript": {
+      "markdownExport": {
+        "enabled": true,
+        "path": null
+      }
+    }
+  }
+}

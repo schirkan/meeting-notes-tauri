@@ -129,9 +129,10 @@ export interface TranscriptApi {
   clearDebugLog: () => Promise<{ cleared: number }>
   getDevices: () => Promise<AudioDeviceSnapshot>
   getSettings: () => Promise<import('./config-contract').UserSettings>
-  getConfig: () => Promise<import('./config-contract').AzureConfigState>
+  getConfig: () => Promise<import('./config-contract').AppConfigState>
   saveSettings: (settings: import('./config-contract').UserSettings) => Promise<import('./config-contract').UserSettings>
-  saveConfig: (config: import('./config-contract').AzureConfig) => Promise<import('./config-contract').AzureConfigState>
+  saveConfig: (config: import('./config-contract').AzureConfig) => Promise<import('./config-contract').AppConfigState>
+  saveTranscriptMarkdown: (markdown: string) => Promise<string>
   testAzureConnectivity: (payload?: unknown) => Promise<{
     probeUrl: string
     reachable: boolean

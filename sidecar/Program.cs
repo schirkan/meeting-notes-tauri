@@ -7,7 +7,7 @@ using MeetingNotes.Sidecar;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
-// Block 3 composition root for meeting-notes-tauri.
+// Block 3 composition root for Meeting Notes.
 //
 // Responsibilities:
 //   1. Parse CLI args (ArgsParser).

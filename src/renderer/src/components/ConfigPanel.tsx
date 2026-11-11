@@ -1,9 +1,9 @@
-import type { AzureConfigState } from '@shared/config-contract'
+import type { AppConfigState } from '@shared/config-contract'
 import type { ConfigDraft } from '../config-utils'
 import type { ConnectivityResult } from './ConnectivityDialog'
 
 type ConfigPanelProps = {
-  configState: AzureConfigState | null
+  configState: AppConfigState | null
   configDraft: ConfigDraft
   statusRunning: boolean
   setConfigDraft: React.Dispatch<React.SetStateAction<ConfigDraft>>
@@ -35,7 +35,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
 
       {!configState?.exists && (
         <div className="settings-inline-hint">
-          Keine gültige <code>config/azure.json</code> gefunden. Bitte jetzt anlegen.
+          Keine gültige Azure-Konfiguration gefunden. Bitte jetzt eintragen und speichern.
         </div>
       )}
 

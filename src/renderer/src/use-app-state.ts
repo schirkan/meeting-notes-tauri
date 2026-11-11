@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_USER_SETTINGS, normalizeUserSettings, type AzureConfigState } from '@shared/config-contract'
+import { DEFAULT_USER_SETTINGS, normalizeUserSettings, type AppConfigState } from '@shared/config-contract'
+import { buildTranscriptMarkdown } from '@shared/transcript-markdown'
 import { formatSpeakerKey, getSpeakerClass, getSpeakerKey } from './speaker-utils'
 import {
   type AudioDeviceSnapshot,
@@ -53,7 +54,7 @@ export function useAppState() {
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false)
   const [debugOpen, setDebugOpen] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
-  const [configState, setConfigState] = useState<AzureConfigState | null>(null)
+  const [configState, setConfigState] = useState<AppConfigState | null>(null)
   const [configDraft, setConfigDraft] = useState<ConfigDraft>(() => toConfigDraft(null))
   const [speakerAliases, setSpeakerAliases] = useState<Record<string, string>>({})
   const [now, setNow] = useState(() => Date.now())
@@ -465,10 +466,7 @@ export function useAppState() {
 
   const onCopyTranscript = async () => {
     try {
-      await window.transcriptApi.copyTranscript(segments.map((segment) => ({
-        ...segment,
-        speaker: getSpeakerLabel(getSpeakerKey(segment))
-      })))
+      await window.transcriptApi.copyTranscript(labeledSegments)
       setToast({ message: 'Finales Transkript wurde in die Zwischenablage kopiert.', variant: 'info', persistent: false })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Kopieren fehlgeschlagen.'
@@ -491,6 +489,71 @@ export function useAppState() {
     const alias = speakerAliases[speaker]?.trim()
     return alias && alias.length > 0 ? alias : formatSpeakerKey(speaker)
   }
+
+  // Segmente mit Anzeigenamen (Alias), wie sie im UI und im Export erscheinen.
+  const labeledSegments = useMemo(
+    () =>
+      segments.map((segment) => ({
+        ...segment,
+        speaker: getSpeakerLabel(getSpeakerKey(segment))
+      })),
+    [segments, speakerAliases]
+  )
+
+  // Markdown-Export (T-506). Das Dokument enthaelt Frontmatter mit den
+  // Metadaten der Sitzung; geschrieben wird es ueber das Backend, damit
+  // der Zielordner (App-Verzeichnis oder konfigurierter Pfad) dort
+  // aufgeloest wird.
+  const persistTranscript = async () => {
+    try {
+      const markdown = buildTranscriptMarkdown(labeledSegments)
+      const path = await window.transcriptApi.saveTranscriptMarkdown(markdown)
+      setToast({ message: `Transkript gespeichert: ${path}`, variant: 'info', persistent: false })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Transkript konnte nicht gespeichert werden.'
+      setToast({ message, variant: 'error', persistent: true })
+    }
+  }
+
+  // Automatisch speichern, sobald die Aufnahme endet.
+  //
+  // Der Export wird erst ausgeloest, wenn die Aufnahme endet, und dann
+  // kurz verzoe gert: Final-Segmente, die nach dem Status-Event
+  // eintreffen, sollen noch im Dokument landen. Jedes neue Segment
+  // setzt die Wartezeit zurueck.
+  const sessionActiveRef = useRef(false)
+  const saveTimerRef = useRef<number | null>(null)
+  const [saveRequest, setSaveRequest] = useState(0)
+
+  useEffect(() => {
+    if (status.running) {
+      sessionActiveRef.current = true
+      return
+    }
+    if (sessionActiveRef.current) {
+      sessionActiveRef.current = false
+      setSaveRequest((value) => value + 1)
+    }
+  }, [status.running])
+
+  useEffect(() => {
+    if (saveRequest === 0) return
+    if (status.running) return
+    if (!settings.transcript.markdownExport.enabled) return
+    if (labeledSegments.length === 0) return
+    if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null
+      setSaveRequest(0)
+      void persistTranscript()
+    }, 500)
+    return () => {
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
+      }
+    }
+  }, [saveRequest, status.running, labeledSegments, settings.transcript.markdownExport.enabled])
 
   return {
     configDraft,

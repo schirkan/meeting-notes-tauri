@@ -107,10 +107,7 @@ export function App() {
         onClose={closeSettingsDialog}
         columns={3}
         footer={configState && (
-          <>
-            <p className="meta-path">Azure-Konfiguration: {configState.path}</p>
-            <p className="meta-path">Allgemeine Einstellungen: {configState.userSettingsPath}</p>
-          </>
+          <p className="meta-path">Konfiguration: {configState.path}</p>
         )}
       >
         <SettingsPanel

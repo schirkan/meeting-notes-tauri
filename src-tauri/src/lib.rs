@@ -1,4 +1,4 @@
-//! Tauri 2 entry point for meeting-notes-tauri.
+//! Tauri 2 entry point for Meeting Notes.
 //!
 //! Block 4 wires all Tauri-Commands to real implementations
 //! (settings, connectivity, sidecar spawn, clipboard). The app
@@ -32,14 +32,14 @@ pub fn run() {
       let entry = state.push_debug(
         state::DebugLogEntrySource::Main,
         state::DebugLogEntryLevel::Info,
-        "Tauri app initialisiert.",
+        "Meeting Notes initialisiert.",
       );
       events::emit_debug(&handle, &entry);
 
       // Beim App-Start den Azure-Config-Status melden, damit der
       // Renderer ohne Polling weiß, ob eine Konfiguration vorhanden ist.
       let config_status = tauri::async_runtime::block_on(async {
-        match settings::get_azure_config_state(&handle).await {
+        match settings::get_app_config_state().await {
           Ok(state) => events::FixedConfigStatus {
             exists: state.exists,
             path: state.path,
@@ -65,8 +65,9 @@ pub fn run() {
       commands::get_devices,
       commands::get_user_settings,
       commands::save_user_settings,
-      commands::get_fixed_config,
+      commands::get_app_config,
       commands::save_fixed_config,
+      commands::save_transcript_markdown,
       commands::test_azure_connectivity,
     ])
     .build(tauri::generate_context!())

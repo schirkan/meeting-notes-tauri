@@ -7,18 +7,16 @@
  *
  * Layout produced:
  *   dist/portable/
- *     meeting-notes-tauri.exe      (Tauri host)
+ *     meeting-notes.exe             (Tauri host)
  *     sidecar/                     (C# sidecar + deps)
  *       MeetingNotes.Sidecar.exe
  *       MeetingNotes.Sidecar.dll
  *       …                          (Azure Speech / NAudio / System.* DLLs)
- *     config/                      (optional, only if templates exist)
- *       azure.example.json
- *       user-settings.example.json
+ *     meeting-notes.config.example.json  (config template, optional)
  *     SHA256SUMS
  *
  * Pre-requisites:
- *   - `npm run tauri build`        → src-tauri/target/release/meeting-notes-tauri.exe
+ *   - `npm run tauri build`        → src-tauri/target/release/meeting-notes.exe
  *   - Sidecar-Publish              → sidecar/publish/sidecar/
  *                                    (lief automatisch via src-tauri/build.rs seit AD-009)
  */
@@ -29,12 +27,13 @@ import { basename, join, relative } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 
 const PROJECT_ROOT = process.cwd()
-const TAURI_EXE_SRC = join(PROJECT_ROOT, 'src-tauri', 'target', 'release', 'meeting-notes-tauri.exe')
+const TAURI_EXE_SRC = join(PROJECT_ROOT, 'src-tauri', 'target', 'release', 'meeting-notes.exe')
 const SIDECAR_SRC = join(PROJECT_ROOT, 'sidecar', 'publish', 'sidecar')
-const CONFIG_SRC = join(PROJECT_ROOT, 'config')
+const CONFIG_TEMPLATE = 'meeting-notes.config.example.json'
+const CONFIG_TEMPLATE_SRC = join(PROJECT_ROOT, CONFIG_TEMPLATE)
 const PORTABLE_OUT = join(PROJECT_ROOT, 'dist', 'portable')
 
-const TAURI_EXE_NAME = 'meeting-notes-tauri.exe'
+const TAURI_EXE_NAME = 'meeting-notes.exe'
 const SIDECAR_EXE_NAME = 'MeetingNotes.Sidecar.exe'
 const SHA256SUMS_NAME = 'SHA256SUMS'
 
@@ -153,18 +152,14 @@ async function main() {
   info(`Kopiere Sidecar (${SIDECAR_EXE_NAME} + DLLs) …`)
   copyDirContents(SIDECAR_SRC, join(PORTABLE_OUT, 'sidecar'))
 
-  // 3. Config-Templates (optional)
-  const configTemplates = []
-  if (existsSync(CONFIG_SRC)) {
-    for (const entry of readdirSync(CONFIG_SRC)) {
-      if (entry.endsWith('.example.json')) configTemplates.push(entry)
-    }
-  }
-  if (configTemplates.length > 0) {
-    info(`Kopiere Config-Templates …`)
-    copyDirContents(CONFIG_SRC, join(PORTABLE_OUT, 'config'))
+  // 3. Config-Template (optional)
+  let configTemplateCopied = false
+  if (existsSync(CONFIG_TEMPLATE_SRC)) {
+    info(`Kopiere Config-Template …`)
+    copyFileSync(CONFIG_TEMPLATE_SRC, join(PORTABLE_OUT, CONFIG_TEMPLATE))
+    configTemplateCopied = true
   } else {
-    info(`(Kein config/-Verzeichnis mit *.example.json gefunden — übersprungen. Templates gehören zu T-103/T-305.)`)
+    info(`(Kein ${CONFIG_TEMPLATE} gefunden — übersprungen. Template gehört zu T-103/T-305.)`)
   }
 
   // 4. SHA256SUMS
@@ -186,7 +181,7 @@ async function main() {
   console.log(`Ausgabe:       ${PORTABLE_OUT}`)
   console.log(`Tauri-EXE:     ${formatBytes(tauriExeBytes)}  (${TAURI_EXE_NAME})`)
   console.log(`Sidecar:       ${formatBytes(sidecarBytes)}  (${listFilesRecursive(join(PORTABLE_OUT, 'sidecar')).length} Dateien in sidecar/)`)
-  console.log(`Config:        ${configTemplates.length > 0 ? `${configTemplates.length} Templates` : '— (übersprungen)'}`)
+  console.log(`Config:        ${configTemplateCopied ? CONFIG_TEMPLATE : '— (übersprungen)'}`)
   console.log(`SHA256SUMS:    ${formatBytes(sumsBytes)}  (${sumsCount} Summen)`)
   console.log(`----------------------------------------`)
   console.log(`Gesamt:        ${formatBytes(totalBytes + sumsBytes)}  über ${allFiles.length + 1} Dateien`)

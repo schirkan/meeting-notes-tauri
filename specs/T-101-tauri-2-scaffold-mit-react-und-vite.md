@@ -21,7 +21,7 @@ Lauffähiges Tauri-2-Projekt mit React-Frontend, das ein leeres Fenster öffnet 
 - [x] Im nativen portablen Build geprüft; unabhängig von Vite-Dev-Modus. Dies bestätigt nicht automatisch die übrigen offenen Scaffold-Kriterien.
 
 ## Approach
-- `tauri.conf.json`: Window-Größe, Identifier (`de.schirkan.meeting-notes-tauri`), Bundle-Identifier, Resources-Verzeichnis für den Sidecar.
+- `tauri.conf.json`: Window-Größe, Identifier (`de.schirkan.meeting-notes`), Bundle-Identifier, Resources-Verzeichnis für den Sidecar. Product-Name und Fenstertitel lauten `Meeting Notes` — „Tauri" ist Technikbezeichnung, kein Produktname.
 - Rust-Crate-Dependencies (Minimum): `tauri = "2"`, `tauri-plugin-shell = "2"`, `serde`, `serde_json`, `tokio` (für Async-Pipes).
 - Vite-Config identisch zu `../meeting-notes` (Port 1420 für Tauri-Dev).
 - Smoke-Test: `npm run tauri dev` öffnet Fenster, IPC-Roundtrip aus DevTools-Console.

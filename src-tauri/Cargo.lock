@@ -1752,7 +1752,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "meeting-notes-tauri"
+name = "meeting-notes"
 version = "0.1.0"
 dependencies = [
  "chrono",

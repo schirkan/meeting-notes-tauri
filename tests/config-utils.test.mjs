@@ -40,11 +40,12 @@ async function compileAndImport() {
   const contract = await import(toUrl(contractPath).href)
   const utils = await import(toUrl(utilsPath).href)
   const speakers = await import(toUrl(join(tmp, 'renderer', 'src', 'speaker-utils.js')).href)
+  const markdown = await import(toUrl(join(tmp, 'shared', 'transcript-markdown.js')).href)
   rmSync(tmp, { recursive: true, force: true })
-  return { contract, utils, speakers }
+  return { contract, utils, speakers, markdown }
 }
 
-const { contract, utils, speakers } = await compileAndImport()
+const { contract, utils, speakers, markdown } = await compileAndImport()
 
 test('isValidBcp47Language accepts canonical codes', () => {
   assert.equal(contract.isValidBcp47Language('de-DE'), true)
@@ -99,6 +100,59 @@ test('diarization normalization preserves every independent boolean combination'
 
 test('malformed diarization values do not become truthy checkbox settings', () => {
   assert.deepEqual(contract.normalizeUserSettings({ diarization: { mic: 'false', speaker: 0 } }).diarization, { mic: true, speaker: true })
+})
+
+test('markdown export defaults to enabled without a path', () => {
+  for (const input of [null, undefined, {}, { transcript: null }]) {
+    assert.deepEqual(contract.normalizeUserSettings(input).transcript.markdownExport, {
+      enabled: true,
+      path: null
+    })
+  }
+})
+
+test('markdown export path is optional and blank values fall back to null', () => {
+  assert.deepEqual(
+    contract.normalizeUserSettings({ transcript: { markdownExport: { enabled: false, path: '   ' } } })
+      .transcript.markdownExport,
+    { enabled: false, path: null }
+  )
+  assert.deepEqual(
+    contract.normalizeUserSettings({ transcript: { markdownExport: { enabled: false, path: 'D:/Notes' } } })
+      .transcript.markdownExport,
+    { enabled: false, path: 'D:/Notes' }
+  )
+})
+
+test('markdown export keeps an explicitly disabled flag', () => {
+  assert.equal(contract.normalizeUserSettings({ transcript: { markdownExport: { enabled: false } } })
+    .transcript.markdownExport.enabled, false)
+})
+
+test('transcript markdown starts with yaml frontmatter carrying the session metadata', () => {
+  const segments = [
+    { id: '1', source: 'mic', speaker: 'Guest-1', language: 'de-DE', timestampIso: '2026-11-09T13:00:00.000Z', text: 'Hallo.', state: 'final' },
+    { id: '2', source: 'speaker', speaker: 'Guest-2', language: 'de-DE', timestampIso: '2026-11-09T13:00:05.000Z', text: 'Guten Tag.', state: 'final' }
+  ]
+  const document = markdown.buildTranscriptMarkdown(segments)
+  assert.ok(document.startsWith('---\n'), 'document starts with frontmatter')
+  assert.ok(document.includes('\n---\n'), 'frontmatter is closed')
+  assert.ok(document.includes('segments: 2'))
+  assert.ok(document.includes('duration: "00:00:05"'))
+  assert.ok(document.includes('"Guest-1"'))
+  assert.ok(document.includes('"Guest-2"'))
+  assert.ok(document.includes('- ['))
+})
+
+test('transcript markdown body contains final segments only', () => {
+  const segments = [
+    { id: '1', source: 'mic', speaker: 'Guest-1', language: 'de-DE', timestampIso: '2026-11-09T13:00:00.000Z', text: 'Endgueltig.', state: 'final' },
+    { id: '2', source: 'mic', speaker: 'Guest-1', language: 'de-DE', timestampIso: '2026-11-09T13:00:02.000Z', text: 'Vorlaeufig.', state: 'interim' }
+  ]
+  const document = markdown.buildTranscriptMarkdown(segments)
+  assert.ok(document.includes('Endgueltig.'))
+  assert.ok(!document.includes('Vorlaeufig.'))
+  assert.ok(document.includes('segments: 1'))
 })
 
 test('speaker identities are scoped to their audio source', () => {

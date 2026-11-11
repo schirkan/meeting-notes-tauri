@@ -1,9 +1,10 @@
 {
-  "name": "meeting-notes-tauri",
+  "name": "meeting-notes",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
-  "description": "Meeting Notes PoC (Tauri 2 + React + C# Sidecar)",
+  "description": "Meeting Notes (Windows-Desktop-App fuer Meeting-Transkripte)",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

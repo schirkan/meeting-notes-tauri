@@ -125,6 +125,45 @@ export function SettingsPanel(props: SettingsPanelProps) {
           />
           <span>Sprechererkennung für Speaker</span>
         </label>
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
+            checked={settings.transcript.markdownExport.enabled}
+            onChange={(event) =>
+              setSettings((prev) => ({
+                ...prev,
+                transcript: {
+                  ...prev.transcript,
+                  markdownExport: { ...prev.transcript.markdownExport, enabled: event.target.checked }
+                }
+              }))
+            }
+            disabled={statusRunning}
+          />
+          <span>Transkript automatisch als Markdown speichern</span>
+        </label>
+
+        <label>
+          Speicherpfad (optional)
+          <input
+            type="text"
+            value={settings.transcript.markdownExport.path ?? ''}
+            onChange={(event) =>
+              setSettings((prev) => ({
+                ...prev,
+                transcript: {
+                  ...prev.transcript,
+                  markdownExport: {
+                    ...prev.transcript.markdownExport,
+                    path: event.target.value.trim() || null
+                  }
+                }
+              }))
+            }
+            placeholder="Standard: Anwendungsverzeichnis"
+            disabled={statusRunning || !settings.transcript.markdownExport.enabled}
+          />
+        </label>
         <p className="meta">Änderungen gelten nach dem Speichern für die nächste Aufnahme.</p>
       </div>
 

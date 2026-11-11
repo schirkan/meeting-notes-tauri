@@ -40,7 +40,7 @@ async function openApp(options) {
     const noSubscription = () => () => {}
     window.transcriptApi = {
       getStatus: async () => ({ running: input.running ?? false }),
-      getSettings: async () => ({ language: input.language ?? 'de-DE', devices: {}, diarization: input.diarization }),
+      getSettings: async () => ({ language: input.language ?? 'de-DE', devices: {}, diarization: input.diarization, transcript: input.transcript }),
       saveSettings: async (settings) => {
         window.lastSavedSettings = settings
         return settings
@@ -52,11 +52,15 @@ async function openApp(options) {
       getDebugLog: async () => [],
       getConfig: async () => {
         if (input.configError) throw new Error('Konfiguration nicht lesbar')
-        return input.configState && { ...input.configState, userSettingsPath: 'test-user-settings' }
+        return input.configState
       },
       saveConfig: async (config) => {
         window.lastSavedConfig = config
-        return { exists: true, path: 'test-config', userSettingsPath: 'test-user-settings', config }
+        return { exists: true, path: 'test-config', config }
+      },
+      saveTranscriptMarkdown: async (markdown) => {
+        window.lastSavedMarkdown = markdown
+        return 'D:/Notes/transcript-2026-11-11-22-05-00.md'
       },
       testAzureConnectivity: async (payload) => {
         window.lastConnectivityPayload = payload
@@ -141,8 +145,7 @@ test('settings separates Proxy into a third responsive column and preserves save
     assert.equal(await panels.locator('.meta-path').count(), 0)
     const footer = dialog.locator('.settings-dialog-footer')
     assert.deepEqual(await footer.locator('.meta-path').allTextContents(), [
-      'Azure-Konfiguration: test-config',
-      'Allgemeine Einstellungen: test-user-settings'
+      'Konfiguration: test-config'
     ])
     assert.equal(await dialog.locator('.settings-dialog-grid .settings-dialog-footer').count(), 0)
     assert.equal(await proxy.getByLabel('Proxy Host', { exact: true }).isDisabled(), true)

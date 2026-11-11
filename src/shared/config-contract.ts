@@ -18,6 +18,15 @@ export interface DiarizationSettings {
   speaker: boolean
 }
 
+export interface MarkdownExportSettings {
+  enabled: boolean
+  path: string | null
+}
+
+export interface TranscriptSettings {
+  markdownExport: MarkdownExportSettings
+}
+
 export interface UserSettings {
   language: string
   diarization: DiarizationSettings
@@ -25,17 +34,18 @@ export interface UserSettings {
     micId: string | null
     speakerLoopbackId: string | null
   }
+  transcript: TranscriptSettings
 }
 
-export interface ResolvedAppConfig {
-  azure: AzureConfig
+/** Shape of the single on-disk configuration file. */
+export interface AppConfig {
+  azure: AzureConfig | null
   user: UserSettings
 }
 
-export interface AzureConfigState {
+export interface AppConfigState {
   exists: boolean
   path: string
-  userSettingsPath: string
   config: AzureConfig | null
 }
 
@@ -45,6 +55,9 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   devices: {
     micId: null,
     speakerLoopbackId: null
+  },
+  transcript: {
+    markdownExport: { enabled: true, path: null }
   }
 }
 
@@ -54,9 +67,12 @@ export function isValidBcp47Language(input: unknown): input is string {
   return typeof input === 'string' && BCP47_PATTERN.test(input.trim())
 }
 
-type UserSettingsInput = Partial<Omit<UserSettings, 'devices' | 'diarization'>> & {
+type UserSettingsInput = Partial<Omit<UserSettings, 'devices' | 'diarization' | 'transcript'>> & {
   devices?: Partial<UserSettings['devices']> | null
   diarization?: Partial<DiarizationSettings> | null
+  transcript?: Partial<TranscriptSettings> & {
+    markdownExport?: Partial<MarkdownExportSettings> | null
+  } | null
 }
 
 export function normalizeUserSettings(input: UserSettingsInput | null | undefined): UserSettings {
@@ -72,6 +88,19 @@ export function normalizeUserSettings(input: UserSettingsInput | null | undefine
     devices: {
       micId: input?.devices?.micId ?? DEFAULT_USER_SETTINGS.devices.micId,
       speakerLoopbackId: input?.devices?.speakerLoopbackId ?? DEFAULT_USER_SETTINGS.devices.speakerLoopbackId
+    },
+    transcript: {
+      markdownExport: {
+        enabled:
+          typeof input?.transcript?.markdownExport?.enabled === 'boolean'
+            ? input.transcript.markdownExport.enabled
+            : DEFAULT_USER_SETTINGS.transcript.markdownExport.enabled,
+        path:
+          typeof input?.transcript?.markdownExport?.path === 'string' &&
+          input.transcript.markdownExport.path.trim().length > 0
+            ? input.transcript.markdownExport.path.trim()
+            : null
+      }
     }
   }
 }

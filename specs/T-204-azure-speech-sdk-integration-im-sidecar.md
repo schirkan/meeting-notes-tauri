@@ -13,7 +13,7 @@ NuGet-Paket `Microsoft.CognitiveServices.Speech` (1.44.x) zum Sidecar-Projekt hi
 - [x] `AzureSpeechService.cs` kapselt beide Recognizer-Typen. Jede Quelle wählt unabhängig `ConversationTranscriber` bei aktivierter Sprechererkennung oder `SpeechRecognizer` bei deaktivierter Sprechererkennung; Mic und Speaker sind standardmäßig aktiviert (siehe [T-205](./T-205-continuous-lid-und-diarization-in-c-sharp.md)).
 - [ ] `PushAudioInputStream` wird aus der `AudioResampler`-Pipeline gefüttert (siehe `T-203`).
 - [ ] Recognizer-Events (`Recognizing`, `Recognized`, `Canceled`, `SessionStarted/Stopped`, `SpeechStart/EndDetected`) werden auf interne Event-Handler gemappt.
-- [x] Rust lädt `config/azure.json` und übergibt Region/Endpoint als CLI-Args sowie Speech-Key als prozesslokale Umgebungsvariable. Der Sidecar liest die JSON-Datei nicht selbst.
+- [x] Rust lädt den Abschnitt `azure` aus `meeting-notes.config.json` und übergibt Region/Endpoint als CLI-Args sowie Speech-Key als prozesslokale Umgebungsvariable. Der Sidecar liest die JSON-Datei nicht selbst.
 - [x] Optionaler Proxy (`proxy.host`/`proxy.port` + optional Auth) wird im gemeinsamen [SpeechConfiguration](../sidecar/SpeechConfiguration.cs)-Builder via `SpeechConfig.SetProxy()` für Aufnahme und Diagnose konfiguriert. Zugangsdaten kommen aus prozesslokalen Umgebungsvariablen.
 - [x] `--test-connectivity` prüft Recognizer und Transcriber ohne Audio-Capture; positives Ergebnis verlangt jeweils `Connected` und `SessionStarted`.
 - [ ] Erfolgreiche native Azure-/Proxy-Verbindung im realen Zielnetz validiert (siehe [T-306](./T-306-proxy-aware-azure-transport.md)); lokale Negativdiagnose ersetzt diesen Test nicht.

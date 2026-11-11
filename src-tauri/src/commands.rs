@@ -12,7 +12,7 @@ use tokio::sync::Mutex;
 use crate::connectivity;
 use crate::events;
 use crate::settings::{
-    self, AzureConfig, AzureConfigState, UserSettings,
+    self, AppConfigState, AzureConfig, UserSettings,
 };
 use crate::sidecar::{self, SidecarHandle, SidecarOptions};
 use crate::state::{
@@ -77,8 +77,8 @@ pub async fn start_recording(
 ) -> Result<events::TranscriptStatus, String> {
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "start_recording aufgerufen.");
 
-    let azure = settings::load_azure_config(&app).await.map_err(|e| e.to_string())?;
-    let user = settings::load_user_settings(&app).await.map_err(|e| e.to_string())?;
+    let azure = settings::load_azure_config().await.map_err(|e| e.to_string())?;
+    let user = settings::load_user_settings().await.map_err(|e| e.to_string())?;
 
     let speech_key = azure.as_ref().map(|a| a.speech_key.clone());
     let speech_region = azure.as_ref().map(|a| a.region.clone());
@@ -428,7 +428,7 @@ pub async fn get_user_settings(
     state: State<'_, AppState>,
 ) -> Result<UserSettings, String> {
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "get_user_settings aufgerufen.");
-    settings::load_user_settings(&app).await.map_err(|e| e.to_string())
+    settings::load_user_settings().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -438,7 +438,7 @@ pub async fn save_user_settings(
     settings: UserSettings,
 ) -> Result<UserSettings, String> {
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "save_user_settings aufgerufen.");
-    let saved = settings::save_user_settings(&app, settings).await.map_err(|e| e.to_string())?;
+    let saved = settings::save_user_settings(settings).await.map_err(|e| e.to_string())?;
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Main, DebugLogEntryLevel::Info, "User-Settings gespeichert.");
     Ok(saved)
 }
@@ -446,12 +446,12 @@ pub async fn save_user_settings(
 // ---------- Azure config ----------
 
 #[tauri::command]
-pub async fn get_fixed_config(
+pub async fn get_app_config(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<AzureConfigState, String> {
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "get_fixed_config aufgerufen.");
-    settings::get_azure_config_state(&app).await.map_err(|e| e.to_string())
+) -> Result<AppConfigState, String> {
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "get_app_config aufgerufen.");
+    settings::get_app_config_state().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -459,11 +459,31 @@ pub async fn save_fixed_config(
     app: AppHandle,
     state: State<'_, AppState>,
     config: AzureConfig,
-) -> Result<AzureConfigState, String> {
+) -> Result<AppConfigState, String> {
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "save_fixed_config aufgerufen.");
-    settings::save_azure_config(&app, config).await.map_err(|e| e.to_string())?;
+    settings::save_azure_config(config).await.map_err(|e| e.to_string())?;
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Main, DebugLogEntryLevel::Info, "Azure-Konfiguration gespeichert.");
-    settings::get_azure_config_state(&app).await.map_err(|e| e.to_string())
+    settings::get_app_config_state().await.map_err(|e| e.to_string())
+}
+
+// ---------- transcript export ----------
+
+/// Write the transcript as a Markdown file with frontmatter (T-506).
+/// The target directory comes from the user settings; without a
+/// configured path the file lands next to the application EXE.
+#[tauri::command]
+pub async fn save_transcript_markdown(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    markdown: String,
+) -> Result<String, String> {
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "save_transcript_markdown aufgerufen.");
+    let path = settings::write_transcript_markdown(&markdown)
+        .await
+        .map_err(|e| e.to_string())?;
+    let path = path.to_string_lossy().into_owned();
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Main, DebugLogEntryLevel::Info, format!("Transkript als Markdown gespeichert: {path}"));
+    Ok(path)
 }
 
 // ---------- connectivity ----------

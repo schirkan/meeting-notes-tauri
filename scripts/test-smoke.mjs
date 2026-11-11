@@ -31,11 +31,11 @@ import { pipeline } from 'node:stream/promises'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = join(__dirname, '..')
 
-const TAURI_EXE = join(PROJECT_ROOT, 'src-tauri', 'target', 'release', 'meeting-notes-tauri.exe')
+const TAURI_EXE = join(PROJECT_ROOT, 'src-tauri', 'target', 'release', 'meeting-notes.exe')
 const SIDECAR_EXE = join(PROJECT_ROOT, 'sidecar', 'publish', 'sidecar', 'MeetingNotes.Sidecar.exe')
 const DIST_DIR = join(PROJECT_ROOT, 'dist')
 const PORTABLE_DIR = join(PROJECT_ROOT, 'dist', 'portable')
-const PORTABLE_TAURI = join(PORTABLE_DIR, 'meeting-notes-tauri.exe')
+const PORTABLE_TAURI = join(PORTABLE_DIR, 'meeting-notes.exe')
 const PORTABLE_SIDECAR = join(PORTABLE_DIR, 'sidecar', 'MeetingNotes.Sidecar.exe')
 const PORTABLE_SHA256SUMS = join(PORTABLE_DIR, 'SHA256SUMS')
 const TRANSCRIPT_CONTRACT = join(PROJECT_ROOT, 'src', 'shared', 'transcript-contract.ts')
@@ -85,9 +85,9 @@ header('2. Tauri-EXE')
 
 if (existsSync(TAURI_EXE)) {
   const sizeMb = (statSync(TAURI_EXE).size / 1024 / 1024).toFixed(2)
-  pass('src-tauri/target/release/meeting-notes-tauri.exe', `${sizeMb} MB`)
+  pass('src-tauri/target/release/meeting-notes.exe', `${sizeMb} MB`)
 } else {
-  fail('src-tauri/target/release/meeting-notes-tauri.exe', 'missing — run `npm run tauri build`')
+  fail('src-tauri/target/release/meeting-notes.exe', 'missing — run `npm run tauri build`')
 }
 
 // --- 3. Sidecar-EXE + device_list ---------------------------------------
@@ -138,9 +138,9 @@ if (existsSync(SIDECAR_EXE)) {
 header('4. Portable-Distribution')
 
 if (existsSync(PORTABLE_TAURI)) {
-  pass('dist/portable/meeting-notes-tauri.exe', `${(statSync(PORTABLE_TAURI).size / 1024 / 1024).toFixed(2)} MB`)
+  pass('dist/portable/meeting-notes.exe', `${(statSync(PORTABLE_TAURI).size / 1024 / 1024).toFixed(2)} MB`)
 } else {
-  fail('dist/portable/meeting-notes-tauri.exe', 'missing — run `npm run dist:portable`')
+  fail('dist/portable/meeting-notes.exe', 'missing — run `npm run dist:portable`')
 }
 
 if (existsSync(PORTABLE_SIDECAR)) {

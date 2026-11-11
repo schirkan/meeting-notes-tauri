@@ -1,11 +1,11 @@
-# Spezifikation v0.1 — Meeting Notes (Tauri-Variante)
+# Spezifikation v0.1 — Meeting Notes
 
 Stand: 09.11.2026
 Status: Implementierungsstand fortgeschrieben; reale Azure-/Corporate-Netz-, Latenz- und Clean-Machine-Akzeptanz offen.
 
 Lokaler Stand: aktueller Portable-Build 20.79 MB (27 Dateien, 26 geprüfte Hashes), einschließlich der neuen unabhängigen Mic-/Speaker-Diarization; Build-Smoke inklusive Sidecar-Geräteabfrage erfolgreich. Dafür sind TypeScript, 23 Unit-Tests, drei Rust-Tests und 334 C#-Assertions erfolgreich; neue UI-Szenarien wurden im integrierten Browser mit gemockter Bridge geprüft. Der aktuelle CLI-Lauf der 18 UI-Tests scheitert vor den Assertions am headless-Edge-Start (Exit 21). Frühere Settings-/Diagnose-UI-Prüfungen und native Negativdiagnose bleiben dokumentiert. Nicht jede ursprüngliche Audio-/Protokoll-Anforderung ist als abgenommen bestätigt; Einzelstatus siehe [Specs](./specs/).
 
-Diese Spezifikation ist die **Tauri-Variante** von `../meeting-notes/SPEC-v0.1.md`. Architekturziel: Tauri 2 + React + C#-Sidecar (mit Azure Speech SDK in NuGet-Form).
+Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1.md` (Electron-Projekt, unveränderte Referenz). Architekturziel: Tauri 2 + React + C#-Sidecar (mit Azure Speech SDK in NuGet-Form). Die Anwendung selbst heißt *Meeting Notes*; „Tauri" ist die Container-Technik, nicht Teil des Produktnamens.
 
 ---
 
@@ -65,18 +65,19 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - Bei geänderter SDK-Sprecher-ID ersetzt ein neues Interim-/Final-Event ältere Interims derselben Quelle; andere Quellen und finale Segmente bleiben erhalten. Die letzter-Sprecher-Anzeige berücksichtigt Aliase.
 - Diagnostikbereich mit laufendem Debug-Log (App/Sidecar/IPC).
 - Diagnostikbereich mit separaten Öffnen-/Schließen-Aktionen und manueller Log-Leerung.
-- Einstellungen haben drei responsive Bereiche: **Allgemein**, **Azure-Konfiguration**, **Proxy** (rechts). Unterhalb aller Bereiche stehen die tatsächlichen Backend-Pfade zu beiden Config-Dateien. Bis 960 px Fensterbreite stehen die Bereiche untereinander.
+- Einstellungen haben drei responsive Bereiche: **Allgemein**, **Azure-Konfiguration**, **Proxy** (rechts). Unterhalb aller Bereiche steht der tatsächliche Backend-Pfad der gemeinsamen Konfigurationsdatei. Bis 960 px Fensterbreite stehen die Bereiche untereinander.
 - Nutzer kann Sprache/Devices sowie Azure-Konfiguration und Proxy bearbeiten. Proxy wird gemeinsam mit Azure gespeichert; **Verbindung testen** und laufende/letzte Ergebnisse öffnen liegen im Azure-Bereich.
 - Spracheinstellung und unabhängige Sprechererkennung für Mic/Speaker werden über Neustarts hinweg persistiert. Beide Diarization-Checkboxen stehen bei den jeweiligen Geräten im Bereich **Allgemein** und sind während der Aufnahme deaktiviert. Gespeicherte Änderungen gelten für die nächste Aufnahme.
+- Im Bereich **Allgemein** stehen außerdem **Transkript automatisch als Markdown speichern** (standardmäßig aktiv) und das optionale Feld **Speicherpfad**. Leer bedeutet Anwendungsverzeichnis.
 - Bei fehlender, nicht lesbarer oder unvollständiger Azure-Konfiguration öffnen sich Einstellungen beim Start automatisch; schließbarer Bottom-Toast ohne Verschiebung des Hauptinhalts. Das ist lokale Pflichtfeldprüfung, keine Azure-Key-Verifikation.
 - Separater Diagnose-Dialog mit Transportstatus und vollständiger Schritttabelle nach Abschluss. Schließen kehrt zu Einstellungen zurück, ohne einen laufenden Test abzubrechen; Ergebnisse können wieder geöffnet werden.
 - F12 öffnet/schließt DevTools auch im Release-/Portable-Build.
 - Bestehende UI bleibt Grundlage; Settings-/Diagnose-UX ist eine bewusste Ausnahme zur ursprünglichen 1:1-Portierung (siehe [DECISIONS.md](./DECISIONS.md), Fortschreibung AD-004 und [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md)).
 
 ## 6. Konfiguration
-- Azure-Konfiguration liegt in `config/azure.json`, Benutzeroptionen in `config/user-settings.json`: im Release neben der EXE, in Entwicklung im Repository neben den Templates. Unabhängig vom Start-Arbeitsverzeichnis, ohne AppData-Migration/-Fallback.
-- Azure-Key bleibt direkt im Feld `speechKey`; Azure-/Proxy-Werte sind im Settings-Dialog editierbar. `AzureConfigState` liefert `exists`, `path`, `userSettingsPath` und optional `config`.
-- User-Settings enthalten `diarization: { "mic": true, "speaker": true }`. Fehlende Felder werden je Quelle als `true` normalisiert. Rust reicht die gespeicherten Optionen beim Start über `--diarization-mic true|false` und `--diarization-speaker true|false` an den Sidecar weiter.
+- Azure-Konfiguration und Benutzeroptionen liegen gemeinsam in **einer** Datei `meeting-notes.config.json` (Abschnitte `azure` und `user`): im Release direkt neben der EXE, in Entwicklung im Repository-Root. Unabhängig vom Start-Arbeitsverzeichnis, ohne AppData-Migration/-Fallback.
+- Azure-Key bleibt direkt im Feld `azure.speechKey`; Azure-/Proxy-Werte sind im Settings-Dialog editierbar. `AppConfigState` liefert `exists`, `path` und optional `config`.
+- User-Settings enthalten `diarization: { "mic": true, "speaker": true }` sowie `transcript.markdownExport` mit `enabled` (Default `true`) und optionalem `path` (Default `null`). Fehlende Felder werden je Quelle als `true` normalisiert. Rust reicht die gespeicherten Optionen beim Start über `--diarization-mic true|false` und `--diarization-speaker true|false` an den Sidecar weiter.
 - Optionaler HTTP-CONNECT-Proxy über `proxy.host`, `proxy.port` (1–65535), optional `username`/`password`. Host ohne Schema/Pfad. Rust lädt die Dateien und reicht Einstellungen an HTTPS-Diagnose und Sidecar weiter; der Sidecar lädt sie nicht selbst.
 - Sidecar erhält Speech-Key/Proxy-Zugangsdaten über prozesslokale Umgebungsvariablen, nicht Credential-CLI-Argumente. Host/Port/Endpoint/Region/Sprache sind nicht geheime CLI-Args.
 - **Verbindung testen** nutzt aktuelle, auch ungespeicherte Werte und Sitzungssprache. `test_azure_connectivity` führt parallel System-DNS/TCP/HTTPS in Rust und native Speech/WSS-Diagnose in einem separaten Sidecar ohne Audio-Capture aus.
@@ -112,10 +113,10 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - Corporate-Netzvalidierung und gegebenenfalls Entscheidung über eigenen WSS-Transport siehe [T-306](./specs/T-306-proxy-aware-azure-transport.md) und [T-505](./specs/T-505-proxy-aware-azure-transport.md). Eigener WSS-Client ist nicht implementiert.
 
 ## 7. Export
-- Kein Dateiexport im PoC vorgesehen.
-- Vollständiges Transkript per Copy-to-Clipboard als TXT.
-- Exportinhalt: YAML-ähnlicher Header (`datum`, `startzeit`, `dauer`) plus finale Segmentliste mit Sprecher/Uhrzeit/Text. Sprecherlabels berücksichtigen quellenspezifische UI-Aliase; ohne Alias wird die Quelle mit ausgegeben, z. B. `Mic · Guest-1`.
-- Zeitformat: deutsches Datums-/Zeitformat.
+- Automatischer Dateiexport als Markdown mit YAML-Frontmatter (siehe [T-506](./specs/T-506-transkript-markdown-export-und-frontmatter.md)); kein Export in weitere Formate.
+- Vollständiges Transkript per Copy-to-Clipboard als Markdown — identisch zur automatisch gespeicherten Datei.
+- Exportinhalt: YAML-Frontmatter (`title`, `date`, `start`, `end`, `duration`, `language`, `segments`, `speakers`) plus finale Segmentliste mit Sprecher/Uhrzeit/Text. Sprecherlabels berücksichtigen quellenspezifische UI-Aliase; ohne Alias wird die Quelle mit ausgegeben, z. B. `Mic · Guest-1`.
+- Zeitformat: deutsches Datums-/Zeitformat. Der Zielpfad des Datei-Exports ist optional; ohne Angabe landet die Datei im Anwendungsverzeichnis, relative Pfade werden dort aufgelöst.
 
 ## 8. Entwicklungsumgebung (Stabilitätsvorgabe)
 - Standard für lokale Entwicklung: Node 22 LTS ≥22.12.0; zulässige Versionen gemäß `package.json` (auch ≥24.0.0 <24.16.0).
@@ -138,7 +139,7 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - Plattformübergreifende Unterstützung (macOS/Linux) — siehe `DECISIONS.md → AD-005`
 - Bluetooth-Audio-Support
 - Mobile (iOS/Android)
-- Datei-Export (nur Clipboard)
+- Kein Export in weitere Formate (JSON, DOCX, TXT)
 - Produktionsreife Betriebs-/Monitoring-Features
 
 ## 10. MVP-Rollout
