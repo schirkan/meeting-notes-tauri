@@ -14,8 +14,8 @@ Portable Variante der Tauri-App, die ohne Installation läuft.
   - [x] `sidecar/MeetingNotes.Sidecar.exe` + DLLs (framework-dependent)
   - [x] `meeting-notes.config.example.json` — die Config-Vorlage wird mitgeliefert; keine persönlichen Configs oder Credentials.
 - [ ] Portable Build auf einem **frischen** Windows-11-System mit .NET 8 Runtime und WebView2 validiert. Bisherige native Tests erfolgten nur auf dem lokalen Entwicklungsrechner.
-- [x] SHA256SUMS-Datei wird erzeugt und geprüft (26 Summen für 1 Tauri-EXE + 23 Sidecar-Dateien + 2 Templates; 27 Dateien inklusive SHA256SUMS).
-- [x] Bundle-Größe wird im Build-Output geloggt (Tauri-EXE / Sidecar / SHA256SUMS / Gesamt).
+- [x] SHA256SUMS-Datei wird erzeugt und geprüft. Stand 2026-11-09: 26 Summen für 1 App-EXE + 23 Sidecar-Dateien + 2 Templates; 27 Dateien inklusive SHA256SUMS. Seit 2026-11-11 gibt es nur noch ein Config-Template, die EXE heißt `meeting-notes.exe` — Summe und Dateizahl sind nach dem nächsten Portable-Build neu zu erheben.
+- [x] Bundle-Größe wird im Build-Output geloggt (App-EXE / Sidecar / Config-Template / SHA256SUMS / Gesamt).
 
 ## Approach
 - `scripts/dist-portable.mjs` orchestriert: Prereq-Check → Clean → Copy (`meeting-notes.exe`, `sidecar/*`, optional `meeting-notes.config.example.json`) → SHA256-Summen via Streaming-Hash (`createReadStream` + `pipeline`) → Summary-Output.
