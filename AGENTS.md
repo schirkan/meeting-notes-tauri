@@ -12,6 +12,7 @@
 - 2026-11-09: Settings mit Allgemein/Azure-Konfiguration/Proxy, Azure-Testbutton und beiden Config-Pfaden im Footer. Release liest/schreibt `config/` neben der EXE, Dev im Repository; kein AppData-Fallback. Fehlende/ungültige Azure-Konfiguration öffnet Settings automatisch mit Bottom-Toast. F12-DevTools funktionieren auch im Release.
 - 2026-11-09: HTTPS-Diagnose nutzt expliziten CONNECT-Proxy und ignoriert Zertifikatsprüfungen bewusst nur dort (unsicher). Separate native Speech/WSS-Diagnose prüft Recognizer/Transcriber ohne Capture; native Zertifikatsprüfung bleibt aktiv. Credentials werden prozesslokal per Env übergeben. Separater Dialog zeigt Schritte erst nach Abschluss und bleibt wiederöffnbar.
 - 2026-11-09: 12 UI-Regressionstests, fokussierte TypeScript-/Rust-Prüfungen, Build-Smoke und native lokale Negativdiagnose erfolgreich. **Offen:** positiver Firmenproxy-/Azure-Test, Aufnahme-Latenz, Clean-Machine-Deployment und aktuelle Installer-Parität. Specs unterscheiden `implemented`, `partial` und offene Akzeptanz; ursprüngliche Draft-Notizen oben sind historisch.
+- 2026-11-11: Git-Sync mit `origin/main` abgeschlossen (2 Commits übernommen, Stand `39b251e`). Review der eingetroffenen Änderungen: 41 Node-Tests, 12 Rust-Tests und beide .NET-Builds grün. Ungenutzte Rust-Abhängigkeit entfernt, `## Git`-Sektion ergänzt, veraltete Spec-Verweise korrigiert. Repo-Setup siehe `## Git`.
 
 ## Ziel der Migration
 
@@ -148,7 +149,21 @@ Der ursprüngliche Migrationsplan war bewusst **inkrementell** aufgebaut, sodass
 5. **Phase 4 — Validierung:**
    - Smoke-Test, Latenz-Messung, Portable-Build.
    - Größenvergleich: vorher ~180 MB → nachher ~15–30 MB.
+## Git
+
+- **Repo-Typ:** GitHub (public)
+- **Pfad / URL:** https://github.com/schirkan/meeting-notes-tauri
+- **Remote(s):** `origin` -> https://github.com/schirkan/meeting-notes-tauri.git
+- **Eingerichtet am:** 2026-06-25
+- **Standard-Branch:** `main`
+- **`.gitignore`-Status:** vorhanden (Rust `target/`, Node `node_modules/`/`dist/`, .NET `bin/`/`obj/`, Secrets in `config/`)
+
+## Workboard
+
+Kein Workboard-Board für dieses Projekt (Owner-Entscheidung 2026-11-11). Aufgaben und Akzeptanzstatus werden in `specs/T-*.md` geführt; eine Karten-Erzeugung im Workboard ist bewusst nicht aktiviert.
+
 ## Session Log
+- 2026-11-11, 14:30 UTC: Git-Sync mit `origin/main` (2 Commits: `6a83162`, `39b251e`). Review abgeschlossen; Befunde behoben: ungenutztes `hickory-resolver` aus `src-tauri/Cargo.toml` entfernt, `## Git`-Sektion ergänzt, veraltete Verweise in `specs/T-100-...md` korrigiert.
 - 25.06.2026, 22:30 UTC: Projektordner `meeting-notes-tauri` angelegt (`PROJECT.md`, `README.md`, `DECISIONS.md`, `SPEC-v0.1.md`, `specs/T-*.md`).
 - 25.06.2026, 22:30 UTC: Architekturziel dokumentiert (Tauri 2 + C#-Sidecar mit Azure Speech SDK in NuGet-Form).
 - 25.06.2026, 22:30 UTC: Migration in 5 Phasen geplant; Phase 0 (Doku) abgeschlossen, Phase 1 ff. warten auf Nutzer-Freigabe.

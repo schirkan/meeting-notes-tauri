@@ -13,12 +13,12 @@ Umsetzbaren technischen Rahmen für die Tauri-Variante von Meeting Notes festzie
 - [ ] Projektstruktur für `src/` (Renderer), `src-tauri/` (Rust-Main), `sidecar/` (C#) ist dokumentiert und im Repo angelegt.
 - [ ] Tauri-IPC-Vertrag ist versioniert und für Renderer + Rust-Main eindeutig.
 - [ ] Konfigurationsquellen und Persistenzpfad sind festgelegt.
-- [ ] Migrationsplan aus `PROJECT.md` ist mit Subtasks verlinkt.
+- [ ] Migrationsplan aus `AGENTS.md` ist mit Subtasks verlinkt.
 
 ## Approach
 - Subtasks T-101 bis T-104 zuerst abschließen.
 - Bestehende Strukturen aus `../meeting-notes/` als Vorlage verwenden, nur dort ändern, wo es die Tauri-Architektur erzwingt.
-- Offene Architekturfragen in `SPEC-v0.1.md` und `DECISIONS.md` synchron halten.
+- Offene Architekturfragen in `SPEC.md` und `DECISIONS.md` synchron halten.
 
 ## Log
 - 2026-06-25: Spec angelegt.
