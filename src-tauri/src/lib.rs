@@ -71,7 +71,7 @@ pub fn run() {
       commands::test_azure_connectivity,
     ])
     .build(tauri::generate_context!())
-    .expect("error while running tauri application")
+    .expect("error while running Meeting Notes")
     .run(|app_handle, event| match event {
       RunEvent::ExitRequested { .. } | RunEvent::Exit => {
         let cache = app_handle.state::<SidecarCache>();
