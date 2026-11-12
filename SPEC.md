@@ -1,9 +1,9 @@
 # Spezifikation v0.1 — Meeting Notes
 
-Stand: 09.11.2026
-Status: Implementierungsstand fortgeschrieben; reale Azure-/Corporate-Netz-, Latenz- und Clean-Machine-Akzeptanz offen.
+Stand: 12.11.2026
+Status: Implementierungsstand fortgeschrieben; Corporate-Netz-/Proxy-Akzeptanz am 2026-11-12 erfolgreich. Offen bleiben Latenz- und Clean-Machine-Akzeptanz.
 
-Lokaler Stand: aktueller Portable-Build 20.79 MB (27 Dateien, 26 geprüfte Hashes), einschließlich der neuen unabhängigen Mic-/Speaker-Diarization; Build-Smoke inklusive Sidecar-Geräteabfrage erfolgreich. Dafür sind TypeScript, 23 Unit-Tests, drei Rust-Tests und 334 C#-Assertions erfolgreich; neue UI-Szenarien wurden im integrierten Browser mit gemockter Bridge geprüft. Der aktuelle CLI-Lauf der 18 UI-Tests scheitert vor den Assertions am headless-Edge-Start (Exit 21). Frühere Settings-/Diagnose-UI-Prüfungen und native Negativdiagnose bleiben dokumentiert. Nicht jede ursprüngliche Audio-/Protokoll-Anforderung ist als abgenommen bestätigt; Einzelstatus siehe [Specs](./specs/).
+Lokaler Stand: aktueller Portable-Build 20.94 MB (26 Dateien, 25 geprüfte Hashes) mit der EXE `meeting-notes.exe`, dem gemeinsamen Config-Template und der unabhängigen Mic-/Speaker-Diarization; Build-Smoke inklusive Sidecar-Geräteabfrage erfolgreich. Dafür sind TypeScript, 46 Node-Tests, 15 Rust-Tests und 334 C#-Assertions erfolgreich; die 18 UI-Tests laufen im CLI-Browserlauf grün. Nicht jede ursprüngliche Audio-/Protokoll-Anforderung ist als abgenommen bestätigt; Einzelstatus siehe [Specs](./specs/).
 
 Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1.md` (Electron-Projekt, unveränderte Referenz). Architekturziel: Tauri 2 + React + C#-Sidecar (mit Azure Speech SDK in NuGet-Form). Die Anwendung selbst heißt *Meeting Notes*; „Tauri" ist die Container-Technik, nicht Teil des Produktnamens.
 
@@ -108,9 +108,9 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - **Versionierung:** `protocol_version` im ersten Handshake-Objekt auf stdout (siehe `specs/T-201`).
 
 ## 6.4 Bekannte Netzwerk-Einschränkungen
-- Proxy-Probleme mit dem nativen Node-Speech-Pfad sind aus der Electron-Referenz übernommen. Ob dasselbe Verhalten im C#-Pfad auftritt, ist **nicht bestätigt**; `SpeechConfig.SetProxy()` ist implementiert, Erfolg im Firmenproxy noch offen.
+- Proxy-Probleme mit dem nativen Node-Speech-Pfad sind aus der Electron-Referenz übernommen. Im C#-Pfad treten sie **nicht** auf: `SpeechConfig.SetProxy()` funktioniert nativ, am 2026-11-12 im Firmennetz erfolgreich bestätigt (HTTPS **und** native Speech/WSS).
 - HTTPS-Erreichbarkeit bei ignorierten Zertifikaten beweist weder vertrauenswürdiges TLS noch native Speech/WSS-Funktion. Bei TLS-Inspection können Unternehmens-Root-CA und Allowlisting erforderlich sein.
-- Corporate-Netzvalidierung und gegebenenfalls Entscheidung über eigenen WSS-Transport siehe [T-306](./specs/T-306-proxy-aware-azure-transport.md) und [T-505](./specs/T-505-proxy-aware-azure-transport.md). Eigener WSS-Client ist nicht implementiert.
+- Die Corporate-Netzvalidierung ist abgeschlossen (2026-11-12, siehe [T-306](./specs/T-306-proxy-aware-azure-transport.md) und [T-505](./specs/T-505-proxy-aware-azure-transport.md)). Ein eigener WSS-Client ist nicht implementiert und nicht mehr erforderlich.
 
 ## 7. Export
 - Automatischer Dateiexport als Markdown mit YAML-Frontmatter (siehe [T-506](./specs/T-506-transkript-markdown-export-und-frontmatter.md)); kein Export in weitere Formate.
@@ -164,10 +164,10 @@ Die MVPs des Electron-Projekts bleiben die funktionale Grundlage; umgesetzt wird
 ### MVP 3 (Tauri)
 - Audio-Transport-Härtungen (1:1 aus `meeting-notes` Audit-Block).
 - **Verbindung testen**-Button + Diagnose-Modul.
-- Proxy-Workaround (T-505) je nach Entscheidung.
+- Proxy-Workaround (T-505): **nicht erforderlich** — die native Proxy-Unterstützung funktioniert (2026-11-12 bestätigt).
 
 ## 11. Offene Entscheidungen und Akzeptanz
-1. [T-505](./specs/T-505-proxy-aware-azure-transport.md): Erst nach echtem Firmenproxy-/C#-WSS-Test gegebenenfalls über Workaround entscheiden.
+1. [T-505](./specs/T-505-proxy-aware-azure-transport.md): abgeschlossen — der Firmenproxy-/C#-WSS-Test war am 2026-11-12 erfolgreich, ein Workaround entfällt.
 2. Reale Aufnahme/Latenz und Clean-Machine-Deployment sowie aktuelle Installer-Parität prüfen ([T-500](./specs/T-500-qualitaetssicherung-und-akzeptanztests.md)).
 3. Historisch offene Sidecar-Benennung: aktuell `MeetingNotes.Sidecar.exe`; keine Umbenennung in den heutigen Änderungen.
 

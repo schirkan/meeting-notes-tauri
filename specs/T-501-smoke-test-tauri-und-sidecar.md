@@ -21,9 +21,9 @@ Smoke-Test, der die gesamte Tauri-Variante inkl. Sidecar-Spawn und Speech-Pipeli
 - [ ] Voller End-to-End-Test mit WebDriver + App-Start + `start_recording()`/Event-Wait — **offen**: WebDriver-Setup für Tauri 2 ist aufwendig; die headless Smoke-Stufen 1–5 decken die kritischen Artefakt-Invarianten ab.
 
 ## Zusätzliche lokale Validierung (2026-11-09)
-- `npm run test:smoke` nach letztem Portable-Rebuild erfolgreich, alle **26** SHA256-Summen einschließlich beider Config-Templates stimmen.
+- `npm run test:smoke` nach letztem Portable-Rebuild erfolgreich, alle **25** SHA256-Summen (1 App-EXE + 23 Sidecar-Dateien + 1 Config-Template) stimmen.
 - Native WebView2-Prüfung mit temporärer Portable-Kopie und absichtlich nicht erreichbarem Loopback-Endpoint/-Proxy: aus fremdem Arbeitsverzeichnis gestartet, relative Config geladen, detaillierte HTTPS- und beide Speech/WSS-Fehler im separaten Dialog sichtbar.
-- Dieser CDP-/Playwright-Test wurde ad hoc durchgeführt und ist kein zusätzliches dauerhaftes Smoke-Skript. Er ersetzt weder Aufnahme-End-to-End noch positiven Corporate-Proxy-/Azure-Test oder Clean-Machine-Deployment.
+- Dieser CDP-/Playwright-Test wurde ad hoc durchgeführt und ist kein zusätzliches dauerhaftes Smoke-Skript. Er ersetzt weder Aufnahme-End-to-End noch Clean-Machine-Deployment. Der positive Corporate-Proxy-/Azure-Test wurde am 2026-11-12 separat im Firmennetz geführt.
 - [Browser-UI-Tests](../tests/startup-ui.test.mjs) (12) prüfen die UI mit Bridge-Mocks; native Erreichbarkeit ist damit nicht nachgewiesen.
 
 ## Approach

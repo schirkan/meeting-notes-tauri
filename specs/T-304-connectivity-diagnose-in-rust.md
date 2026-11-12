@@ -25,9 +25,10 @@ Proxy-aware DNS-/TCP-/HTTPS-Diagnose und getrennte native Speech/WSS-Validierung
 - Native Diagnose: [sidecar.rs](../src-tauri/src/sidecar.rs) begrenzt den Diagnoseprozess auf 45 s und beendet ihn anschließend. Dies ist kein separater Timeout für jeden UI-Schritt.
 - **TLS-Grenze:** Der HTTPS-Zertifikatsbypass ist unsicher und kann den Speech-Key einem nicht vertrauenswürdigen Proxy offenlegen. Er gilt ausschließlich für die HTTPS-Diagnose. Native Windows-Speech-SDK-Zertifikatsprüfung bleibt aktiv; siehe [T-306](./T-306-proxy-aware-azure-transport.md).
 - [T-403](./T-403-settings-dialog-mit-verbindung-testen-button.md) definiert den separaten Ergebnisdialog. Alle Schritte werden nach Abschluss angezeigt, nicht live einzeln gestreamt.
-- Positive Verbindung im realen Corporate-Netz bleibt separat zu validieren ([T-505](./T-505-proxy-aware-azure-transport.md)).
+- Die Verbindung im realen Corporate-Netz wurde am 2026-11-12 validiert ([T-505](./T-505-proxy-aware-azure-transport.md)): HTTPS **und** native Speech/WSS erfolgreich über den konfigurierten CONNECT-Proxy.
 
 ## Log
 - 2026-06-25: Spec angelegt.
 - 2026-06-26: hickory-API-Drift korrigiert (`TokioResolver::build` → `TokioAsyncResolver::tokio`, `use url::Url` raus, `format!`-Borrow-Lifetime-Fix in `probe_url_from_endpoint`).
 - 2026-11-09: Expliziten Proxy, System-DNS ohne externen Fallback, getrennte HTTPS-/Speech-WSS-Ergebnisse, TLS-Grenzen und detaillierte Fehler dokumentiert. Lokaler nativer Negativtest erfolgreich; Firmenproxy/Azure noch nicht live validiert.
+- 2026-11-12: **Im Firmennetz erfolgreich validiert** — HTTPS- und beide nativen Speech-Ergebnisse positiv über den CONNECT-Proxy.

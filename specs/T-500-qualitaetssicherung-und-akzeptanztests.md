@@ -20,7 +20,8 @@ Vollständige QA-Strecke für die Tauri-Variante: Smoke-Test, Latency-Messung, D
 - [x] 12 Browser-UI-Regressionstests: Startup bei fehlender/ungültiger Config, Bottom-Toast ohne Layout-Verschiebung, drei responsive Settings-Bereiche, zwei Footer-Pfade, Proxy-Save-/Test-Payloads und detaillierter Diagnose-Dialog einschließlich Schließen/Wiederöffnen.
 - [x] TypeScript-Prüfung und drei fokussierte Rust-Tests für relative Config-Pfade und beide serialisierten Pfade erfolgreich.
 - [x] Native lokale Prüfung: Release-F12, Laden/Speichern neben der EXE bei fremdem Arbeitsverzeichnis sowie kontrollierte HTTPS-/Speech-Fehler im separaten Dialog. Kein echter Azure-Erfolg durch den Loopback-Negativtest behauptet.
-- [ ] Erfolgreiche Aufnahme, End-to-End-Latenz und positiver Corporate-Proxy-/Speech-Test mit echten Zugangsdaten.
+- [x] Positiver Corporate-Proxy-/Speech-Test mit echten Zugangsdaten — am 2026-11-12 im Firmennetz erfolgreich (HTTPS **und** native Speech/WSS).
+- [ ] Erfolgreiche Aufnahme und End-to-End-Latenz (< 5 s) mit echten Zugangsdaten — weiterhin offen (siehe [T-502](./T-502-latenz-messung.md)).
 - [ ] Aktueller Portable-Build auf sauberem Windows-11-Zielsystem geprüft.
 
 ## Approach
@@ -30,3 +31,4 @@ Vollständige QA-Strecke für die Tauri-Variante: Smoke-Test, Latency-Messung, D
 ## Log
 - 2026-06-25: Spec angelegt.
 - 2026-11-09: Aktuelle UI-/Config-/Diagnose-Validierung und Portable-Messwerte dokumentiert; reale Netz-, Aufnahme-, Latenz- und Clean-Machine-Tests ausdrücklich offen gehalten.
+- 2026-11-12: Corporate-Proxy-/Azure-Test im Firmennetz erfolgreich — Netz-Akzeptanz abgeschlossen, kein Proxy-Workaround nötig. Aufnahme-Latenz und Clean-Machine-Deployment bleiben offen.

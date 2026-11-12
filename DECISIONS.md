@@ -239,6 +239,8 @@ Architekturentscheidungen für die Windows-Variante (Tauri-Container). Wird fort
 
 **Fortschreibung 2026-11-09:** `SetProxy()` und native Diagnosesitzungen sind implementiert; erfolgreiche Verbindung im Corporate-Netz steht aus. Ein eigenes WSS-Protokoll ist weder implementiert noch als nötig/zuverlässig bestätigt. T-505 bleibt die bedingte Entscheidung nach dem echten Netztest.
 
+**Fortschreibung 2026-11-12:** Der Netztest ist erfolgreich — `SetProxy()` funktioniert nativ für den WSS-Connect, HTTPS **und** beide nativen Speech-Sitzungen erreichen Azure über den konfigurierten CONNECT-Proxy. Der aus dem Electron-Projekt übernommene Proxy-Befund tritt im C#-Pfad nicht auf. **Kein Workaround erforderlich**, kein eigener WSS-Client. T-306 und T-505 sind abgeschlossen; die Diagnose-Funktion aus T-304 bleibt als Hilfskommunikation bestehen.
+
 ---
 
 ## AD-012 · Expliziter Proxy, getrennte Transportdiagnose und relative Config (2026-11-09)
@@ -256,7 +258,7 @@ Architekturentscheidungen für die Windows-Variante (Tauri-Container). Wird fort
 
 **Fortschreibung 2026-11-11:** Beide Dateien sind zu **einer** Datei `meeting-notes.config.json` zusammengeführt (Abschnitte `azure` und `user`), die direkt neben der EXE liegt. Das Speichern eines Abschnitts ersetzt nur diesen; der andere bleibt erhalten. Details siehe [T-103](./specs/T-103-konfiguration-azure-und-user-settings.md), [T-305](./specs/T-305-settings-persistenz-im-tauri-main.md) und [T-506](./specs/T-506-transkript-markdown-export-und-frontmatter.md).
 
-**Validierung:** 12 Browser-UI-Regressionstests, fokussierte TypeScript-/Rust-Prüfungen, Portable-Smoke und nativer lokaler Negativtest erfolgreich. Positiver Corporate-Proxy-/Azure-Test bleibt offen; eigener WSS-Transport nicht implementiert. Siehe [T-304](./specs/T-304-connectivity-diagnose-in-rust.md), [T-306](./specs/T-306-proxy-aware-azure-transport.md) und [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md).
+**Validierung:** 12 Browser-UI-Regressionstests, fokussierte TypeScript-/Rust-Prüfungen, Portable-Smoke und nativer lokaler Negativtest erfolgreich. Der positive Corporate-Proxy-/Azure-Test war am 2026-11-12 im Firmennetz erfolgreich; ein eigener WSS-Transport ist weder implementiert noch erforderlich. Siehe [T-304](./specs/T-304-connectivity-diagnose-in-rust.md), [T-306](./specs/T-306-proxy-aware-azure-transport.md) und [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md).
 
 ---
 

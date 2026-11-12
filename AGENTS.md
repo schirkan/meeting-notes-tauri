@@ -11,7 +11,9 @@
 - 2026-11-09: **Implementierung vorhanden, lokal gebaut und teilweise validiert.** Portable: 20.79 MB gesamt, 27 Dateien/26 geprüfte Hashes. Tauri-Haupt-EXE benötigt den externen Sidecar-Ordner mit DLLs, .NET 8 Runtime und WebView2.
 - 2026-11-09: Settings mit Allgemein/Azure-Konfiguration/Proxy, Azure-Testbutton und beiden Config-Pfaden im Footer. Release liest/schreibt `config/` neben der EXE, Dev im Repository; kein AppData-Fallback. Fehlende/ungültige Azure-Konfiguration öffnet Settings automatisch mit Bottom-Toast. F12-DevTools funktionieren auch im Release.
 - 2026-11-09: HTTPS-Diagnose nutzt expliziten CONNECT-Proxy und ignoriert Zertifikatsprüfungen bewusst nur dort (unsicher). Separate native Speech/WSS-Diagnose prüft Recognizer/Transcriber ohne Capture; native Zertifikatsprüfung bleibt aktiv. Credentials werden prozesslokal per Env übergeben. Separater Dialog zeigt Schritte erst nach Abschluss und bleibt wiederöffnbar.
-- 2026-11-09: 12 UI-Regressionstests, fokussierte TypeScript-/Rust-Prüfungen, Build-Smoke und native lokale Negativdiagnose erfolgreich. **Offen:** positiver Firmenproxy-/Azure-Test, Aufnahme-Latenz, Clean-Machine-Deployment und aktuelle Installer-Parität. Specs unterscheiden `implemented`, `partial` und offene Akzeptanz; ursprüngliche Draft-Notizen oben sind historisch.
+- 2026-11-09: 12 UI-Regressionstests, fokussierte TypeScript-/Rust-Prüfungen, Build-Smoke und native lokale Negativdiagnose erfolgreich. **Offen:** Aufnahme-Latenz, Clean-Machine-Deployment und aktuelle Installer-Parität. Specs unterscheiden `implemented`, `partial` und offene Akzeptanz; ursprüngliche Draft-Notizen oben sind historisch.
+- 2026-11-12: **Proxy-Test im Firmennetz erfolgreich.** `SpeechConfig.SetProxy()` funktioniert nativ für den WSS-Connect; HTTPS und beide nativen Speech-Sitzungen erreichen Azure über den konfigurierten CONNECT-Proxy. Der aus `meeting-notes` (Electron) übernommene Proxy-Befund tritt im C#-Pfad **nicht** auf — kein Workaround nötig, T-306/T-505 auf `implemented`.
+- 2026-11-12: Portable-Build mit umbenannter EXE neu erzeugt: `meeting-notes.exe` (14.18 MB), Sidecar 6.76 MB, gesamt **20.94 MB**, 26 Dateien, **25/25** SHA256-Summen geprüft (`npm run test:smoke`). Alle `meeting-notes-tauri`-Artefakte entfernt.
 - 2026-11-11: Git-Sync mit `origin/main` abgeschlossen (2 Commits übernommen, Stand `39b251e`). Review der eingetroffenen Änderungen: 41 Node-Tests, 12 Rust-Tests und beide .NET-Builds grün. Ungenutzte Rust-Abhängigkeit entfernt, `## Git`-Sektion ergänzt, veraltete Spec-Verweise korrigiert. Repo-Setup siehe `## Git`.
 - 2026-11-11: **Produktname bereinigt, MIT-Lizenz, eine Konfigurationsdatei, Markdown-Export.** Das Wort „Tauri" ist aus dem UI entfernt (Fenstertitel, HTML-Titel, EXE-Name `meeting-notes.exe`, Product-Name, Identifier, Paketname). Die zwei Config-Dateien sind zu **einer** Datei `meeting-notes.config.json` direkt neben der EXE zusammengeführt; der `config/`-Ordner entfällt. Neu: automatischer Transkript-Export als Markdown mit YAML-Frontmatter (optionaler Pfad, Standard Anwendungsverzeichnis); Clipboard-Kopie und Datei teilen denselben Builder. `LICENSE` (MIT, Copyright Martin Pietschmann) ergänzt. Spec: [T-506](./specs/T-506-transkript-markdown-export-und-frontmatter.md).
 
@@ -111,7 +113,7 @@ Das unter `projects/meeting-notes/AGENTS.md → Offene Probleme` dokumentierte P
 - Workaround-Plan (Variante 3: Eigenbau eines WSS-Clients) wird in `specs/T-505` mit C#-Code-Skeleton skizziert.
 
 ### Bekannte Nebensymptome (aus `meeting-notes` übernommen)
-- DNS-Filterung auf Custom-Endpoints in Corporate-Netzen.
+- DNS-Filterung auf Custom-Endpoints in Corporate-Netzen — im C#-Pfad nicht reproduziert (Proxy-Test am 2026-11-12 erfolgreich, siehe T-306/T-505).
 - `https-proxy-agent` als möglicher Ersatz evaluiert, nicht eingebaut.
 
 ### Anbieter-Alternativen evaluiert (OpenAI) — nicht verfolgt (2026-06-27)

@@ -4,7 +4,7 @@ Windows-Desktop-App zur strukturierten Erfassung von Meeting-Transkripten (**Tau
 
 Dieses Projekt ist die **Tauri-Migration** des bestehenden Electron-Projekts `projects/meeting-notes`, das als Referenz unverändert bleibt. Architektur und aktueller Funktionsumfang siehe [SPEC.md](./SPEC.md) und [DECISIONS.md](./DECISIONS.md).
 
-> **Stand 2026-11-11:** Implementierung und lokaler Portable-Build vorhanden. Settings-/Diagnose-Regressionen und Build-Smoke sind geprüft; erfolgreicher Corporate-Proxy-/Azure-Betrieb, Aufnahme-Latenz und Clean-Machine-Deployment bleiben offen. Die [Specs](./specs/) unterscheiden implementierte Funktionen von ausstehenden Akzeptanztests.
+> **Stand 2026-11-12:** Implementierung und lokaler Portable-Build vorhanden. Settings-/Diagnose-Regressionen und Build-Smoke sind geprüft; der Corporate-Proxy-/Azure-Test war am 2026-11-12 im Firmennetz erfolgreich (HTTPS und native Speech/WSS). **Offen:** Aufnahme-Latenz und Clean-Machine-Deployment. Die [Specs](./specs/) unterscheiden implementierte Funktionen von ausstehenden Akzeptanztests.
 >
 > **Änderung 2026-11-11:** Eine gemeinsame Konfigurationsdatei `meeting-notes.config.json` direkt neben der EXE, MIT-Lizenz und automatischer Transkript-Export als Markdown mit Frontmatter. Siehe [T-506](./specs/T-506-transkript-markdown-export-und-frontmatter.md).
 
@@ -88,14 +88,14 @@ npm run test:smoke
 
 **Den gesamten Portable-Ordner verteilen.** Sidecar-EXE und alle verwalteten/nativen DLLs liegen extern in `sidecar/`, nicht eingebettet in `meeting-notes.exe`. .NET 8 Runtime (win-x64) und WebView2 müssen auf dem Zielsystem vorhanden sein.
 
-Letzter verifizierter Portable-Build (2026-11-09): **20.79 MB gesamt**, davon Haupt-EXE 14.03 MB und Sidecar 6.76 MB; 27 Dateien einschließlich 2 Templates und SHA256SUMS, alle 26 Hashes geprüft. Seit 2026-11-11 heißt die EXE `meeting-notes.exe` und es gibt ein Config-Template statt zwei; die Größenangaben beziehen sich noch auf den Stand vom 2026-11-09. 12 UI-Regressionstests sowie fokussierte TypeScript-/Rust-Prüfungen erfolgreich. Native lokale Tests bestätigen F12, relative Config-Pfade und detaillierte negative Transportdiagnosen; kein positiver Azure-/Firmenproxy- oder Clean-Machine-Nachweis. MSI/NSIS wurden heute nicht neu gebaut.
+Letzter verifizierter Portable-Build (2026-11-12): **20.94 MB gesamt**, davon Haupt-EXE `meeting-notes.exe` 14.18 MB und Sidecar 6.76 MB; 26 Dateien einschließlich 1 Config-Template und SHA256SUMS, alle 25 Hashes geprüft (`npm run test:smoke`: 25/25). 46 Node-Tests, 15 Rust-Tests sowie fokussierte TypeScript-/Rust-Prüfungen erfolgreich. Native lokale Tests bestätigen F12, relative Config-Pfade und detaillierte negative Transportdiagnosen; der positive Azure-/Firmenproxy-Nachweis erfolgte am 2026-11-12 separat (siehe [T-505](./specs/T-505-proxy-aware-azure-transport.md)). Kein Clean-Machine-Nachweis. MSI/NSIS wurden nicht neu gebaut.
 
 ## Lizenz
 
 MIT — siehe [LICENSE](./LICENSE).
 
 ## Bekannte Einschränkungen
-- In restriktiven Netzwerkumgebungen mit erzwungenem HTTP-Proxy: native Azure-Speech-SDK (auch in der C#-Variante) muss separat validiert werden. Siehe `specs/T-505-proxy-aware-azure-transport.md`.
+- Der native Azure-Speech-SDK funktioniert auch in restriktiven Netzwerkumgebungen mit erzwungenem HTTP-Proxy: am 2026-11-12 im Firmennetz erfolgreich validiert. Siehe `specs/T-505-proxy-aware-azure-transport.md`.
 - Mobile-Build (iOS/Android) ist nicht im Scope.
 
 ## Querverweise
@@ -105,4 +105,4 @@ MIT — siehe [LICENSE](./LICENSE).
 - Tasks und Akzeptanzstatus: [specs/](./specs/)
 - Settings-/Diagnose-UX: [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md)
 - Transportdiagnose: [T-304](./specs/T-304-connectivity-diagnose-in-rust.md)
-- Offene Corporate-Netzvalidierung: [T-505](./specs/T-505-proxy-aware-azure-transport.md)
+- Corporate-Netzvalidierung (erfolgreich, 2026-11-12): [T-505](./specs/T-505-proxy-aware-azure-transport.md)
