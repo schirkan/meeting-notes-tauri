@@ -6,6 +6,8 @@ Dieses Projekt ist die **Tauri-Migration** des bestehenden Electron-Projekts `pr
 
 > **Aenderung 2026-11-13:** Pause und Stop haben klare Semantik. **Pause** haelt die Azure-Sitzung am Leben, speist aber kein Audio zu — der pausierte Abschnitt erscheint nicht im Transkript, und die Sprecher-Zuordnung bleibt gueltig. **Stop** beendet die Sitzung endgueltig; der naechste Start beginnt ein neues Transkript mit frischer Sprecherbasis. Die Sprecher-IDs sind jetzt sessionsicher zugeordnet. Siehe [T-507](./specs/T-507-pause-stop-und-sitzungsgebundene-sprecherzuordnung.md).
 >
+> **Stand 2026-11-13:** Alle Referenzen und Pakete aktualisiert (TypeScript 7, .NET 10, NAudio 3.3, Speech SDK 1.53, reqwest 0.13). Das Zielsystem benütigt jetzt **.NET 10 Runtime** statt .NET 8. Siehe [T-508](./specs/T-508-abhaengigkeiten-laufzeit-und-referenzen-aktualisieren.md).
+>
 > **Stand 2026-11-12:** Implementierung und lokaler Portable-Build vorhanden. Settings-/Diagnose-Regressionen und Build-Smoke sind geprüft; der Corporate-Proxy-/Azure-Test war am 2026-11-12 im Firmennetz erfolgreich (HTTPS und native Speech/WSS). **Offen:** Aufnahme-Latenz und Clean-Machine-Deployment. Die [Specs](./specs/) unterscheiden implementierte Funktionen von ausstehenden Akzeptanztests.
 >
 > **Änderung 2026-11-11:** Eine gemeinsame Konfigurationsdatei `meeting-notes.config.json` direkt neben der EXE, MIT-Lizenz und automatischer Transkript-Export als Markdown mit Frontmatter. Siehe [T-506](./specs/T-506-transkript-markdown-export-und-frontmatter.md).
@@ -28,8 +30,8 @@ Dieses Projekt ist die **Tauri-Migration** des bestehenden Electron-Projekts `pr
 ## Voraussetzungen
 - Node gemäß `package.json`: ≥22.12.0 <23 oder ≥24.0.0 <24.16.0 (Empfehlung: 22 LTS)
 - Rust Toolchain (für Tauri 2)
-- .NET 8 SDK (lokal für Sidecar-Build)
-- .NET 8 Runtime (auf Zielsystemen)
+- .NET 10 SDK (lokal für Sidecar-Build)
+- .NET 10 Runtime (auf Zielsystemen; .NET 8 wird seit dem 10.11.2026 nicht mehr unterstützt)
 - Windows 11 mit WebView2 (auf Zielsystemen)
 
 ## Setup
@@ -51,7 +53,7 @@ Beim Start mit fehlender, nicht lesbarer oder unvollständiger Azure-Konfigurati
 - **Die HTTPS-Diagnose ignoriert Zertifikatsprüfungen immer (unsicher).** Ein nicht vertrauenswürdiger Proxy kann dadurch den Speech-Key abfangen. Redirects werden nicht verfolgt. Dieses Verhalten ist nur für die Diagnose vorgesehen und kein Nachweis vertrauenswürdiger TLS-Verbindungen.
 - Ein separater Sidecar-Diagnoseprozess öffnet native Speech-SDK-Sitzungen für `SpeechRecognizer` und `ConversationTranscriber`, ohne Mikrofon oder Loopback aufzunehmen. Er verwendet dieselben Endpoint-/Proxy-Einstellungen wie die Aufnahme. HTTPS-Erreichbarkeit allein beweist weder gültige Azure-Zugangsdaten noch Speech/WSS-Erreichbarkeit.
 - Ein separater **Verbindungstest-Dialog** zeigt den laufenden Test sowie anschließend alle Diagnose-Schritte mit Status und kopierbaren Fehlerdetails, HTTP-Status, Endpoint und Dauer. HTTPS und Speech/WSS werden getrennt ausgewiesen; insgesamt erfolgreich ist der Test nur, wenn beide funktionieren. Auch als Strings oder Objekte zurückgewiesene IPC-Aufrufe werden mit ihren Details angezeigt, nicht nur als generischer Fehler. Der Dialog lässt sich schließen und aus den Einstellungen wieder öffnen, ohne den laufenden Test abzubrechen. Ein HTTP 401/403 bestätigt lediglich HTTP-Erreichbarkeit, nicht erfolgreiche Speech-Authentifizierung.
-- Speech/WSS behält unter Windows die native Zertifikatsprüfung bei: Für das verwendete .NET Speech-SDK 1.44 wurde kein offiziell dokumentierter Abschaltmechanismus gefunden. OpenSSL-/CRL-Schalter für Linux werden nicht als Windows-Zertifikatsbypass verwendet. Bei TLS-Inspection müssen die Firmenzertifikate daher weiterhin für den nativen SDK-Transport vertrauenswürdig sein. Die WSS-Proben erwarten sowohl `Connected` als auch `SessionStarted`; bloßes lokales Starten reicht nicht für ein positives Ergebnis.
+- Speech/WSS behält unter Windows die native Zertifikatsprüfung bei: Für das verwendete .NET Speech-SDK 1.53 wurde kein offiziell dokumentierter Abschaltmechanismus gefunden. OpenSSL-/CRL-Schalter für Linux werden nicht als Windows-Zertifikatsbypass verwendet. Bei TLS-Inspection müssen die Firmenzertifikate daher weiterhin für den nativen SDK-Transport vertrauenswürdig sein. Die WSS-Proben erwarten sowohl `Connected` als auch `SessionStarted`; bloßes lokales Starten reicht nicht für ein positives Ergebnis.
 - Der native Diagnoseprozess ist auf 45 Sekunden begrenzt; DNS-/TCP-/HTTPS-Proben haben jeweils 5 Sekunden Timeout. Dies ist keine garantierte 45-Sekunden-Obergrenze des gesamten UI-Aufrufs einschließlich Prozessstart. Einzelne Schritte erscheinen erst nach Abschluss, nicht live während der Prüfung. Der Test kann Azure-Verbindungen und gegebenenfalls Kosten verursachen, sendet aber keine aufgenommenen Audiodaten. Firmenproxy-Allowlisting, CONNECT-Unterstützung und Authentifizierung sind separat im Zielnetz zu prüfen.
 
 ### Benutzereinstellungen (optional)
@@ -88,9 +90,9 @@ npm run test:smoke
 ```
 `dist:portable` verpackt bereits gebaute Artefakte; es kompiliert keine aktualisierte EXE. Portable-Ausgabe: [dist/portable/](./dist/portable/). Installer entstehen separat durch `npm run tauri -- build`.
 
-**Den gesamten Portable-Ordner verteilen.** Sidecar-EXE und alle verwalteten/nativen DLLs liegen extern in `sidecar/`, nicht eingebettet in `meeting-notes.exe`. .NET 8 Runtime (win-x64) und WebView2 müssen auf dem Zielsystem vorhanden sein.
+**Den gesamten Portable-Ordner verteilen.** Sidecar-EXE und alle verwalteten/nativen DLLs liegen extern in `sidecar/`, nicht eingebettet in `meeting-notes.exe`. .NET 10 Runtime (win-x64) und WebView2 müssen auf dem Zielsystem vorhanden sein.
 
-Letzter verifizierter Portable-Build (2026-11-13): **20.96 MB gesamt**, davon Haupt-EXE `meeting-notes.exe` 14.19 MB und Sidecar 6.77 MB; 26 Dateien einschließlich 1 Config-Template und SHA256SUMS, alle 25 Hashes geprüft (`npm run test:smoke`: 25/25). 51 Node-Tests, 18 Rust-Tests, 467 C#-Assertions sowie fokussierte TypeScript-/Rust-Prüfungen erfolgreich. Native lokale Tests bestätigen F12, relative Config-Pfade und detaillierte negative Transportdiagnosen; der positive Azure-/Firmenproxy-Nachweis erfolgte am 2026-11-12 separat (siehe [T-505](./specs/T-505-proxy-aware-azure-transport.md)). Kein Clean-Machine-Nachweis. MSI/NSIS wurden nicht neu gebaut.
+Letzter verifizierter Portable-Build (2026-11-13): **23.50 MB gesamt**, davon Haupt-EXE `meeting-notes.exe` 15.44 MB und Sidecar 8.06 MB; 27 Dateien einschließlich 1 Config-Template und SHA256SUMS, alle 26 Hashes geprüft (`npm run test:smoke`: 26/26). 51 Node-Tests, 18 Rust-Tests, 467 C#-Assertions sowie fokussierte TypeScript-/Rust-Prüfungen erfolgreich. Native lokale Tests bestätigen F12, relative Config-Pfade und detaillierte negative Transportdiagnosen; der positive Azure-/Firmenproxy-Nachweis erfolgte am 2026-11-12 separat (siehe [T-505](./specs/T-505-proxy-aware-azure-transport.md)). Kein Clean-Machine-Nachweis. MSI/NSIS wurden nicht neu gebaut.
 
 ## Lizenz
 

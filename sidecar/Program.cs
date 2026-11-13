@@ -128,19 +128,32 @@ try
         return 22;
     }
 
-    var micBuffered = new BufferedWaveProvider(micDevice.AudioClient.MixFormat)
+    // NAudio 3.x: MMDevice.AudioClient ist obsolet, weil der Getter bei
+    // jedem Zugriff einen neuen Client erzeugt. CreateAudioClient() erzeugt
+    // den Client bewusst einmal; er bleibt fuer die Laufzeit der Aufnahme
+    // aktiv, damit das Mix-Format gueltig bleibt.
+    using var micMixClient = micDevice.CreateAudioClient();
+    using var speakerMixClient = speakerDevice.CreateAudioClient();
+    var micBuffered = new BufferedWaveProvider(micMixClient.MixFormat)
     {
         DiscardOnBufferOverflow = true,
         ReadFully = false
     };
-    var speakerBuffered = new BufferedWaveProvider(speakerDevice.AudioClient.MixFormat)
+    var speakerBuffered = new BufferedWaveProvider(speakerMixClient.MixFormat)
     {
         DiscardOnBufferOverflow = true,
         ReadFully = false
     };
 
+    // NAudio 3.x markiert WasapiCapture/WasapiLoopbackCapture als
+    // obsolet (Empfehlung: WasapiRecorderBuilder). Die Umstellung aendert
+    // das Aufnahmemodell (IAsyncEnumerable statt DataAvailable-Event) und
+    // damit das Verhalten der Aufnahme — sie ist ein eigener Schritt und
+    // nicht Teil dieser Paket-Aktualisierung (T-508).
+#pragma warning disable CS0618
     using var micCapture = new WasapiCapture(micDevice);
     using var speakerCapture = new WasapiLoopbackCapture(speakerDevice);
+#pragma warning restore CS0618
     using var micResampler = new MediaFoundationResampler(micBuffered, targetWaveFormat);
     using var speakerResampler = new MediaFoundationResampler(speakerBuffered, targetWaveFormat);
     micResampler.ResamplerQuality = 60;
@@ -333,7 +346,10 @@ static byte[] DrainResampled(IWaveProvider provider)
     using var output = new MemoryStream();
     while (true)
     {
-        var read = provider.Read(buffer, 0, buffer.Length);
+        // NAudio 3.x: IWaveProvider.Read ist span-basiert
+        // (Read(Span<byte>)); die byte[]-Ueberladung mit Offset und
+        // Count existiert nicht mehr.
+        var read = provider.Read(buffer.AsSpan());
         if (read <= 0) break;
         output.Write(buffer, 0, read);
         if (read < buffer.Length) break;

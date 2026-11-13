@@ -12,7 +12,7 @@ C#-Sidecar als framework-dependent EXE bauen und über Tauri-Ressourcenmechanism
 - [x] `src-tauri/build.rs` ruft `dotnet publish sidecar/MeetingNotes.Sidecar.csproj -c {Debug|Release} -r {RID} --self-contained false -o sidecar/publish/sidecar` automatisch auf — siehe `DECISIONS.md → AD-009`. Ein-Befehl-Workflow über `tauri build` reicht.
 - [x] Tauri-`tauri.conf.json` deklariert `bundle.resources` für `sidecar/publish/sidecar/*` (selektiv via Glob, Mapping auf `sidecar/` im Installer).
 - [x] Tauri-Main findet die Sidecar-EXE in Development (`dev`) und in Production (`production`) zuverlässig (`sidecar.rs::resolve_sidecar_path` mit CWD-/Resource-/EXE-Fallback).
-- [x] Auf Zielsystem ist nur .NET 8 Runtime erforderlich (kein SDK).
+- [x] Auf Zielsystem ist nur .NET 10 Runtime erforderlich (kein SDK).
 - [ ] EXE-Größe nach Publish: dokumentiert (Erwartung: ~25–35 MB inkl. Speech-Native-Binaries).
 
 ## Approach

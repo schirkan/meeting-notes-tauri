@@ -32,7 +32,10 @@ public sealed class AudioResampler : IDisposable
         using var output = new MemoryStream();
         while (true)
         {
-            var read = _resampler.Read(buffer, 0, buffer.Length);
+            // NAudio 3.x: MediaFoundationTransform liest span-basiert
+            // (IWaveProvider.Read(Span<byte>)); die alte byte[]-Ueberladung
+            // mit Offset/Count existiert nicht mehr.
+            var read = _resampler.Read(buffer.AsSpan());
             if (read <= 0) break;
             output.Write(buffer, 0, read);
             if (read < buffer.Length) break;

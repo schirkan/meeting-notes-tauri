@@ -6,10 +6,10 @@ Priorität: high
 Abhängigkeiten: T-203
 
 ## Goal
-NuGet-Paket `Microsoft.CognitiveServices.Speech` (1.44.x) zum Sidecar-Projekt hinzufügen und beide Recognizer (Mic + Speaker) konfigurieren.
+NuGet-Paket `Microsoft.CognitiveServices.Speech` (1.53.x) zum Sidecar-Projekt hinzufügen und beide Recognizer (Mic + Speaker) konfigurieren.
 
 ## Done When
-- [ ] `MeetingNotes.Sidecar.csproj` enthält `<PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.44.0" />`.
+- [ ] `MeetingNotes.Sidecar.csproj` enthält `<PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.53.0" />`.
 - [x] `AzureSpeechService.cs` kapselt beide Recognizer-Typen. Jede Quelle wählt unabhängig `ConversationTranscriber` bei aktivierter Sprechererkennung oder `SpeechRecognizer` bei deaktivierter Sprechererkennung; Mic und Speaker sind standardmäßig aktiviert (siehe [T-205](./T-205-continuous-lid-und-diarization-in-c-sharp.md)).
 - [ ] `PushAudioInputStream` wird aus der `AudioResampler`-Pipeline gefüttert (siehe `T-203`).
 - [ ] Recognizer-Events (`Recognizing`, `Recognized`, `Canceled`, `SessionStarted/Stopped`, `SpeechStart/EndDetected`) werden auf interne Event-Handler gemappt.

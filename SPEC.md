@@ -3,7 +3,7 @@
 Stand: 12.11.2026
 Status: Implementierungsstand fortgeschrieben; Corporate-Netz-/Proxy-Akzeptanz am 2026-11-12 erfolgreich. Offen bleiben Latenz- und Clean-Machine-Akzeptanz.
 
-Lokaler Stand: aktueller Portable-Build 20.96 MB (26 Dateien, 25 geprüfte Hashes) mit der EXE `meeting-notes.exe`, dem gemeinsamen Config-Template und der unabhängigen Mic-/Speaker-Diarization; Build-Smoke inklusive Sidecar-Geräteabfrage erfolgreich. Dafür sind TypeScript, 51 Node-Tests, 18 Rust-Tests und 467 C#-Assertions erfolgreich; die 20 UI-Tests laufen im CLI-Browserlauf grün. Nicht jede ursprüngliche Audio-/Protokoll-Anforderung ist als abgenommen bestätigt; Einzelstatus siehe [Specs](./specs/).
+Lokaler Stand: aktueller Portable-Build 23.50 MB (27 Dateien, 26 geprüfte Hashes) mit der EXE `meeting-notes.exe`, dem gemeinsamen Config-Template und der unabhängigen Mic-/Speaker-Diarization; Build-Smoke inklusive Sidecar-Geräteabfrage erfolgreich. Dafür sind TypeScript, 51 Node-Tests, 18 Rust-Tests und 467 C#-Assertions erfolgreich; die 20 UI-Tests laufen im CLI-Browserlauf grün. Nicht jede ursprüngliche Audio-/Protokoll-Anforderung ist als abgenommen bestätigt; Einzelstatus siehe [Specs](./specs/).
 
 Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1.md` (Electron-Projekt, unveränderte Referenz). Architekturziel: Tauri 2 + React + C#-Sidecar (mit Azure Speech SDK in NuGet-Form). Die Anwendung selbst heißt *Meeting Notes*; „Tauri" ist die Container-Technik, nicht Teil des Produktnamens.
 
@@ -38,11 +38,11 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 ## 3.1 Technische Architektur
 
 - **App-Container:** Tauri 2 (Rust). Verantwortlich für Fenster/WebView2-Lifecycle, Sidecar-Spawn, Settings-Persistenz, UI-Bridge.
-- **Backend:** C#/.NET 8 als Sidecar (`MeetingNotes.Sidecar.exe`, framework-dependent publiziert). Verantwortlich für Audio-Capture, Audio-Resampling, Azure-Speech-Transkription, Speaker-Diarization und Event-Streaming.
+- **Backend:** C#/.NET 10 als Sidecar (`MeetingNotes.Sidecar.exe`, framework-dependent publiziert). Verantwortlich für Audio-Capture, Audio-Resampling, Azure-Speech-Transkription, Speaker-Diarization und Event-Streaming.
 - **Frontend:** React 19 + TypeScript 6 + Vite 8 (im Tauri-Renderer-WebView2).
 - **IPC Sidecar ↔ App:** `stdin/stdout` über `tauri-plugin-shell` mit JSON-Lines (siehe `DECISIONS.md → AD-008`). Named Pipe entfällt.
 - **IPC App ↔ Renderer:** Tauri-`invoke()` für Commands + Tauri-`listen()` für Events (typed JSON).
-- **Distribution:** NSIS-/MSI-Installer oder gesamter Portable-Ordner. Sidecar-EXE und verwaltete/native DLLs werden extern ausgeliefert, nicht in die Haupt-EXE eingebettet. Zielsystem braucht .NET 8 Runtime (win-x64) und WebView2.
+- **Distribution:** NSIS-/MSI-Installer oder gesamter Portable-Ordner. Sidecar-EXE und verwaltete/native DLLs werden extern ausgeliefert, nicht in die Haupt-EXE eingebettet. Zielsystem braucht .NET 10 Runtime (win-x64) und WebView2.
 
 ## 4. Transkription
 - API: Azure Speech
@@ -84,7 +84,7 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - Sidecar erhält Speech-Key/Proxy-Zugangsdaten über prozesslokale Umgebungsvariablen, nicht Credential-CLI-Argumente. Host/Port/Endpoint/Region/Sprache sind nicht geheime CLI-Args.
 - **Verbindung testen** nutzt aktuelle, auch ungespeicherte Werte und Sitzungssprache. `test_azure_connectivity` führt parallel System-DNS/TCP/HTTPS in Rust und native Speech/WSS-Diagnose in einem separaten Sidecar ohne Audio-Capture aus.
 - HTTPS nutzt expliziten Proxy mit optionaler Basic-Authentifizierung, ansonsten `.no_proxy()`; kein öffentlicher DNS-Fallback. DNS/TCP prüfen den Proxy, sonst den Endpoint mit dessen Port oder 443. HTTPS-HEAD folgt keinen Redirects.
-- **HTTPS-Diagnose ignoriert Zertifikatsprüfungen immer (unsicher, Speech-Key-Abfangrisiko). Native Windows-Speech-SDK-Prüfung bleibt aktiv.** Kein offiziell dokumentierter .NET-Bypass für Speech SDK 1.44 gefunden.
+- **HTTPS-Diagnose ignoriert Zertifikatsprüfungen immer (unsicher, Speech-Key-Abfangrisiko). Native Windows-Speech-SDK-Prüfung bleibt aktiv.** Kein offiziell dokumentierter .NET-Bypass für Speech SDK 1.53 gefunden.
 - `httpsReachable` bedeutet HTTP-Antwort auch bei 401/403; `speechReachable` verlangt `Connected` und `SessionStarted` für Recognizer **und** Transcriber. `reachable` verlangt beide Transporte.
 - Diagnoseprozess: 45 s Grenze; DNS/TCP/HTTPS jeweils 5 s Timeout, keine garantierte 45-s-Obergrenze des vollständigen UI-Aufrufs. Native Proben können Azure-Kosten verursachen.
 - Ergebnis wird zurückgegeben und als `transcript:connectivity-result` emittiert; UI nutzt Return-Wert. Separater Dialog zeigt alle Status/Details erst nach Abschluss, einschließlich Validierungs-/IPC-Fehlern, nicht live gestreamte Einzelsteps. Siehe [T-304](./specs/T-304-connectivity-diagnose-in-rust.md).
@@ -123,13 +123,13 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 ## 8. Entwicklungsumgebung (Stabilitätsvorgabe)
 - Standard für lokale Entwicklung: Node 22 LTS ≥22.12.0; zulässige Versionen gemäß `package.json` (auch ≥24.0.0 <24.16.0).
 - Rust-Toolchain (stable, Edition 2021).
-- .NET 8 SDK (für Sidecar-Build) lokal.
+- .NET 10 SDK (für Sidecar-Build) lokal.
 - Tauri-CLI (2.x) als devDependency.
 - Native Entwicklung: `npm run tauri -- dev`; `npm run dev` startet nur Vite/Renderer. Build-/Test-Kommandos siehe [README.md](./README.md).
 
 ## 8.1 Sidecar-Deployment (Runtime-Anforderung)
-- Lokale Entwicklung/Build: .NET 8 SDK erforderlich, um das Sidecar zu veröffentlichen.
-- Zielsystem: .NET 8 Runtime (win-x64) ausreichend; SDK ist dort nicht erforderlich.
+- Lokale Entwicklung/Build: .NET 10 SDK erforderlich, um das Sidecar zu veröffentlichen.
+- Zielsystem: .NET 10 Runtime (win-x64) ausreichend; SDK ist dort nicht erforderlich.
 - Build-/Start-Flow:
   - Dev: `build.rs` publiziert Sidecar automatisch, danach Start durch Tauri.
   - Installer: `npm run tauri -- build` bündelt Sidecar-EXE **und DLLs** als externe Resources.

@@ -289,7 +289,7 @@ pub fn resolve_sidecar_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, S
         if candidate.exists() {
             return Ok(candidate);
         }
-        let candidate2 = cwd.join("..").join("sidecar").join("bin").join("Release").join("net8.0-windows").join(exe);
+        let candidate2 = cwd.join("..").join("sidecar").join("bin").join("Release").join("net10.0-windows").join(exe);
         if candidate2.exists() {
             return Ok(candidate2);
         }

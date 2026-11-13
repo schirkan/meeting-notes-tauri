@@ -15,6 +15,7 @@ namespace MeetingNotes.Sidecar;
 public abstract class AudioCaptureClient : IDisposable
 {
     private readonly MMDevice _device;
+    private readonly AudioClient? _mixClient;
     private IWaveIn? _capture;
 
     public BufferedWaveProvider BufferedProvider { get; }
@@ -23,7 +24,11 @@ public abstract class AudioCaptureClient : IDisposable
     protected AudioCaptureClient(MMDevice device)
     {
         _device = device;
-        BufferedProvider = new BufferedWaveProvider(device.AudioClient.MixFormat)
+        // NAudio 3.x: MMDevice.AudioClient ist obsolet (erzeugt bei jedem
+        // Zugriff einen neuen Client). CreateAudioClient() wird einmal
+        // aufgerufen und bis zum Dispose gehalten.
+        _mixClient = device.CreateAudioClient();
+        BufferedProvider = new BufferedWaveProvider(_mixClient.MixFormat)
         {
             DiscardOnBufferOverflow = true,
             ReadFully = false
@@ -57,5 +62,9 @@ public abstract class AudioCaptureClient : IDisposable
         _capture = null;
     }
 
-    public void Dispose() => Stop();
+    public void Dispose()
+    {
+        Stop();
+        _mixClient?.Dispose();
+    }
 }

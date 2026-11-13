@@ -19,7 +19,7 @@ Für die C#-Azure-Speech-SDK validieren, ob `SpeechConfig.SetProxy()` auf der C#
 - Rust übergibt Host/Port als nicht geheime CLI-Args; Speech-Key/Proxy-Authentifizierung über prozesslokale Umgebungsvariablen.
 - HTTPS-Diagnose nutzt einen expliziten HTTP-CONNECT-Proxy mit optionaler Basic-Authentifizierung; ohne Proxy sind automatische Umgebungsproxies deaktiviert.
 - Separate native Diagnose ohne Audio-Capture verlangt für **beide** Clients (`SpeechRecognizer`, `ConversationTranscriber`) `Connected` und `SessionStarted`. HTTPS-Erfolg bestätigt weder WSS noch Speech-Authentifizierung.
-- **TLS:** HTTPS-Diagnose ignoriert Zertifikatsprüfungen immer (unsicher, einschließlich Risiko für den Speech-Key). Im nativen Windows-Speech-SDK 1.44 bleiben sie aktiv; kein offiziell unterstützter .NET-Bypass wurde gefunden. Unternehmens-Root-CA/Allowlisting bleiben bei TLS-Inspection gegebenenfalls erforderlich.
+- **TLS:** HTTPS-Diagnose ignoriert Zertifikatsprüfungen immer (unsicher, einschließlich Risiko für den Speech-Key). Im nativen Windows-Speech-SDK 1.53 bleiben sie aktiv; kein offiziell unterstützter .NET-Bypass wurde gefunden. Unternehmens-Root-CA/Allowlisting bleiben bei TLS-Inspection gegebenenfalls erforderlich.
 - Lokal verifiziert: Payload-Weitergabe, Validierung/Redaktion, UI-Fehlerdetails und kontrollierter nativer Verbindungsfehler. **Im Firmennetz verifiziert (2026-11-12):** erfolgreiche Verbindung zu Azure über den konfigurierten HTTP-CONNECT-Proxy, HTTPS **und** native Speech/WSS-Sitzungen erfolgreich. Der aus `../meeting-notes` übernommene Proxy-Befund tritt im C#-Pfad damit nicht auf.
 
 ## Approach / Validierung

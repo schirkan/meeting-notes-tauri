@@ -102,7 +102,7 @@ Architekturentscheidungen für die Windows-Variante (Tauri-Container). Wird fort
 
 **Begründung:**
 - Kleinste Bundle-Größe (Sidecar-EXE ~30 MB inkl. Speech-Native-Binaries, statt ~80 MB self-contained).
-- Zielsystem-Voraussetzung bleibt einfach: .NET 8 Runtime.
+- Zielsystem-Voraussetzung bleibt einfach: .NET 10 Runtime.
 - Tauri-Resource-System ist gut dokumentiert und für genau diesen Use Case gedacht.
 
 **Mess-/Deploymentstand 2026-11-09:** Sidecar-Publish inklusive EXE/DLLs 6.76 MB; gesamte Portable-Distribution 20.79 MB (Haupt-EXE 14.03 MB). Sidecar-DLLs liegen extern, nicht eingebettet in der Tauri-EXE. Gesamten Portable-Ordner verteilen; .NET 8 Runtime (win-x64) und WebView2 bleiben Voraussetzungen. Frisches Zielsystem noch nicht geprüft.
@@ -250,7 +250,7 @@ Architekturentscheidungen für die Windows-Variante (Tauri-Container). Wird fort
 **Entscheidung:**
 - Rust lädt/speichert `config/azure.json` und `config/user-settings.json` neben der Release-EXE, im Dev-Build im Repository. Unabhängig vom Arbeitsverzeichnis, ohne AppData-Fallback/Migration. Beide Backend-Pfade werden im Settings-Footer angezeigt.
 - HTTPS-Diagnose: expliziter HTTP-CONNECT-Proxy mit optionaler Basic-Authentifizierung; ohne Proxy `.no_proxy()`. System-DNS/TCP prüfen Proxy oder direkten Endpoint, kein öffentlicher DNS-Fallback.
-- **HTTPS-Zertifikatsprüfung wird ausschließlich in der Diagnose immer ignoriert (bewusst unsicher).** Kein Redirect-Following. Native Windows-Speech-SDK-Zertifikatsprüfung bleibt aktiv: kein offiziell unterstützter .NET-Bypass für Speech SDK 1.44 gefunden.
+- **HTTPS-Zertifikatsprüfung wird ausschließlich in der Diagnose immer ignoriert (bewusst unsicher).** Kein Redirect-Following. Native Windows-Speech-SDK-Zertifikatsprüfung bleibt aktiv: kein offiziell unterstützter .NET-Bypass für Speech SDK 1.53 gefunden.
 - **Risiko:** Der HTTPS-Bypass kann den Speech-Key einem nicht vertrauenswürdigen Proxy offenlegen. Positives HTTPS ist keine Aussage zu TLS-Vertrauen, gültigem Key oder Speech/WSS. Bei TLS-Inspection gegebenenfalls Unternehmens-Root-CA/Allowlisting für den nativen Transport erforderlich.
 - Separate native Diagnose ohne Capture nutzt denselben `SpeechConfiguration`-Builder wie Aufnahme (`SetProxy`, Endpoint, Sprache, Continuous LID) und verlangt `Connected` plus `SessionStarted` für Recognizer und Transcriber. Credentials nur über child-lokale Env-Variablen, Host/Port über nicht geheime CLI-Args.
 - HTTPS und Speech werden parallel geprüft; Gesamterfolg verlangt beide. HTTP 401/403 zählt nur als HTTPS-Erreichbarkeit. DNS/TCP/HTTP jeweils 5 s Timeout; nativer Prozess maximal 45 s ab Spawn, keine garantierte Gesamt-UI-Zeitgrenze.

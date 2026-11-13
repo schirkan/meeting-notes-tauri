@@ -18,12 +18,12 @@ function isDirectory(path) {
 /**
  * Liest die aktiven Target-Frameworks aus dem Sidecar-csproj.
  * Unterstützt sowohl einzelne `<TargetFramework>` als auch Multi-Target
- * `<TargetFrameworks>` (Semikolon-getrennt). Fallback: ['net8.0-windows'].
+ * `<TargetFrameworks>` (Semikolon-getrennt). Fallback: ['net10.0-windows'].
  */
 function readActiveTargetFrameworks() {
   if (!existsSync(CSPROJ_PATH)) {
     console.warn(`Warnung: csproj nicht gefunden: ${CSPROJ_PATH}`)
-    return ['net8.0-windows']
+    return ['net10.0-windows']
   }
 
   const xml = readFileSync(CSPROJ_PATH, 'utf8')
@@ -37,7 +37,7 @@ function readActiveTargetFrameworks() {
     return multiMatch[1].split(';').map((value) => value.trim()).filter(Boolean)
   }
 
-  return ['net8.0-windows']
+  return ['net10.0-windows']
 }
 
 function listSubdirectories(path) {

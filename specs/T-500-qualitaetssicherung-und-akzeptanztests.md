@@ -14,7 +14,7 @@ Vollständige QA-Strecke für die Tauri-Variante: Smoke-Test, Latency-Messung, D
 - [ ] Latency-Messung dokumentiert < 5 s End-to-End (T-502) — **offen**: erfordert Live-Azure-Credentials + Audio-Input.
 - [x] MSI/NSIS-Builds wurden zuvor verifiziert (T-503); heutige Rebuilds verwenden `--no-bundle`. Aktuelle Installer-Parität ist dadurch nicht erneut nachgewiesen.
 - [x] Aktueller Portable-Build ist lokal lauffähig (T-504; kein Clean-Machine-Nachweis).
-- [x] **Gesamte Portable-Distribution** ist ≤ 30 MB: Stand 2026-11-13 Haupt-EXE 14.19 MB, Sidecar 6.77 MB, Gesamt 20.96 MB einschließlich Templates und Hashdatei. 26 Dateien, 25 geprüfte SHA256-Summen.
+- [x] **Gesamte Portable-Distribution** ist ≤ 30 MB: Stand 2026-11-13 Haupt-EXE 15.44 MB, Sidecar 8.06 MB, Gesamt 23.50 MB einschließlich Templates und Hashdatei. 27 Dateien, 26 geprüfte SHA256-Summen.
 - [ ] Proxy-Workaround (T-505) ist in restriktiver Umgebung validiert — **offen**.
 - [x] Konfigurations-Regressionen lokal erfolgreich (`tests/config-utils.test.mjs`); gesamter Test-Runner: `npm run test:unit`.
 - [x] 12 Browser-UI-Regressionstests: Startup bei fehlender/ungültiger Config, Bottom-Toast ohne Layout-Verschiebung, drei responsive Settings-Bereiche, zwei Footer-Pfade, Proxy-Save-/Test-Payloads und detaillierter Diagnose-Dialog einschließlich Schließen/Wiederöffnen.

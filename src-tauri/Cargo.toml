@@ -5,7 +5,8 @@ description = "Meeting Notes (Windows-Desktop-App fuer Meeting-Transkripte)"
 authors = ["Martin Pietschmann <martin.pietschmann@itergo.com>"]
 license = "MIT"
 edition = "2021"
-rust-version = "1.77.2"
+# tauri 2.12.x verlangt Rust >= 1.90 (MSRV).
+rust-version = "1.90"
 
 [lib]
 name = "meeting_notes_lib"
@@ -26,6 +27,8 @@ serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
-thiserror = "1"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+thiserror = "2"
+# reqwest 0.13 hat das Feature "rustls-tls" umbenannt: "rustls" nutzt den
+# Platform-Verifier und damit den Windows-Zertifikatsspeicher.
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 url = "2"

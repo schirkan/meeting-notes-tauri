@@ -79,7 +79,7 @@ try
     });
     try
     {
-        var sidecar = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "bin", "Release", "net8.0-windows", "MeetingNotes.Sidecar.exe"));
+        var sidecar = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "bin", "Release", "net10.0-windows", "MeetingNotes.Sidecar.exe"));
         var start = new ProcessStartInfo(sidecar) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         foreach (var arg in new[] { "--test-connectivity", "--speech-region", "westeurope", "--speech-endpoint", "wss://localhost:443/speech/universal/v2", "--language", "de-DE", "--proxy-host", "127.0.0.1", "--proxy-port", port.ToString() }) start.ArgumentList.Add(arg);
         start.Environment[variables[0]] = "00000000000000000000000000000000";

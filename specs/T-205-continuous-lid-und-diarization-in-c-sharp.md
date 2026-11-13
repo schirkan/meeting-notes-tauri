@@ -13,7 +13,7 @@ Continuous LID und Speaker-Diarization in der C#-Recognizer-Konfiguration aktivi
 - [ ] Erkannte Sprache wird im optionalen Segmentfeld `language` mitgeführt und im Live-Test geprüft (nicht `detectedLanguage`).
 - [x] Je Quelle wählt `diarization.mic` bzw. `diarization.speaker` unabhängig `ConversationTranscriber` (aktiviert) oder `SpeechRecognizer` (deaktiviert). Beide Optionen sind standardmäßig aktiviert, auch bei fehlenden Feldern in bestehenden Konfigurationen.
 - [x] Bei aktivierter Sprechererkennung werden SDK-Speaker-IDs für Mic und Speaker unverändert im Segmentfeld `speaker` weitergegeben, für Interim und Final; fehlende IDs werden `unknown`. Bei deaktivierter Sprechererkennung heißen die IDs `self` (Mic) bzw. `guest` (Speaker).
-- [x] Das SDK-Property für Intermediate-Diarization ist mit Speech SDK 1.44 verifiziert und im Transcriber-Pfad konfiguriert.
+- [x] Das SDK-Property für Intermediate-Diarization ist mit Speech SDK 1.53 verifiziert und im Transcriber-Pfad konfiguriert.
 - [x] Die UI verwendet quellenspezifische Identitäten und 30 zyklische Farbslots; nummerierte Mic-IDs erhalten einen Offset von 15. Siehe [T-404](./T-404-speaker-mapping-auto-scroll-focus-trap.md).
 - [ ] Diarization funktioniert für mindestens 2 Sprecher je aktivierter Quelle (manueller Live-Azure-Test).
 
