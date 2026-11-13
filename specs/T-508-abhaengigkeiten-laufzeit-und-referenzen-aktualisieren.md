@@ -43,12 +43,46 @@ die Aufnahme- und Transkriptionslogik bleibt unveraendert.
   Signatur wurde per Reflection gegen die installierte DLL ermittelt, nicht geraten:
   `MediaFoundationTransform.Read(Span<byte>)` und `MMDevice.CreateAudioClient()`.
 - **Rust `reqwest` 0.13** hat das TLS-Feature umbenannt (`rustls-tls` -> `rustls`).
-  Die Diagnose-Diagnose zeigte `unrecognized feature for crate reqwest: rustls-tls`.
+  Die Diagnose zeigte `unrecognized feature for crate reqwest: rustls-tls`.
 - Die beiden in NAudio 3.x als obsolet markierten Capture-Klassen
   (`WasapiCapture`, `WasapiLoopbackCapture`) bleiben mit `#pragma warning disable`
-  im Einsatz. Die empfohlene Alternative `WasapiRecorderBuilder` wechselt das
-  Aufnahmemodell komplett (IAsyncEnumerable statt `DataAvailable`-Event) und waere
-  ein eigener Schritt mit Verhaltensaenderung — **kein Teil dieser Aktualisierung**.
+  im Einsatz. Die empfohlene Alternative `WasapiRecorderBuilder` ist ein eigener
+  Schritt — **kein Teil dieser Aktualisierung**. Per Reflection gegen die
+  installierte NAudio-Wasapi-3.3.0-DLL verifiziert: `WasapiRecorder` bietet
+  **beide** Wege weiter — das `DataAvailable`-Event (jetzt `ReadOnlySpan<byte>`,
+  Zero-Copy) **und** `CaptureAsync` (`IAsyncEnumerable`). Der Umstieg ist damit
+  kein Modellwechsel, sondern eine API-Ersetzung; Aufwand siehe unten.
+
+## Aufwandschaetzung: Umstellung auf `WasapiRecorderBuilder`
+
+*Ermittelt am 2026-11-13 gegen die installierte NAudio-Wasapi-3.3.0-DLL und die
+NAudio-Doku — nicht geschaetzt, sondern am Code und an der API gemessen.*
+
+- **Betroffen:** die aktive Capture-Pipeline in `sidecar/Program.cs`
+  (≈ 95 Zeilen: 2× Capture, 2× `DataAvailable`, `BufferedWaveProvider`,
+  `MediaFoundationResampler`, `DrainResampled`) plus `AudioResampler.cs`.
+- **Kostenlos mit erledigt:** `MicCaptureClient` und `LoopbackCaptureClient` haben
+  **0 externe Verwendungen** — die Pipeline liegt komplett inline in
+  `Program.cs`. Deren Entfernung ist reine Aufräumarbeit.
+- **`WithLoopbackCapture()`** ersetzt `WasapiLoopbackCapture` 1:1 mit gleicher
+  Semantik (Events nur während tatsächlicher Audioausgabe).
+- **`WithFormat(new WaveFormat(16000, 16, 1))`** lässt die WASAPI-Engine im
+  Shared Mode selbst konvertieren; damit entfallen `BufferedWaveProvider` und
+  `MediaFoundationResampler` samt `DrainResampled`.
+- **Offener Punkt (der einzige echte unknown Faktor):** Shared Mode konvertiert
+  nur 16-Bit-PCM. Liefert das Mic Float-Samples, ist dieser Weg nicht
+  anwendbar, dann bliebe `MediaFoundationResampler` und der Aufwand stiege auf
+  ≈ 1,5 Tage.
+- **Blocker fuer die Verifikation:** Auf dieser Maschine meldet `--list-devices`
+  **keine** Aufnahme- und keine Ausgabegeräte. Den Konvertierungsweg kann nur
+  ein Rechner mit echtem Mic und Loopback belegen.
+- **`WithLowLatency()`** wäre die Gegenmassnahme zum Latenzziel (< 5 s, T-502),
+  schliesst aber `WithFormat` aus — Mic und Loopback wuerden dann
+  unterschiedlich behandelt. Das ist eine Architekturentscheidung, kein
+  Refactor.
+
+**Summe:** ≈ 1 Tag Code (Pipeline-Umbau, Resampler-Entfall, Aufräumen, Tests)
+plus ein Verifikationsfenster mit Audio-Hardware.
 
 ## Offene Punkte
 - **Zielsystem braucht jetzt .NET 10 Runtime** (win-x64) statt .NET 8. Das ist
