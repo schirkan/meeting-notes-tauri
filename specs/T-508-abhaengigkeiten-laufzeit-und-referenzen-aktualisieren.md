@@ -88,7 +88,8 @@ plus ein Verifikationsfenster mit Audio-Hardware.
 - **Zielsystem braucht jetzt .NET 10 Runtime** (win-x64) statt .NET 8. Das ist
   eine Anforderung an die Zielmaschine und muss beim Clean-Machine-Deployment
   (siehe T-504) beruecksichtigt werden.
-- Die Umstellung des Audio-Captures auf `WasapiRecorderBuilder` bleibt offen.
+- Die Umstellung des Audio-Captures auf `WasapiRecorderBuilder` bleibt offen;
+  Plan und Verifikationsprozedur siehe [T-509](./T-509-audio-capture-auf-wasapirecorderbuilder-umstellen.md).
 - Die Node-Toolchain-Kette (Node 26, TypeScript 7, Vite 8.3) ist lokal verifiziert;
   ein Nachweis auf einem frischen System steht aus.
 
