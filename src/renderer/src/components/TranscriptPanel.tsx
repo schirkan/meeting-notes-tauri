@@ -1,18 +1,17 @@
 import type { RefObject } from 'react'
 import type { TranscriptSegment } from '@shared/transcript-contract'
-import { getSpeakerKey } from '../speaker-utils'
+import { getSpeakerClassForIdentity, getSpeakerIdentity } from '../speaker-utils'
 
 type TranscriptPanelProps = {
   segments: TranscriptSegment[]
   transcriptListRef: RefObject<HTMLUListElement | null>
-  getSpeakerClass: (speaker: string) => string
   getSpeakerLabel: (speaker: string) => string
   canCopyTranscript: boolean
   onCopyTranscript: () => Promise<void>
 }
 
 export function TranscriptPanel(props: TranscriptPanelProps) {
-  const { segments, transcriptListRef, getSpeakerClass, getSpeakerLabel, canCopyTranscript, onCopyTranscript } = props
+  const { segments, transcriptListRef, getSpeakerLabel, canCopyTranscript, onCopyTranscript } = props
 
   return (
     <section className="panel transcript-panel">
@@ -32,7 +31,7 @@ export function TranscriptPanel(props: TranscriptPanelProps) {
               <div className="segment-meta">
                 <span className="meta">{new Date(segment.timestampIso).toLocaleTimeString('de-DE')}</span>
                 <span className="meta">{segment.language}</span>
-                <span className={`speaker-badge ${getSpeakerClass(getSpeakerKey(segment))}`.trim()}>{getSpeakerLabel(getSpeakerKey(segment))}</span>
+                <span className={`speaker-badge ${getSpeakerClassForIdentity(getSpeakerIdentity(segment))}`.trim()}>{getSpeakerLabel(getSpeakerIdentity(segment))}</span>
               </div>
             </li>
           ))}

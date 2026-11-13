@@ -8,6 +8,8 @@ export const TAURI_COMMANDS = {
   toggleDevtools: 'toggle_devtools',
   startRecording: 'start_recording',
   stopRecording: 'stop_recording',
+  pauseRecording: 'pause_recording',
+  resumeRecording: 'resume_recording',
   resetTranscript: 'reset_transcript',
   getStatus: 'get_status',
   getDebugLog: 'get_debug_log',

@@ -3,7 +3,7 @@
 Stand: 12.11.2026
 Status: Implementierungsstand fortgeschrieben; Corporate-Netz-/Proxy-Akzeptanz am 2026-11-12 erfolgreich. Offen bleiben Latenz- und Clean-Machine-Akzeptanz.
 
-Lokaler Stand: aktueller Portable-Build 20.94 MB (26 Dateien, 25 geprüfte Hashes) mit der EXE `meeting-notes.exe`, dem gemeinsamen Config-Template und der unabhängigen Mic-/Speaker-Diarization; Build-Smoke inklusive Sidecar-Geräteabfrage erfolgreich. Dafür sind TypeScript, 46 Node-Tests, 15 Rust-Tests und 334 C#-Assertions erfolgreich; die 18 UI-Tests laufen im CLI-Browserlauf grün. Nicht jede ursprüngliche Audio-/Protokoll-Anforderung ist als abgenommen bestätigt; Einzelstatus siehe [Specs](./specs/).
+Lokaler Stand: aktueller Portable-Build 20.96 MB (26 Dateien, 25 geprüfte Hashes) mit der EXE `meeting-notes.exe`, dem gemeinsamen Config-Template und der unabhängigen Mic-/Speaker-Diarization; Build-Smoke inklusive Sidecar-Geräteabfrage erfolgreich. Dafür sind TypeScript, 51 Node-Tests, 18 Rust-Tests und 467 C#-Assertions erfolgreich; die 20 UI-Tests laufen im CLI-Browserlauf grün. Nicht jede ursprüngliche Audio-/Protokoll-Anforderung ist als abgenommen bestätigt; Einzelstatus siehe [Specs](./specs/).
 
 Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1.md` (Electron-Projekt, unveränderte Referenz). Architekturziel: Tauri 2 + React + C#-Sidecar (mit Azure Speech SDK in NuGet-Form). Die Anwendung selbst heißt *Meeting Notes*; „Tauri" ist die Container-Technik, nicht Teil des Produktnamens.
 
@@ -52,6 +52,7 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
   - Beide Optionen sind standardmäßig `true`, auch bei alten oder teilweise ergänzten Konfigurationen; explizites `false` bleibt erhalten.
   - Aktiviert: SDK-Speaker-IDs in Interim-/Final-Segmenten, mit `unknown` bei noch fehlender ID. Deaktiviert: feste IDs `self` (Mic) bzw. `guest` (Speaker).
   - Reale Mehrsprecherqualität und Continuous-LID-Verhalten bleiben getrennte Akzeptanztests; siehe [T-205](./specs/T-205-continuous-lid-und-diarization-in-c-sharp.md).
+- Azure vergibt die Sprecher-IDs pro Sitzung neu. Jedes Transkript-Segment fuehrt deshalb die Session-ID mit (`sessionId`). Das UI leitet daraus die sessionsichere Sprecheridentitaet `<sessionId>|<source>:<speaker>` ab: Alias-Zuordnung und das Zusammenfuehren von Segmenten ueberschreiten die Sitzungsgrenze nie. Siehe [T-507](./specs/T-507-pause-stop-und-sitzungsgebundene-sprecherzuordnung.md).
 - Continuous Language Identification (LID) aktiviert (entspricht `meeting-notes`).
 - **Implementierung:** NuGet-Paket `Microsoft.CognitiveServices.Speech` (C#) im Sidecar.
 - Der Stop-Pfad muss je nach Recognizer-Typ korrekt erfolgen (`stopContinuousRecognitionAsync` vs. `stopTranscribingAsync`).
@@ -62,6 +63,7 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - Anzeige der Transkripte mit Sprecher/Quelle, Zeitstempel, Text (sofern verfügbar).
 - Verbesserte Sprecherdarstellung über Speaker-Badges/Farben.
 - Sprecher-Alias-Mapping im UI für beide Quellen. Identitäten sind quellenspezifisch (`mic:Guest-1`, `speaker:Guest-1`), Standardlabels zeigen `Mic · Guest-1` bzw. `Speaker · Guest-1`; gleiche SDK-IDs verschiedener Quellen teilen keinen Alias. Nummerierte Mic-IDs nutzen einen Offset von 15 innerhalb der 30 zyklischen Farbslots.
+- Aufnahmesteuerung mit **Start**, **Pause**/**Weiter** und **Stop**. Pause haelt die Azure-Sitzung am Leben, speist aber kein Audio zu: der pausierte Abschnitt erscheint nicht im Transkript, und die Sprecher-IDs der Sitzung bleiben gueltig. Stop beendet die Sitzung endgueltig; der naechste Start beginnt ein neues Transkript mit frischer Sprecherbasis. Ein Fortsetzen nach Stop ist nicht moeglich. Pausen zaehlen nicht als Aufnahmezeit.
 - Bei geänderter SDK-Sprecher-ID ersetzt ein neues Interim-/Final-Event ältere Interims derselben Quelle; andere Quellen und finale Segmente bleiben erhalten. Die letzter-Sprecher-Anzeige berücksichtigt Aliase.
 - Diagnostikbereich mit laufendem Debug-Log (App/Sidecar/IPC).
 - Diagnostikbereich mit separaten Öffnen-/Schließen-Aktionen und manueller Log-Leerung.

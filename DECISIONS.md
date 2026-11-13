@@ -262,6 +262,49 @@ Architekturentscheidungen für die Windows-Variante (Tauri-Container). Wird fort
 
 ---
 
+## AD-013 · Pause haelt die Azure-Sitzung, Stop beendet sie (2026-11-13)
+
+**Entscheidung.** Zwei getrennte Zustaende mit klarer Semantik:
+
+- **Pause** (`pause_recording`) laesst die Azure-Sitzung am Leben, speist aber
+  kein Audio mehr zu. Der pausierte Abschnitt wird nicht transkribiert, die
+  Sprecher-IDs der Sitzung bleiben gueltig, und das Fortsetzen laeuft in
+  derselben Sitzung weiter.
+- **Stop** (`stop_recording`) beendet die Sitzung endgueltig. Ein Fortsetzen
+  ist nicht moeglich; der naechste Start beginnt ein **neues Transkript** mit
+  frischer Sprecherbasis (Segmente und Aliase werden zurueckgesetzt).
+
+**Begruendung.** Die gemeldete Fehlzuordnung nach Stop+Start hat ihre Ursache
+nicht im Start selbst, sondern im Datenmodell: Azure vergibt die Sprecher-IDs
+pro Sitzung neu, das Segment-Payload fuehrte aber keine Session-ID. Dadurch
+konnte der UI-Schluessel `source:speaker` nicht zwischen zwei Sitzungen
+unterscheiden — der Alias der vorigen Sitzung fiel still auf eine andere
+Person, und Final-Segmente wurden ueber die Sitzungsgrenze hinweg
+zusammengefuehrt.
+
+Als Fundament fuehrt jedes Segment deshalb `sessionId`; die Identitaet im UI
+ist `<sessionId>|<source>:<speaker>`. Alias-Zuordnung und Merge benutzen diese
+Identitaet, nie die nackte SDK-ID. Damit ist die Zuordnung auch dann korrekt,
+wenn eine Sitzungsgrenze unausweichlich ist (60-Minuten-Limit der
+Azure-Verbindung, Reconnect, Absturz).
+
+**Variante der Pause.** Verworfen wurde die reine UI-Pause, bei der das
+Transkript im Hintergrund weiterlaeuft: sie wuerde den pausierten Abschnitt
+trotzdem aufnehmen und in den Export schreiben. Der Name "Pause" verspricht
+das Gegenteil — und nur bei lebender Sitzung ohne Audio-Zufuhr bleiben die
+Sprecher-IDs ueberhaupt stabil. Der Preis ist eine Kommandoschale: der
+C#-Sidecar las bisher kein stdin (die gesendeten `reset`/`shutdown`-Kommandos
+ liefen ins Leere). Sie ist jetzt gebaut und unterstuetzt `pause`, `resume`,
+`reset` und `shutdown`.
+
+**Konsequenz fuer den Sidecar.** Waehrend einer Pause wird bewusst *nicht*
+neu verbunden: eine Neuverbindung vergibt neue Sprecher-IDs und wuerde genau
+das zerstoeren, was die Pause erhalten soll. Ausserhalb der Pause erkennt
+der Sidecar eine vom Dienst beendete Sitzung und verbindet sie neu; das UI
+baut die Sprecherzuordnung dann sichtbar neu auf.
+
+Siehe [T-507](./specs/T-507-pause-stop-und-sitzungsgebundene-sprecherzuordnung.md).
+
 ## Offene Fragen
 
 | # | Frage | Status |

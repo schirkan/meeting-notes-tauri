@@ -1,5 +1,5 @@
 import type { TranscriptStatus, TranscriptSegment } from '@shared/transcript-contract'
-import { getSpeakerKey } from '../speaker-utils'
+import { getSpeakerIdentity } from '../speaker-utils'
 
 type HeroStatusCardProps = {
   status: TranscriptStatus
@@ -15,6 +15,8 @@ type HeroStatusCardProps = {
   getSpeakerLabel: (speaker: string) => string
   onOpenSettingsDialog: () => void
   onToggleRecording: () => Promise<void>
+  onPause: () => Promise<void>
+  onResume: () => Promise<void>
   onResetTranscript: () => Promise<void> | void
 }
 
@@ -33,6 +35,8 @@ export function HeroStatusCard(props: HeroStatusCardProps) {
     getSpeakerLabel,
     onOpenSettingsDialog,
     onToggleRecording,
+    onPause,
+    onResume,
     onResetTranscript
   } = props
 
@@ -55,6 +59,15 @@ export function HeroStatusCard(props: HeroStatusCardProps) {
         >
           {status.running ? '■ Stop' : isStarting ? '◌ Startet ...' : '▶ Start'}
         </button>
+        {status.running && (
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => void (status.paused ? onResume() : onPause())}
+          >
+            {status.paused ? '▶ Weiter' : '⏸ Pause'}
+          </button>
+        )}
         <button className="ghost-button" type="button" onClick={() => void onResetTranscript()} disabled={finalCount === 0 && startedAtLabel === '---'}>
           🗑 Löschen
         </button>
@@ -66,7 +79,7 @@ export function HeroStatusCard(props: HeroStatusCardProps) {
         </div>
         <div>
           <span>Letzter Sprecher</span>
-          <strong>{latestSegment ? getSpeakerLabel(getSpeakerKey(latestSegment)) : '---'}</strong>
+          <strong>{latestSegment ? getSpeakerLabel(getSpeakerIdentity(latestSegment)) : '---'}</strong>
         </div>
         <div>
           <span>Dauer</span>

@@ -5,6 +5,12 @@ export interface TranscriptSegment {
   id: string
   source: TranscriptSource
   speaker: string
+  /**
+   * Azure-Sitzung, in der das Segment entstanden ist. Azure vergibt die
+   * Sprecher-IDs ("Guest-N") pro Sitzung neu, deshalb gehoeren Session und
+   * Sprecher-ID untrennbar zusammen (T-507).
+   */
+  sessionId?: string
   language?: string
   timestampIso: string
   text: string
@@ -27,6 +33,8 @@ export interface AudioDeviceSnapshot {
 
 export interface TranscriptStatus {
   running: boolean
+  /** Aufnahme ist pausiert: die Azure-Sitzung lebt weiter, es wird kein Audio zugespeist. */
+  paused?: boolean
   startedAt?: string
 }
 
@@ -49,6 +57,8 @@ export type TranscriptErrorCode =
   | 'AZURE_RECOGNIZER_FAILED'
   | 'UI_START_FAILED'
   | 'UI_STOP_FAILED'
+  | 'UI_PAUSE_FAILED'
+  | 'UI_RESUME_FAILED'
   | 'SETTINGS_PERSIST_FAILED'
 
 export interface TranscriptError {
@@ -114,6 +124,16 @@ export const TRANSCRIPT_ERROR_CATALOG: Record<
     description: 'Stop wurde im Renderer ausgelöst, aber Main-Call ist fehlgeschlagen.',
     recoveryHint: 'Erneut stoppen oder App neu starten.'
   },
+  UI_PAUSE_FAILED: {
+    blocker: false,
+    description: 'Pause wurde im Renderer ausgeloest, aber Main-Call ist fehlgeschlagen.',
+    recoveryHint: 'Fehlerdetails pruefen und erneut pausieren.'
+  },
+  UI_RESUME_FAILED: {
+    blocker: false,
+    description: 'Fortsetzen wurde im Renderer ausgeloest, aber Main-Call ist fehlgeschlagen.',
+    recoveryHint: 'Fehlerdetails pruefen und erneut fortsetzen.'
+  },
   SETTINGS_PERSIST_FAILED: {
     blocker: false,
     description: 'Einstellungen konnten nicht gespeichert werden.',
@@ -124,6 +144,8 @@ export const TRANSCRIPT_ERROR_CATALOG: Record<
 export interface TranscriptApi {
   start: () => Promise<TranscriptStatus>
   stop: () => Promise<TranscriptStatus>
+  pause: () => Promise<TranscriptStatus>
+  resume: () => Promise<TranscriptStatus>
   getStatus: () => Promise<TranscriptStatus>
   getDebugLog: () => Promise<DebugLogEntry[]>
   clearDebugLog: () => Promise<{ cleared: number }>

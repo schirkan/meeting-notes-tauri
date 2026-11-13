@@ -14,7 +14,7 @@ Portable Variante der Tauri-App, die ohne Installation läuft.
   - [x] `sidecar/MeetingNotes.Sidecar.exe` + DLLs (framework-dependent)
   - [x] `meeting-notes.config.example.json` — die Config-Vorlage wird mitgeliefert; keine persönlichen Configs oder Credentials.
 - [ ] Portable Build auf einem **frischen** Windows-11-System mit .NET 8 Runtime und WebView2 validiert. Bisherige native Tests erfolgten nur auf dem lokalen Entwicklungsrechner.
-- [x] SHA256SUMS-Datei wird erzeugt und geprüft. Stand 2026-11-12: **25 Summen** für 1 App-EXE + 23 Sidecar-Dateien + 1 Config-Template; **26 Dateien** inklusive SHA256SUMS. `npm run test:smoke` bestätigt 25/25 Hashes.
+- [x] SHA256SUMS-Datei wird erzeugt und geprüft. Stand 2026-11-13: **25 Summen** für 1 App-EXE + 23 Sidecar-Dateien + 1 Config-Template; **26 Dateien** inklusive SHA256SUMS. `npm run test:smoke` bestätigt 25/25 Hashes.
 - [x] Bundle-Größe wird im Build-Output geloggt (App-EXE / Sidecar / Config-Template / SHA256SUMS / Gesamt).
 
 ## Approach
@@ -29,4 +29,5 @@ Portable Variante der Tauri-App, die ohne Installation läuft.
 ## Log
 - 2026-06-25: Spec angelegt.
 - 2026-06-26: `scripts/dist-portable.mjs` + `npm run dist:portable` implementiert. Config-Templates als optional markiert (gehört zu T-103/T-305).
+- 2026-11-13: Portable nach der Pause-/Stop-Umsetzung neu gebaut (T-507): Haupt-EXE 14.19 MB, Sidecar 6.77 MB, Gesamt 20.96 MB, 26 Dateien, 25/25 SHA256-Summen. Smoke-Test bestütigt.
 - 2026-11-09: Portable neu gebaut und Smoke-Test erfolgreich, alle 26 Hashes geprüft. Haupt-EXE 14.03 MB, Sidecar 6.76 MB, Gesamt 20.79 MB. Aktueller Build enthält drei Settings-Bereiche, Azure-Testbutton, Config-Footer, relative Pfade und separaten Diagnose-Dialog; MSI/NSIS heute nicht neu gebaut.

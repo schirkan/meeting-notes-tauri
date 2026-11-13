@@ -35,6 +35,16 @@ internal static class DiarizationValidation
             catch (ArgumentException) { check(true, "Invalid diarization boolean rejected"); }
         }
 
+        // T-507: Die stdin-Kommandoschale des Sidecars.
+        check(SidecarCommands.ReadType("{\"type\":\"pause\"}") == "pause", "Pause command parsed");
+        check(SidecarCommands.ReadType("{\"type\":\"resume\"}") == "resume", "Resume command parsed");
+        check(SidecarCommands.ReadType("{\"type\":\"shutdown\"}") == "shutdown", "Shutdown command parsed");
+        check(SidecarCommands.ReadType("{\"type\":\"reset\"}") == "reset", "Reset command parsed");
+        check(SidecarCommands.ReadType("{\"type\":\"PAUSE\"}") == "pause", "Command type is case insensitive");
+        check(SidecarCommands.ReadType("not json") == SidecarCommands.Unknown, "Invalid JSON is rejected");
+        check(SidecarCommands.ReadType("{}") == SidecarCommands.Unknown, "Missing type is rejected");
+        check(SidecarCommands.ReadType("") == SidecarCommands.Unknown, "Empty line is rejected");
+
         var config = new AzureSpeechConfig("wss://localhost/speech/universal/v2", "westeurope", "validation-key", true, null);
         foreach (var mic in new[] { true, false })
         foreach (var speaker in new[] { true, false })
@@ -76,6 +86,10 @@ internal static class DiarizationValidation
                         check(payload.GetProperty("source").GetString() == source, "Raw source preserved");
                         check(payload.GetProperty("speaker").GetString() == expected, "Raw SDK ID or fixed source speaker preserved, missing ID falls back to unknown");
                         check(payload.GetProperty("state").GetString() == (i < 6 ? "interim" : "final"), "Transcript state preserved");
+                        // T-507: Jedes Segment traegt die Session-Dimension. Ohne sie
+                        // kann das UI "Guest-1" aus zwei Sitzungen nicht trennen.
+                        check(payload.TryGetProperty("sessionId", out var sessionId) && !string.IsNullOrWhiteSpace(sessionId.GetString()),
+                            "Every segment carries a session id");
                     }
                 }
                 finally { foreach (var item in events) item.Dispose(); }

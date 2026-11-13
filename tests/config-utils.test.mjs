@@ -177,6 +177,37 @@ test('speaker colors cycle over 30 slots with distinct Mic and Speaker palettes'
   assert.equal(speakers.getSpeakerClass('mic:Unknown'), 'speaker-unknown')
 })
 
+test('speaker identities are scoped to the azure session', () => {
+  // T-507: Azure vergibt die Sprecher-IDs pro Sitzung neu. Die Identitaet
+  // muss die Sitzung mitfuehren, sonst faellt der Alias aus der vorigen
+  // Sitzung still auf eine andere Person.
+  const first = speakers.getSpeakerIdentity({ source: 'mic', speaker: 'Guest-1', sessionId: 's1' })
+  const second = speakers.getSpeakerIdentity({ source: 'mic', speaker: 'Guest-1', sessionId: 's2' })
+  assert.equal(first, 's1|mic:Guest-1')
+  assert.notEqual(first, second, 'Gleiche SDK-ID in zwei Sitzungen sind verschiedene Identitaeten')
+  assert.equal(
+    speakers.getSpeakerIdentity({ source: 'speaker', speaker: 'Guest-1', sessionId: 's1' }),
+    's1|speaker:Guest-1'
+  )
+  assert.equal(
+    speakers.getSpeakerIdentity({ source: 'mic', speaker: ' ', sessionId: 's1' }),
+    's1|mic:unknown'
+  )
+})
+
+test('speaker identities without a session fall back to a stable placeholder', () => {
+  assert.equal(speakers.getSpeakerIdentity({ source: 'mic', speaker: 'Guest-1' }), 'unknown|mic:Guest-1')
+  assert.equal(speakers.getSpeakerIdentity({ source: 'mic', speaker: 'Guest-1', sessionId: '  ' }), 'unknown|mic:Guest-1')
+})
+
+test('identity labels and colors ignore the session prefix', () => {
+  assert.equal(speakers.formatSpeakerIdentity('s1|mic:Guest-1'), 'Mic · Guest-1')
+  assert.equal(speakers.formatSpeakerIdentity('s1|speaker:Guest-1'), 'Speaker · Guest-1')
+  assert.equal(speakers.getSpeakerClassForIdentity('s1|mic:Guest-1'), 'speaker-guest-16')
+  assert.equal(speakers.getSpeakerClassForIdentity('s1|speaker:Guest-1'), 'speaker-guest-1')
+  assert.equal(speakers.getSpeakerClassForIdentity('unknown|mic:self'), 'speaker-mic-self')
+})
+
 test('validateAzureConfig accepts minimal valid config', () => {
   const valid = {
     endpoint: 'wss://westeurope.stt.speech.microsoft.com',

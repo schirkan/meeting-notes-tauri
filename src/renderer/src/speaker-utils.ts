@@ -4,6 +4,35 @@ export function getSpeakerKey(segment: Pick<TranscriptSegment, 'source' | 'speak
   return `${segment.source}:${segment.speaker.trim() || 'unknown'}`
 }
 
+/**
+ * Sitzungsbezogene Sprecheridentitaet (T-507).
+ *
+ * Azure vergibt die Sprecher-IDs ("Guest-1", "Guest-2", ...) pro Sitzung neu.
+ * "Guest-1" aus zwei verschiedenen Sitzungen koennen verschiedene Personen
+ * sein. Deshalb gehoert die Session-ID untrennbar zur Identitaet: Alias-Zuordnung
+ * und Segment-Merge duerfen sich nie ueber eine Sitzungsgrenze hinweg greifen.
+ *
+ * Format: "<sessionId>|<source>:<speaker>" — die Session-ID enthaelt kein "|".
+ */
+export function getSpeakerIdentity(
+  segment: Pick<TranscriptSegment, 'source' | 'speaker' | 'sessionId'>
+): string {
+  const session = segment.sessionId?.trim()
+  return `${session || 'unknown'}|${getSpeakerKey(segment)}`
+}
+
+/** Anzeigename einer Identitaet: "Mic - Guest-1" (ohne Session-Praefix). */
+export function formatSpeakerIdentity(identity: string): string {
+  const separator = identity.indexOf('|')
+  return formatSpeakerKey(separator < 0 ? identity : identity.slice(separator + 1))
+}
+
+/** Farb-Slot einer Identitaet (je Quelle getrennte Palette). */
+export function getSpeakerClassForIdentity(identity: string): string {
+  const separator = identity.indexOf('|')
+  return getSpeakerClass(separator < 0 ? identity : identity.slice(separator + 1))
+}
+
 export function formatSpeakerKey(key: string): string {
   const separator = key.indexOf(':')
   if (separator < 0) return key

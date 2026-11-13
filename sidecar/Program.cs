@@ -218,6 +218,66 @@ try
     Logger.Info("status", "capturing", "Mic + Speaker Loopback aktiv.");
     Logger.Event("status", new { phase = "started", running = true });
 
+    // ---- stdin-Kommandoschale (T-507) ---------------------------------
+    //
+    // Der Tauri-Main steuert den laufenden Sidecar ueber JSON-Lines auf
+    // stdin:
+    //   {"type":"pause"}    -> Audio-Zufuhr stoppt, Azure-Session bleibt offen
+    //   {"type":"resume"}   -> Audio-Zufuhr laeuft weiter, gleiche Session
+    //   {"type":"reset"}    -> Zuruecksetzen der internen Zaehler
+    //   {"type":"shutdown"} -> geordneter Abbruch
+    //
+    // "pause" beendet die Azure-Session NICHT: nur die Audioframes werden
+    // nicht mehr zugespeist. Die vom Azure-Dienst vergebenen Sprecher-IDs
+    // bleiben dadurch gueltig.
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            while (!cts.Token.IsCancellationRequested)
+            {
+                var line = await Console.In.ReadLineAsync(cts.Token);
+                if (line is null) break;
+                var command = SidecarCommands.ReadType(line);
+                switch (command)
+                {
+                    case SidecarCommands.Pause:
+                        azure?.SetPaused(true);
+                        Logger.Info("sidecar", "pause", "Aufnahme pausiert; Azure-Session bleibt verbunden.");
+                        Logger.Event("status", new { phase = "paused", running = true });
+                        break;
+                    case SidecarCommands.Resume:
+                        {
+                            var restarted = azure is null ? Array.Empty<string>() : await azure.ReconnectDeadStreamsAsync();
+                            azure?.SetPaused(false);
+                            Logger.Info("sidecar", "resume", "Aufnahme fortgesetzt.");
+                            Logger.Event("status", new { phase = "resumed", running = true });
+                            foreach (var source in restarted)
+                                Logger.Warn("azure", "speaker_ids_reset",
+                                    $"Azure-Session fuer {source} war beendet und wurde neu verbunden. " +
+                                    "Die Sprecher-IDs wurden neu vergeben.");
+                            break;
+                        }
+                    case SidecarCommands.Reset:
+                        Logger.Info("sidecar", "reset", "Reset-Kommando empfangen.");
+                        break;
+                    case SidecarCommands.Shutdown:
+                        Logger.Info("sidecar", "shutdown", "Shutdown-Kommando empfangen.");
+                        cts.Cancel();
+                        break;
+                    default:
+                        Logger.Warn("sidecar", "unknown_command", $"Unbekanntes Kommando: {command}");
+                        break;
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Logger.Error("SIDECAR_UNAVAILABLE", $"stdin-Reader beendet: {ex.Message}");
+        }
+    });
+
     var healthInterval = TimeSpan.FromSeconds(30);
     var nextHealthLog = DateTime.UtcNow.Add(healthInterval);
     while (!cts.Token.IsCancellationRequested)
@@ -229,6 +289,19 @@ try
         {
             Logger.Info("health", "alive", "ok");
             nextHealthLog = DateTime.UtcNow.Add(healthInterval);
+        }
+
+        // Waehrend einer Pause wird nicht neu verbunden: die Azure-Sitzung
+        // soll die Sprecher-IDs unveraendert erhalten. Ausserhalb der Pause
+        // wird eine vom Dienst beendete Sitzung sofort neu aufgebaut, damit
+        // die Aufnahme nicht still weiterlaeuft.
+        if (azure is not null && !azure.IsPaused)
+        {
+            var restarted = await azure.ReconnectDeadStreamsAsync();
+            foreach (var source in restarted)
+                Logger.Warn("azure", "speaker_ids_reset",
+                    $"Azure-Session fuer {source} wurde vom Dienst beendet und neu verbunden. " +
+                    "Die Sprecher-IDs wurden neu vergeben.");
         }
     }
 

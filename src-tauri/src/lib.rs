@@ -58,6 +58,8 @@ pub fn run() {
       commands::toggle_devtools,
       commands::start_recording,
       commands::stop_recording,
+      commands::pause_recording,
+      commands::resume_recording,
       commands::reset_transcript,
       commands::get_status,
       commands::get_debug_log,

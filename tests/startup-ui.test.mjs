@@ -39,7 +39,9 @@ async function openApp(options) {
   await page.addInitScript((input) => {
     const noSubscription = () => () => {}
     window.transcriptApi = {
-      getStatus: async () => ({ running: input.running ?? false }),
+      getStatus: async () => ({ running: input.running ?? false, paused: false }),
+      pause: async () => { window.lastPauseCalled = true; return { running: true, paused: true } },
+      resume: async () => { window.lastResumeCalled = true; return { running: true, paused: false } },
       getSettings: async () => ({ language: input.language ?? 'de-DE', devices: {}, diarization: input.diarization, transcript: input.transcript }),
       saveSettings: async (settings) => {
         window.lastSavedSettings = settings
@@ -290,6 +292,51 @@ test('Mic speakers get independent badges, aliases, interim handling and export 
     assert.deepEqual(copied.map((segment) => segment.speaker), ['Anna', 'Clara', 'Bert', 'Clara'])
     assert.deepEqual(copied.map((segment) => segment.source), ['mic', 'mic', 'speaker', 'mic'])
     assert.ok(copied.every((segment) => segment.state === 'final'))
+  } finally {
+    await page.close()
+  }
+})
+
+test('pause and resume keep the session running and report the paused state', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, running: true })
+  try {
+    await page.locator('.hero-controls').waitFor()
+    assert.match(await page.locator('.hero-card-topbar strong').innerText(), /Läuft/)
+    await page.getByRole('button', { name: /Pause/ }).click()
+    await page.waitForFunction(() => !!window.lastPauseCalled)
+    assert.match(await page.locator('.hero-card-topbar strong').innerText(), /Pausiert/)
+    assert.match(await page.locator('.hero-status-card span').first().innerText(), /Sitzung bleibt aktiv/)
+    await page.getByRole('button', { name: /Weiter/ }).click()
+    await page.waitForFunction(() => !!window.lastResumeCalled)
+    assert.match(await page.locator('.hero-card-topbar strong').innerText(), /Läuft/)
+  } finally {
+    await page.close()
+  }
+})
+
+test('the same SDK id in two sessions stays two separate speakers with separate aliases', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.waitForFunction(() => typeof window.emitSegment === 'function')
+    const events = [
+      { source: 'mic', speaker: 'Guest-1', sessionId: 's1', text: 'Erste Sitzung.', state: 'final' },
+      { source: 'mic', speaker: 'Guest-1', sessionId: 's2', text: 'Zweite Sitzung.', state: 'final' }
+    ]
+    for (const [index, event] of events.entries()) {
+      await page.evaluate((segment) => window.emitSegment(segment), { ...event, id: `segment-${index}`, language: 'de-DE', timestampIso: new Date(2026, 10, 13, 10, 0, index).toISOString() })
+    }
+    await page.locator('.segment.final').nth(1).waitFor()
+    // Zwei Sitzungen, zwei Identitaeten: kein Zusammenfuehren ueber die Grenze.
+    assert.equal(await page.locator('.segment.final').count(), 2)
+    assert.equal(await page.locator('.speaker-mapping-table tbody tr').count(), 2)
+    await page.getByRole('textbox', { name: 'Anzeigename für Mic · Guest-1 #1', exact: true }).fill('Anna')
+    await page.getByRole('textbox', { name: 'Anzeigename für Mic · Guest-1 #2', exact: true }).fill('Bert')
+    assert.deepEqual(await page.locator('.speaker-badge').allTextContents(), ['Anna', 'Bert'])
+    // Der Alias der ersten Sitzung faellt nicht auf die zweite.
+    await page.getByRole('button', { name: 'Transkript kopieren', exact: true }).click()
+    await page.waitForFunction(() => !!window.lastCopiedSegments)
+    const copied = await page.evaluate(() => window.lastCopiedSegments)
+    assert.deepEqual(copied.map((segment) => segment.speaker), ['Anna', 'Bert'])
   } finally {
     await page.close()
   }

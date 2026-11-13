@@ -18,7 +18,6 @@ export function App() {
     devices,
     durationLabel,
     finalCount,
-    getSpeakerClass,
     getSpeakerLabel,
     isConfigReady,
     isStarting,
@@ -27,7 +26,9 @@ export function App() {
     onCopyTranscript,
     onClearDebugLog,
     onOpenSettingsDialog,
+    onPause,
     onResetTranscript,
+    onResume,
     onSaveConfig,
     onSaveSettings,
     onTestConnectivity,
@@ -47,6 +48,7 @@ export function App() {
     settingsDialogOpen,
     settingsHint,
     speakerAliases,
+    speakerLabels,
     startedAtLabel,
     status,
     statusDescription,
@@ -64,7 +66,6 @@ export function App() {
         <TranscriptPanel
           segments={segments}
           transcriptListRef={transcriptListRef}
-          getSpeakerClass={getSpeakerClass}
           getSpeakerLabel={getSpeakerLabel}
           canCopyTranscript={finalCount > 0}
           onCopyTranscript={onCopyTranscript}
@@ -84,11 +85,14 @@ export function App() {
           getSpeakerLabel={getSpeakerLabel}
           onOpenSettingsDialog={onOpenSettingsDialog}
           onToggleRecording={onToggleRecording}
+          onPause={onPause}
+          onResume={onResume}
           onResetTranscript={onResetTranscript}
         />
 
         <SpeakerMappingPanel
           knownSpeakers={knownSpeakers}
+          speakerLabels={speakerLabels}
           speakerAliases={speakerAliases}
           setSpeakerAliases={setSpeakerAliases}
         />

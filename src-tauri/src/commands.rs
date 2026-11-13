@@ -141,6 +141,94 @@ pub async fn stop_recording(
     Ok(status)
 }
 
+/// Pause (T-507): der Sidecar behaelt die Azure-Sitzung, speist aber
+/// kein weiteres Audio zu. Die Sprecher-IDs der Sitzung bleiben damit
+/// gueltig, und der pausierte Abschnitt wird nicht transkribiert.
+#[tauri::command]
+pub async fn pause_recording(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<events::TranscriptStatus, String> {
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "pause_recording aufgerufen.");
+
+    let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
+    let handle = {
+        let guard = cache.lock().await;
+        guard.as_ref().map(|h| SidecarHandle {
+            child: Arc::clone(&h.child),
+            events_rx: tokio::sync::mpsc::channel(1).1,
+        })
+    };
+    if let Some(handle) = handle {
+        sidecar::send_command(&handle, r#"{"type":"pause"}"#)
+            .await
+            .map_err(|e| e.to_string())?;
+        push_and_emit_debug(
+            &app,
+            &state,
+            DebugLogEntrySource::Sidecar,
+            DebugLogEntryLevel::Info,
+            "Pause-Befehl an Sidecar gesendet.",
+        );
+    } else {
+        push_and_emit_debug(
+            &app,
+            &state,
+            DebugLogEntrySource::Main,
+            DebugLogEntryLevel::Warn,
+            "Pause angefordert, aber es laeuft kein Sidecar.",
+        );
+    }
+
+    let status = state.mark_paused();
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status geaendert: paused.");
+    events::emit_status(&app, &status);
+    Ok(status)
+}
+
+/// Fortsetzen nach Pause: dieselbe Azure-Sitzung, dieselben Sprecher-IDs.
+#[tauri::command]
+pub async fn resume_recording(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<events::TranscriptStatus, String> {
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "resume_recording aufgerufen.");
+
+    let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
+    let handle = {
+        let guard = cache.lock().await;
+        guard.as_ref().map(|h| SidecarHandle {
+            child: Arc::clone(&h.child),
+            events_rx: tokio::sync::mpsc::channel(1).1,
+        })
+    };
+    if let Some(handle) = handle {
+        sidecar::send_command(&handle, r#"{"type":"resume"}"#)
+            .await
+            .map_err(|e| e.to_string())?;
+        push_and_emit_debug(
+            &app,
+            &state,
+            DebugLogEntrySource::Sidecar,
+            DebugLogEntryLevel::Info,
+            "Resume-Befehl an Sidecar gesendet.",
+        );
+    } else {
+        push_and_emit_debug(
+            &app,
+            &state,
+            DebugLogEntrySource::Main,
+            DebugLogEntryLevel::Warn,
+            "Fortsetzen angefordert, aber es laeuft kein Sidecar.",
+        );
+    }
+
+    let status = state.mark_resumed();
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status geaendert: resumed.");
+    events::emit_status(&app, &status);
+    Ok(status)
+}
+
 #[tauri::command]
 pub async fn reset_transcript(
     app: AppHandle,
@@ -633,10 +721,19 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) {
         "status" | "transcript:status" => {
             let running = payload.get("running").and_then(|v| v.as_bool()).unwrap_or(false);
             let phase = payload.get("phase").and_then(|v| v.as_str()).unwrap_or("");
-            let status = if running {
-                app.state::<AppState>().mark_started()
-            } else {
-                app.state::<AppState>().mark_stopped()
+            // Die Phase steuert den Zustand: "paused"/"resumed" duerfen die
+            // Startzeit nicht zuruecksetzen, sonst waere die Laufzeit nach
+            // einer Pause falsch (T-507).
+            let status = match phase {
+                "paused" => app.state::<AppState>().mark_paused(),
+                "resumed" => app.state::<AppState>().mark_resumed(),
+                _ => {
+                    if running {
+                        app.state::<AppState>().mark_started()
+                    } else {
+                        app.state::<AppState>().mark_stopped()
+                    }
+                }
             };
             events::emit_status(app, &status);
             let entry = app.state::<AppState>().push_debug(

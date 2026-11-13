@@ -21,6 +21,10 @@ pub const EVENT_CONNECTIVITY_RESULT: &str = "transcript:connectivity-result";
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptStatus {
     pub running: bool,
+    /// Aufnahme ist pausiert: die Azure-Sitzung lebt weiter, es wird
+    /// aber kein Audio zugespeist (T-507).
+    #[serde(default)]
+    pub paused: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub started_at: Option<String>,
 }

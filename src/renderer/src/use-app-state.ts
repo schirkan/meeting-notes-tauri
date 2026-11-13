@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_USER_SETTINGS, normalizeUserSettings, type AppConfigState } from '@shared/config-contract'
 import { buildTranscriptMarkdown } from '@shared/transcript-markdown'
-import { formatSpeakerKey, getSpeakerClass, getSpeakerKey } from './speaker-utils'
+import {
+  formatSpeakerIdentity,
+  getSpeakerClassForIdentity,
+  getSpeakerIdentity
+} from './speaker-utils'
 import {
   type AudioDeviceSnapshot,
   type DebugLogEntry,
@@ -124,8 +128,12 @@ export function useAppState() {
 
     const unsubSegment = transcriptApi.onSegment((segment) => {
       setSegments((prev) => {
+        // Die Identitaet enthaelt die Azure-Sitzung (T-507): "Guest-1" aus
+        // zwei Sitzungen sind verschiedene Personen. Deshalb wird nur
+        // innerhalb derselben Identitaet zusammengefuehrt.
+        const identity = getSpeakerIdentity(segment)
         const sameSpeakerKey = (entry: TranscriptSegment) =>
-          entry.source === segment.source && entry.speaker === segment.speaker
+          getSpeakerIdentity(entry) === identity
 
         const withoutInterimForSource = prev.filter(
           (entry) => !(entry.source === segment.source && entry.state === 'interim')
@@ -264,33 +272,61 @@ export function useAppState() {
 
   const statusLabel = useMemo(() => {
     if (isStarting) return 'Startet'
+    if (status.paused) return 'Pausiert'
     if (status.running) return 'Läuft'
     if (configState && !isConfigComplete(configState.config)) return 'Fehler'
     if (lastError) return 'Fehler'
     return 'Gestoppt'
-  }, [configState, isStarting, lastError, status.running])
+  }, [configState, isStarting, lastError, status.paused, status.running])
 
   const statusDescription = useMemo(() => {
     if (isStarting) return 'Transkription wird gestartet ...'
+    if (status.paused) return 'Aufnahme pausiert — Sitzung bleibt aktiv'
     if (status.running) return 'Transkription aktiv'
     if (!isConfigReady) return 'Konfiguration unvollständig'
     return 'Bereit zum Starten'
-  }, [isConfigReady, isStarting, status.running])
+  }, [isConfigReady, isStarting, status.paused, status.running])
 
   const finalCount = segments.filter((segment) => segment.state === 'final').length
   const latestSegment = segments.at(-1) ?? null
 
+  // Bekannte Sprecher als sessionsichere Identitaeten. Zwei Sitzungen
+  // koennen dieselbe SDK-ID vergeben — die Identitaet trennt sie.
   const knownSpeakers = useMemo(
     () =>
       [
         ...new Set(
           segments
             .filter((segment) => segment.speaker.trim().length > 0 && segment.speaker.trim().toLowerCase() !== 'unknown')
-            .map(getSpeakerKey)
+            .map(getSpeakerIdentity)
         )
       ],
     [segments]
   )
+
+  // Anzeigenamen je Identitaet. Nur wenn dieselbe Anzeige in zwei Sitzungen
+  // vorkommt, wird sie nummeriert, damit die Zuordnung unterscheidbar bleibt.
+  const speakerLabels = useMemo(() => {
+    const groups = new Map<string, string[]>()
+    for (const identity of knownSpeakers) {
+      const base = formatSpeakerIdentity(identity)
+      const group = groups.get(base) ?? []
+      group.push(identity)
+      groups.set(base, group)
+    }
+
+    const labels: Record<string, string> = {}
+    for (const [base, group] of groups) {
+      if (group.length === 1) {
+        labels[group[0]] = base
+        continue
+      }
+      group.forEach((identity, index) => {
+        labels[identity] = `${base} #${index + 1}`
+      })
+    }
+    return labels
+  }, [knownSpeakers])
 
   const startedAtLabel = useMemo(() => {
     const startedAt = status.startedAt ?? sessionStartedAt
@@ -303,6 +339,22 @@ export function useAppState() {
     })
   }, [sessionStartedAt, status.startedAt])
 
+  // Pausen zaehlen nicht als Aufnahmezeit (T-507): waehrend der Pause
+  // wird kein Audio aufgenommen.
+  const pausedAccumulatedMsRef = useRef(0)
+  const pausedSinceRef = useRef<number | null>(null)
+  const wasPausedRef = useRef(false)
+
+  useEffect(() => {
+    if (status.paused && !wasPausedRef.current) {
+      pausedSinceRef.current = Date.now()
+    } else if (!status.paused && wasPausedRef.current && pausedSinceRef.current !== null) {
+      pausedAccumulatedMsRef.current += Date.now() - pausedSinceRef.current
+      pausedSinceRef.current = null
+    }
+    wasPausedRef.current = !!status.paused
+  }, [status.paused])
+
   const durationLabel = useMemo(() => {
     const startedAt = status.startedAt ?? sessionStartedAt
     if (!startedAt) return '00:00'
@@ -312,7 +364,9 @@ export function useAppState() {
 
     if (Number.isNaN(startedAtMs)) return '00:00'
 
-    const elapsedSeconds = Math.max(0, Math.floor((endAtMs - startedAtMs) / 1000))
+    const pausedMs = pausedAccumulatedMsRef.current
+      + (pausedSinceRef.current !== null ? now - pausedSinceRef.current : 0)
+    const elapsedSeconds = Math.max(0, Math.floor((endAtMs - startedAtMs - pausedMs) / 1000))
     const hours = Math.floor(elapsedSeconds / 3600)
     const minutes = Math.floor((elapsedSeconds % 3600) / 60)
     const seconds = elapsedSeconds % 60
@@ -328,9 +382,16 @@ export function useAppState() {
     setIsStarting(true)
     try {
       setLastError(null)
+      // Ein Start nach Stop beginnt immer ein NEUES Transkript (T-507):
+      // Segmente und Sprecherbasis werden zurueckgesetzt, damit die
+      // Sprecher-IDs der neuen Azure-Sitzung nicht auf die alte Zuordnung
+      // fallen.
+      setSegments([])
+      setSpeakerAliases({})
       const next = await window.transcriptApi.start()
       setStatus(next)
       setSessionStartedAt(next.startedAt ?? new Date().toISOString())
+      setToast({ message: 'Neues Transkript gestartet.', variant: 'info', persistent: false })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Start fehlgeschlagen.'
       setLastError({ code: 'UI_START_FAILED', message })
@@ -347,6 +408,30 @@ export function useAppState() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Stop fehlgeschlagen.'
       setLastError({ code: 'UI_STOP_FAILED', message })
+    }
+  }
+
+  // Pause: die Azure-Sitzung lebt weiter, es wird kein Audio zugespeist.
+  // Fortsetzen nutzt dieselbe Sitzung — die Sprecher-IDs bleiben gueltig.
+  const onPause = async () => {
+    try {
+      const next = await window.transcriptApi.pause()
+      setStatus(next)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Pause fehlgeschlagen.'
+      setLastError({ code: 'UI_PAUSE_FAILED', message })
+      setToast({ message: `UI_PAUSE_FAILED: ${message}`, variant: 'error', persistent: true })
+    }
+  }
+
+  const onResume = async () => {
+    try {
+      const next = await window.transcriptApi.resume()
+      setStatus(next)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Fortsetzen fehlgeschlagen.'
+      setLastError({ code: 'UI_RESUME_FAILED', message })
+      setToast({ message: `UI_RESUME_FAILED: ${message}`, variant: 'error', persistent: true })
     }
   }
 
@@ -485,9 +570,13 @@ export function useAppState() {
     }
   }
 
-  const getSpeakerLabel = (speaker: string) => {
-    const alias = speakerAliases[speaker]?.trim()
-    return alias && alias.length > 0 ? alias : formatSpeakerKey(speaker)
+  // Der Alias-Schluessel ist die sessionsichere Identitaet. Nach einem
+  // Stop startet ein neues Transkript mit frischer Sprecherbasis — der
+  // Alias aus der vorigen Sitzung faellt dann nicht auf eine andere Person.
+  const getSpeakerLabel = (identity: string) => {
+    const alias = speakerAliases[identity]?.trim()
+    if (alias && alias.length > 0) return alias
+    return speakerLabels[identity] ?? formatSpeakerIdentity(identity)
   }
 
   // Segmente mit Anzeigenamen (Alias), wie sie im UI und im Export erscheinen.
@@ -495,18 +584,25 @@ export function useAppState() {
     () =>
       segments.map((segment) => ({
         ...segment,
-        speaker: getSpeakerLabel(getSpeakerKey(segment))
+        speaker: getSpeakerLabel(getSpeakerIdentity(segment))
       })),
-    [segments, speakerAliases]
+    [segments, speakerAliases, speakerLabels]
   )
+
+  // Spiegel fuer den Export: der Export-Snapshot muss auch dann gueltig
+  // sein, wenn direkt nach dem Stop ein neues Transkript startet.
+  const labeledSegmentsRef = useRef<TranscriptSegment[]>([])
+  useEffect(() => {
+    labeledSegmentsRef.current = labeledSegments
+  }, [labeledSegments])
 
   // Markdown-Export (T-506). Das Dokument enthaelt Frontmatter mit den
   // Metadaten der Sitzung; geschrieben wird es ueber das Backend, damit
   // der Zielordner (App-Verzeichnis oder konfigurierter Pfad) dort
   // aufgeloest wird.
-  const persistTranscript = async () => {
+  const persistTranscript = async (segmentsToExport: TranscriptSegment[]) => {
     try {
-      const markdown = buildTranscriptMarkdown(labeledSegments)
+      const markdown = buildTranscriptMarkdown(segmentsToExport)
       const path = await window.transcriptApi.saveTranscriptMarkdown(markdown)
       setToast({ message: `Transkript gespeichert: ${path}`, variant: 'info', persistent: false })
     } catch (error) {
@@ -521,8 +617,14 @@ export function useAppState() {
   // kurz verzoe gert: Final-Segmente, die nach dem Status-Event
   // eintreffen, sollen noch im Dokument landen. Jedes neue Segment
   // setzt die Wartezeit zurueck.
+  //
+  // Der Export bekommt einen Snapshot der beendeten Sitzung. Startet direkt
+  // danach ein neues Transkript (T-507), bleibt der Export des beendeten
+  // Transkripts trotzdem erhalten.
   const sessionActiveRef = useRef(false)
   const saveTimerRef = useRef<number | null>(null)
+  const exportSegmentsRef = useRef<TranscriptSegment[]>([])
+  const exportSessionRef = useRef<string | null>(null)
   const [saveRequest, setSaveRequest] = useState(0)
 
   useEffect(() => {
@@ -532,20 +634,39 @@ export function useAppState() {
     }
     if (sessionActiveRef.current) {
       sessionActiveRef.current = false
+      const finished = [...labeledSegmentsRef.current]
+      exportSegmentsRef.current = finished
+      exportSessionRef.current = finished.length > 0
+        ? finished[finished.length - 1].sessionId ?? null
+        : null
       setSaveRequest((value) => value + 1)
     }
   }, [status.running])
 
+  // Nachlaufende Final-Segmente der beendeten Sitzung gehoeren noch ins
+  // Dokument. Sobald ein neues Transkript laeuft, bleibt der Snapshot.
   useEffect(() => {
     if (saveRequest === 0) return
     if (status.running) return
+    // Nachlaufende Final-Segmente der beendeten Sitzung gehoeren noch ins
+    // Dokument. Sobald ein neues Transkript laeuft (andere Session oder
+    // leere Liste), bleibt der Snapshot der beendeten Sitzung unveraendert.
+    const current = labeledSegmentsRef.current
+    if (current.length === 0) return
+    const lastSession = current[current.length - 1].sessionId ?? null
+    if (exportSessionRef.current !== null && lastSession !== exportSessionRef.current) return
+    exportSegmentsRef.current = [...current]
+  }, [saveRequest, status.running, labeledSegments])
+
+  useEffect(() => {
+    if (saveRequest === 0) return
     if (!settings.transcript.markdownExport.enabled) return
-    if (labeledSegments.length === 0) return
+    if (exportSegmentsRef.current.length === 0) return
     if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current)
     saveTimerRef.current = window.setTimeout(() => {
       saveTimerRef.current = null
       setSaveRequest(0)
-      void persistTranscript()
+      void persistTranscript(exportSegmentsRef.current)
     }, 500)
     return () => {
       if (saveTimerRef.current !== null) {
@@ -553,7 +674,7 @@ export function useAppState() {
         saveTimerRef.current = null
       }
     }
-  }, [saveRequest, status.running, labeledSegments, settings.transcript.markdownExport.enabled])
+  }, [saveRequest, settings.transcript.markdownExport.enabled])
 
   return {
     configDraft,
@@ -563,7 +684,6 @@ export function useAppState() {
     devices,
     durationLabel,
     finalCount,
-    getSpeakerClass,
     getSpeakerLabel,
     isConfigReady,
     isStarting,
@@ -588,6 +708,8 @@ export function useAppState() {
       setSettingsDialogOpen(true)
     },
     onToggleRecording,
+    onPause,
+    onResume,
     runtimeIssue,
     segments,
     setConfigDraft,
@@ -597,6 +719,7 @@ export function useAppState() {
     settingsDialogOpen,
     settingsHint,
     speakerAliases,
+    speakerLabels,
     startedAtLabel,
     status,
     statusDescription,

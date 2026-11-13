@@ -4,12 +4,14 @@ Windows-Desktop-App zur strukturierten Erfassung von Meeting-Transkripten (**Tau
 
 Dieses Projekt ist die **Tauri-Migration** des bestehenden Electron-Projekts `projects/meeting-notes`, das als Referenz unverändert bleibt. Architektur und aktueller Funktionsumfang siehe [SPEC.md](./SPEC.md) und [DECISIONS.md](./DECISIONS.md).
 
+> **Aenderung 2026-11-13:** Pause und Stop haben klare Semantik. **Pause** haelt die Azure-Sitzung am Leben, speist aber kein Audio zu — der pausierte Abschnitt erscheint nicht im Transkript, und die Sprecher-Zuordnung bleibt gueltig. **Stop** beendet die Sitzung endgueltig; der naechste Start beginnt ein neues Transkript mit frischer Sprecherbasis. Die Sprecher-IDs sind jetzt sessionsicher zugeordnet. Siehe [T-507](./specs/T-507-pause-stop-und-sitzungsgebundene-sprecherzuordnung.md).
+>
 > **Stand 2026-11-12:** Implementierung und lokaler Portable-Build vorhanden. Settings-/Diagnose-Regressionen und Build-Smoke sind geprüft; der Corporate-Proxy-/Azure-Test war am 2026-11-12 im Firmennetz erfolgreich (HTTPS und native Speech/WSS). **Offen:** Aufnahme-Latenz und Clean-Machine-Deployment. Die [Specs](./specs/) unterscheiden implementierte Funktionen von ausstehenden Akzeptanztests.
 >
 > **Änderung 2026-11-11:** Eine gemeinsame Konfigurationsdatei `meeting-notes.config.json` direkt neben der EXE, MIT-Lizenz und automatischer Transkript-Export als Markdown mit Frontmatter. Siehe [T-506](./specs/T-506-transkript-markdown-export-und-frontmatter.md).
 
 ## Features (Ziel)
-- Start/Stop Recording im UI
+- Start/Stop Recording im UI sowie **Pause**/**Weiter**: die Sitzung laeuft weiter, es wird aber kein Audio zugespeist
 - Live-Transkript mit Interim/Final und verbesserter Lesbarkeit
 - Speaker-Badges/Farben inkl. Alias-Mapping
 - Fehler-/Status-Events via Tauri-Bridge
@@ -18,7 +20,7 @@ Dieses Projekt ist die **Tauri-Migration** des bestehenden Electron-Projekts `pr
 - Markdown-Export mit YAML-Frontmatter: automatisches Speichern beim Ende der Aufnahme (Pfad optional, Standard ist das Anwendungsverzeichnis) sowie Kopieren in die Zwischenablage — beide erzeugen dasselbe Dokument
 - C#-Sidecar (NAudio WASAPI Mic + Loopback, Azure Speech SDK, JSON-Lines nach Tauri)
 - Azure Speech: pro Quelle unabhängig `ConversationTranscriber` mit Sprechererkennung oder `SpeechRecognizer` ohne Sprechererkennung. Beide Optionen sind standardmäßig aktiviert, auch bei älteren Konfigurationen ohne diese Felder.
-- Mic- und Speaker-IDs werden getrennt angezeigt und zugeordnet: z. B. `Mic · Guest-1` und `Speaker · Guest-1`. Aliase gelten auch für die Anzeige des letzten Sprechers und den Clipboard-Export.
+- Mic- und Speaker-IDs werden getrennt angezeigt und zugeordnet: z. B. `Mic · Guest-1` und `Speaker · Guest-1`. Aliase gelten auch für die Anzeige des letzten Sprechers und den Clipboard-Export. Die Zuordnung ist sessionsicher: Azure vergibt die IDs pro Sitzung neu, deshalb kann ein Alias aus einer vorigen Sitzung nicht still auf eine andere Person fallen.
 - Optionale Proxy-Konfiguration für Azure Speech
 - Sidecar-Resampling auf 16 kHz / 16-bit / mono
 - Einstellungen mit drei Bereichen: **Allgemein**, **Azure-Konfiguration** und **Proxy** (rechts daneben; bei schmalen Fenstern untereinander). Proxy-Einstellungen befinden sich im Proxy-Bereich, **Verbindung testen** in der Azure-Konfiguration. Gespeichert werden Azure- und Proxy-Einstellungen gemeinsam über **Azure-Konfiguration speichern**. Der Pfad der gemeinsamen Konfigurationsdatei wird unterhalb aller drei Bereiche angezeigt.
@@ -88,7 +90,7 @@ npm run test:smoke
 
 **Den gesamten Portable-Ordner verteilen.** Sidecar-EXE und alle verwalteten/nativen DLLs liegen extern in `sidecar/`, nicht eingebettet in `meeting-notes.exe`. .NET 8 Runtime (win-x64) und WebView2 müssen auf dem Zielsystem vorhanden sein.
 
-Letzter verifizierter Portable-Build (2026-11-12): **20.94 MB gesamt**, davon Haupt-EXE `meeting-notes.exe` 14.18 MB und Sidecar 6.76 MB; 26 Dateien einschließlich 1 Config-Template und SHA256SUMS, alle 25 Hashes geprüft (`npm run test:smoke`: 25/25). 46 Node-Tests, 15 Rust-Tests sowie fokussierte TypeScript-/Rust-Prüfungen erfolgreich. Native lokale Tests bestätigen F12, relative Config-Pfade und detaillierte negative Transportdiagnosen; der positive Azure-/Firmenproxy-Nachweis erfolgte am 2026-11-12 separat (siehe [T-505](./specs/T-505-proxy-aware-azure-transport.md)). Kein Clean-Machine-Nachweis. MSI/NSIS wurden nicht neu gebaut.
+Letzter verifizierter Portable-Build (2026-11-13): **20.96 MB gesamt**, davon Haupt-EXE `meeting-notes.exe` 14.19 MB und Sidecar 6.77 MB; 26 Dateien einschließlich 1 Config-Template und SHA256SUMS, alle 25 Hashes geprüft (`npm run test:smoke`: 25/25). 51 Node-Tests, 18 Rust-Tests, 467 C#-Assertions sowie fokussierte TypeScript-/Rust-Prüfungen erfolgreich. Native lokale Tests bestätigen F12, relative Config-Pfade und detaillierte negative Transportdiagnosen; der positive Azure-/Firmenproxy-Nachweis erfolgte am 2026-11-12 separat (siehe [T-505](./specs/T-505-proxy-aware-azure-transport.md)). Kein Clean-Machine-Nachweis. MSI/NSIS wurden nicht neu gebaut.
 
 ## Lizenz
 

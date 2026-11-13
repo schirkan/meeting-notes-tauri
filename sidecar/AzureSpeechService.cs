@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -23,18 +24,59 @@ public sealed class AzureSpeechService : IDisposable
 
     private readonly AzureSpeechConfig _config;
     private readonly UserSettings _settings;
-    private readonly Dictionary<string, StreamState> _streams = new();
+    // ConcurrentDictionary: die Capture-Threads lesen die Streams
+    // waehrend eine vom Dienst beendete Sitzung neu verbunden wird (T-507).
+    private readonly ConcurrentDictionary<string, StreamState> _streams = new();
     private readonly HashSet<string> _missingSpeakerIdLogged = new();
     private readonly HashSet<string> _firstFrameLogged = new();
     private readonly Dictionary<string, FrameCounter> _pushCounters = new();
 
+    /// <summary>
+    /// Laufende Kennung des Sidecar-Prozesses. Sie dient als Session-ID im
+    /// Segment-Payload, solange Azure fuer die Quelle noch keine
+    /// Session-ID gemeldet hat (T-507).
+    /// </summary>
+    private readonly string _runId = Guid.NewGuid().ToString("N");
+
+    /// <summary>
+    /// Pause-Zustand (T-507): die Azure-Session bleibt verbunden, es
+    /// werden aber keine Audioframes mehr zugespeist. Der pausierte
+    /// Abschnitt wird dadurch nicht transkribiert.
+    /// </summary>
+    private volatile bool _paused;
+
     private SpeechConfig? _speechConfig;
     private bool _initialized;
+    private AzureAudioFormat? _format;
+    private bool _stopping;
 
     public AzureSpeechService(AzureSpeechConfig config, UserSettings settings)
     {
         _config = config;
         _settings = settings;
+    }
+
+    /// <summary>Laufzeit-Kennung dieses Sidecar-Prozesses.</summary>
+    public string RunId => _runId;
+
+    /// <summary>Ist die Aufnahme pausiert (Azure-Session lebt weiter)?</summary>
+    public bool IsPaused => _paused;
+
+    /// <summary>
+    /// Pausiert oder aktiviert die Aufnahme. Die Azure-Session wird
+    /// dabei weder gestoppt noch neu verbunden, damit die vom Azure-Dienst
+    /// vergebenen Sprecher-IDs gueltig bleiben (T-507).
+    /// </summary>
+    public void SetPaused(bool paused)
+    {
+        if (_paused == paused) return;
+        _paused = paused;
+        Logger.Info(
+            "azure",
+            paused ? "paused" : "resumed",
+            paused
+                ? "Audio-Zufuhr gestoppt; Azure-Session bleibt verbunden."
+                : "Audio-Zufuhr wieder aktiv.");
     }
 
     public async Task InitAsync()
@@ -66,6 +108,8 @@ public sealed class AzureSpeechService : IDisposable
             throw new InvalidOperationException("AzureSpeechService nicht initialisiert.");
         if (_streams.Count > 0)
             throw new InvalidOperationException("AzureSpeechService läuft bereits. Bitte zuerst StopAsync aufrufen.");
+        _format = format;
+        _stopping = false;
 
         var micState = EnsureStreamForFormat(SourceMic, format);
         var speakerState = EnsureStreamForFormat(SourceSpeaker, format);
@@ -85,6 +129,10 @@ public sealed class AzureSpeechService : IDisposable
     public void PushFrame(AudioFrame frame)
     {
         if (_speechConfig is null) return;
+        // Pause (T-507): die Azure-Session lebt weiter, aber es werden
+        // keine Audioframes mehr zugespeist. Der pausierte Abschnitt
+        // erscheint deshalb nicht im Transkript.
+        if (_paused) return;
         try
         {
             if (_firstFrameLogged.Add(frame.Source))
@@ -97,7 +145,11 @@ public sealed class AzureSpeechService : IDisposable
                     $"channels={frame.Channels}, bytes={frame.Payload.Length}).");
             }
 
-            var state = _streams[frame.Source];
+            // TryGetValue statt Indexer: waehrend eines Reconnects kann die
+            // Quelle kurzzeitig ohne Stream sein. Der Frame wird dann
+            // verworfen, statt eine Ausnahme in die Capture-Schleife zu
+            // tragen.
+            if (!_streams.TryGetValue(frame.Source, out var state)) return;
             state.PushStream.Write(frame.Payload);
 
             var counter = _pushCounters.GetValueOrDefault(frame.Source) ?? new FrameCounter();
@@ -122,8 +174,35 @@ public sealed class AzureSpeechService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Verbindet Quellen neu, deren Azure-Session vom Dienst beendet wurde
+    /// (z. B. nach dem 60-Minuten-Limit der Verbindung). Eine Neuverbindung
+    /// vergibt neue Sprecher-IDs — das UI erkennt das an der Session-ID im
+    /// Segment und baut die Sprecherbasis neu auf (T-507).
+    /// </summary>
+    public async Task<string[]> ReconnectDeadStreamsAsync()
+    {
+        if (_format is null) return Array.Empty<string>();
+        var restarted = new List<string>();
+        foreach (var source in _streams.Where(pair => pair.Value.SessionDead).Select(pair => pair.Key).ToArray())
+        {
+            var dead = _streams[source];
+            FinalizeStream(dead);
+            _streams.TryRemove(source, out _);
+            var fresh = EnsureStreamForFormat(source, _format);
+            await StartStreamAsync(fresh);
+            restarted.Add(source);
+        }
+        if (restarted.Count > 0)
+            Logger.Info("azure", "session_restarted",
+                $"{restarted.Count} Quelle(n) neu verbunden: {string.Join(", ", restarted)}. " +
+                "Die Sprecher-IDs wurden neu vergeben.");
+        return restarted.ToArray();
+    }
+
     public async Task StopAsync()
     {
+        _stopping = true;
         Logger.Info("azure", "stopping", $"{_streams.Count} aktive Stream(s) werden beendet.");
         var closeTasks = _streams.Values.Select(state => Task.Run(() => FinalizeStream(state))).ToArray();
         await Task.WhenAll(closeTasks);
@@ -160,45 +239,46 @@ public sealed class AzureSpeechService : IDisposable
         if (useConversation)
         {
             var recognizer = new ConversationTranscriber(_speechConfig, autoDetect, audioConfig);
-            AttachCommonDiagnostics(recognizer, source, "conversationTranscriber");
+            var state = new StreamState(recognizer, pushStream, "conversationTranscriber", source);
+            AttachCommonDiagnostics(recognizer, state);
             recognizer.Transcribing += (_, e) =>
             {
                 var text = e.Result?.Text?.Trim();
                 if (!string.IsNullOrEmpty(text))
-                    EmitTranscript(source, text, "interim", 0.8, e.Result?.SpeakerId, ExtractConversationLanguage(e.Result));
+                    EmitTranscript(source, text, "interim", 0.8, e.Result?.SpeakerId,
+                        ExtractConversationLanguage(e.Result), state.ResolveSessionId());
             };
             recognizer.Transcribed += (_, e) =>
             {
                 var text = e.Result?.Text?.Trim();
                 if (!string.IsNullOrEmpty(text))
                     EmitTranscript(source, text, "final", 0.9, e.Result?.SpeakerId,
-                        ExtractConversationLanguage(e.Result));
+                        ExtractConversationLanguage(e.Result), state.ResolveSessionId());
             };
             recognizer.Canceled += (_, e) => HandleCanceled(source, "conversationTranscriber", e);
-            var state = new StreamState(recognizer, pushStream, "conversationTranscriber", source);
             _streams[source] = state;
             return state;
         }
         else
         {
             var recognizer = new SpeechRecognizer(_speechConfig, autoDetect, audioConfig);
-            AttachCommonDiagnostics(recognizer, source, "speechRecognizer");
+            var state = new StreamState(recognizer, pushStream, "speechRecognizer", source);
+            AttachCommonDiagnostics(recognizer, state);
             recognizer.Recognizing += (_, e) =>
             {
                 var text = e.Result?.Text?.Trim();
                 if (!string.IsNullOrEmpty(text))
                     EmitTranscript(source, text, "interim", 0.8, source == SourceMic ? "self" : "guest",
-                        ExtractSpeechLanguage(e.Result));
+                        ExtractSpeechLanguage(e.Result), state.ResolveSessionId());
             };
             recognizer.Recognized += (_, e) =>
             {
                 var text = e.Result?.Text?.Trim();
                 if (!string.IsNullOrEmpty(text))
                     EmitTranscript(source, text, "final", 0.9, source == SourceMic ? "self" : "guest",
-                        ExtractSpeechLanguage(e.Result));
+                        ExtractSpeechLanguage(e.Result), state.ResolveSessionId());
             };
             recognizer.Canceled += (_, e) => HandleCanceled(source, "speechRecognizer", e);
-            var state = new StreamState(recognizer, pushStream, "speechRecognizer", source);
             _streams[source] = state;
             return state;
         }
@@ -245,20 +325,31 @@ public sealed class AzureSpeechService : IDisposable
         Logger.Info("azure", "stream_closed", $"Recognizer geschlossen (mode={state.Mode}, started={state.Started}).");
     }
 
-    private void AttachCommonDiagnostics(Recognizer recognizer, string source, string mode)
+    private void AttachCommonDiagnostics(Recognizer recognizer, StreamState state)
     {
         recognizer.SessionStarted += (_, e) =>
-            Logger.Info("azure", "session_start", $"Session gestartet (source={source}, mode={mode}, session={e.SessionId}).");
+        {
+            state.OnSessionStarted(e.SessionId);
+            Logger.Info("azure", "session_start",
+                $"Session gestartet (source={state.Source}, mode={state.Mode}, session={e.SessionId}).");
+        };
         recognizer.SessionStopped += (_, e) =>
-            Logger.Info("azure", "session_stop", $"Session gestoppt (source={source}, mode={mode}, session={e.SessionId}).");
+        {
+            Logger.Info("azure", "session_stop",
+                $"Session gestoppt (source={state.Source}, mode={state.Mode}, session={e.SessionId}).");
+            if (!_stopping) state.MarkDead();
+        };
         recognizer.SpeechStartDetected += (_, e) =>
-            Logger.Info("azure", "speech_start", $"Speech start erkannt (source={source}, mode={mode}, offset={e.Offset}).");
+            Logger.Info("azure", "speech_start",
+                $"Speech start erkannt (source={state.Source}, mode={state.Mode}, offset={e.Offset}).");
         recognizer.SpeechEndDetected += (_, e) =>
-            Logger.Info("azure", "speech_end", $"Speech end erkannt (source={source}, mode={mode}, offset={e.Offset}).");
+            Logger.Info("azure", "speech_end",
+                $"Speech end erkannt (source={state.Source}, mode={state.Mode}, offset={e.Offset}).");
     }
 
     private void HandleCanceled(string source, string mode, RecognitionEventArgs e)
     {
+        if (!_stopping && _streams.TryGetValue(source, out var canceled)) canceled.MarkDead();
         // ErrorDetails / Reason / ErrorCode live on the derived
         // *CanceledEventArgs classes; reflection keeps this helper generic.
         var prop = (string name) => e.GetType().GetProperty(name)?.GetValue(e)?.ToString();
@@ -278,7 +369,7 @@ public sealed class AzureSpeechService : IDisposable
     internal string GetRecognitionMode(string source) =>
         _settings.Diarization.IsEnabled(source) ? "conversationTranscriber" : "speechRecognizer";
 
-    internal void EmitTranscript(string source, string text, string state, double confidence, string? speaker, string? language)
+    internal void EmitTranscript(string source, string text, string state, double confidence, string? speaker, string? language, string? sessionId = null)
     {
         var diarized = _settings.Diarization.IsEnabled(source);
         if (diarized && string.IsNullOrWhiteSpace(speaker))
@@ -300,6 +391,10 @@ public sealed class AzureSpeechService : IDisposable
             id = Guid.NewGuid().ToString(),
             source,
             speaker = speakerId,
+            // Session-Dimension (T-507): Azure vergibt die Sprecher-IDs
+            // pro Session. Ohne diese Angabe kann das UI eine ID aus einer
+            // alten Session nicht von einer neuen unterscheiden.
+            sessionId = sessionId ?? _runId,
             language,
             timestampIso = DateTime.UtcNow.ToString("O"),
             text,
@@ -377,12 +472,82 @@ internal sealed class StreamState
     public string Source { get; }
     public bool Started { get; set; }
 
+    /// <summary>Azure-Session-ID dieser Quelle (T-507).</summary>
+    public string? AzureSessionId { get; set; }
+
+    /// <summary>
+    /// Eindeutige Kennung dieses Streams. Sie dient als Rueckfall-ID, wenn
+    /// Azure noch keine Session-ID gemeldet hat. Beim Neuverbinden wird ein
+    /// neuer Stream erzeugt und damit eine neue Kennung vergeben — das UI
+    /// erkennt daran die gewechselte Sprecherbasis.
+    /// </summary>
+    public string InstanceId { get; } = Guid.NewGuid().ToString("N");
+
+    /// <summary>
+    /// Die Azure-Session dieser Quelle wurde vom Dienst beendet. Sie wird
+    /// neu verbunden.
+    /// </summary>
+    public bool SessionDead { get; private set; }
+
+    public void MarkDead() => SessionDead = true;
+
+    /// <summary>
+    /// Wie oft Azure fuer diese Quelle eine Session gemeldet hat. Der
+    /// zweite Aufruf markiert eine neue Azure-Session (Neuverbindung).
+    /// </summary>
+    public int SessionStartedCount { get; set; }
+
+    /// <summary>
+    /// Die Session-ID, die im Segment-Payload gemeldet wird. Sie ist
+    /// "sticky": der erste Wert bleibt fuer die Lebensdauer der Quelle
+    /// erhalten, damit Segmente einer Quelle nie zwischen zwei
+    /// Session-IDs wechseln. Eine echte Azure-Neuverbindung setzt sie neu.
+    /// </summary>
+    public string? EffectiveSessionId { get; private set; }
+
+    /// <summary>Wurde die Session-ID bereits an ein Segment gemeldet?</summary>
+    public bool SessionAnnounced { get; private set; }
+
     public StreamState(Recognizer recognizer, PushAudioInputStream pushStream, string mode, string source)
     {
         RecognizerBase = recognizer;
         PushStream = pushStream;
         Mode = mode;
         Source = source;
+    }
+
+    /// <summary>
+    /// Liefert die Session-ID fuer die Segment-Meldung. Solange Azure keine
+    /// Session-ID geliefert hat, wird die eindeutige Kennung dieses Streams
+    /// verwendet, damit kein Segment ohne Session-Dimension im UI landet.
+    /// </summary>
+    public string ResolveSessionId()
+    {
+        if (EffectiveSessionId is null)
+        {
+            EffectiveSessionId = AzureSessionId ?? InstanceId;
+            SessionAnnounced = true;
+        }
+        return EffectiveSessionId;
+    }
+
+    /// <summary>
+    /// Wird aufgerufen, wenn Azure eine Session meldet. Eine andere
+    /// Session-ID als zuvor bedeutet einen neuen Nummernkreis fuer die
+    /// Sprecher-IDs — die Identitaet im Segment wird deshalb neu gesetzt.
+    /// </summary>
+    public void OnSessionStarted(string sessionId)
+    {
+        var previous = AzureSessionId;
+        SessionStartedCount += 1;
+        AzureSessionId = sessionId;
+        SessionDead = false;
+        if (previous is not null && !string.Equals(previous, sessionId, StringComparison.Ordinal))
+        {
+            EffectiveSessionId = null;
+            return;
+        }
+        if (!SessionAnnounced) EffectiveSessionId = sessionId;
     }
 }
 

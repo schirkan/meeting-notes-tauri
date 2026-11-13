@@ -1,13 +1,15 @@
-import { formatSpeakerKey } from '../speaker-utils'
+import { formatSpeakerIdentity } from '../speaker-utils'
 
 type SpeakerMappingPanelProps = {
   knownSpeakers: string[]
+  speakerLabels: Record<string, string>
   speakerAliases: Record<string, string>
   setSpeakerAliases: React.Dispatch<React.SetStateAction<Record<string, string>>>
 }
 
 export function SpeakerMappingPanel(props: SpeakerMappingPanelProps) {
-  const { knownSpeakers, speakerAliases, setSpeakerAliases } = props
+  const { knownSpeakers, speakerLabels, speakerAliases, setSpeakerAliases } = props
+  const labelOf = (speaker: string) => speakerLabels[speaker] ?? formatSpeakerIdentity(speaker)
 
   return (
     <section className="panel speaker-mapping-panel">
@@ -30,7 +32,7 @@ export function SpeakerMappingPanel(props: SpeakerMappingPanelProps) {
             <tbody>
               {knownSpeakers.map((speaker) => (
                 <tr key={speaker}>
-                  <td className="speaker-mapping-id">{formatSpeakerKey(speaker)}</td>
+                  <td className="speaker-mapping-id">{labelOf(speaker)}</td>
                   <td>
                     <input
                       type="text"
@@ -42,7 +44,7 @@ export function SpeakerMappingPanel(props: SpeakerMappingPanelProps) {
                         }))
                       }
                       placeholder="Anzeigename"
-                      aria-label={`Anzeigename für ${formatSpeakerKey(speaker)}`}
+                      aria-label={`Anzeigename für ${labelOf(speaker)}`}
                     />
                   </td>
                 </tr>
