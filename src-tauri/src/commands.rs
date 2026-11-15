@@ -290,6 +290,18 @@ pub async fn clear_debug_log(
 
 // ---------- devices ----------
 
+fn background_command(program: &std::ffi::OsStr) -> std::process::Command {
+    let mut command = std::process::Command::new(program);
+    command.stdout(std::process::Stdio::piped());
+    command.stderr(std::process::Stdio::piped());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000); // CREATE_NO_WINDOW; stdout/stderr bleiben nutzbar.
+    }
+    command
+}
+
 #[tauri::command]
 pub async fn get_devices(app: AppHandle) -> Result<DeviceSnapshot, String> {
     // Wir rufen hier den **Sidecar-EXE selbst** auf, aber **nicht als
@@ -337,11 +349,9 @@ pub async fn get_devices(app: AppHandle) -> Result<DeviceSnapshot, String> {
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
     let result = tauri::async_runtime::spawn_blocking(move || -> Result<Option<DeviceSnapshot>, String> {
-        let mut child = std::process::Command::new(&exe_path)
+        let mut child = background_command(exe_path.as_os_str())
             .arg("--list-devices")
             .current_dir(&cwd)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
             .spawn()
             .map_err(|e| format!("Sidecar-Spawn fehlgeschlagen: {e}"))?;
 
@@ -486,6 +496,24 @@ impl From<SidecarDeviceInfo> for DeviceInfo {
 #[cfg(test)]
 mod device_deser_tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn background_process_has_no_console_and_preserves_output_pipes() {
+        let powershell = std::path::PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+            .join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
+        let output = background_command(powershell.as_os_str())
+            .args(["-NoProfile", "-Command", r#"
+                Add-Type 'using System; using System.Runtime.InteropServices; public static class ConsoleProbe { [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow(); }';
+                [Console]::WriteLine([ConsoleProbe]::GetConsoleWindow().ToInt64());
+                [Console]::Error.WriteLine('stderr-ok');
+            "#])
+            .output()
+            .expect("Hintergrundprozess muss starten");
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "0");
+        assert_eq!(String::from_utf8_lossy(&output.stderr).trim(), "stderr-ok");
+    }
 
     #[test]
     fn sidecar_device_snapshot_parses_pascal_case_payload() {

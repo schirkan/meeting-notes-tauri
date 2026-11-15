@@ -9,11 +9,15 @@ public sealed record SpeechConnectivityResult(bool reachable, IReadOnlyList<Spee
 
 public static class SpeechConnectivityDiagnostic
 {
-    public const string CertificateWarning = "Speech SDK/WSS certificate validation remains enabled: no officially supported Windows .NET Speech SDK 1.44 certificate-validation bypass was found. HTTPS probe settings do not apply to native Speech SDK connections.";
-
     public static async Task<SpeechConnectivityResult> RunFromArgsAsync(IReadOnlyDictionary<string, string?> args)
     {
-        var steps = new List<SpeechConnectivityStep> { new("speech_tls", "warn", CertificateWarning) };
+        // Kein eigener TLS-Schritt: Die Zertifikatspruefung ist eine feste
+        // Eigenschaft des nativen SDK-Pfads (kein offiziell unterstuetzter
+        // Bypass) und keine Messgroesse dieses Tests. Sie aeussert sich ohnehin
+        // als Fehler in den eigentlichen WSS-Proben, wenn die Kette nicht
+        // vertrauenswuerdig ist. Der Dialog weist die Pruefung einmal als
+        // Hinweis aus.
+        var steps = new List<SpeechConnectivityStep>();
         try
         {
             var key = SpeechConfiguration.GetSpeechKey(args);

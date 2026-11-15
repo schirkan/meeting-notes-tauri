@@ -2,7 +2,8 @@
 //!
 //! Resolves and probes the proxy when configured, otherwise the endpoint.
 //! HTTPS HEAD uses an explicit HTTP CONNECT proxy or explicit direct mode.
-//! Certificate validation is disabled only for this HTTPS diagnosis.
+//! TLS certificates are validated against the platform trust store (Windows
+//! certificate store), exactly like the native Speech/WSS sessions.
 //! Native Speech/WSS sessions are checked separately by the sidecar.
 //!
 //! Each step produces a `Step { step, status, detail }` entry so the
@@ -114,11 +115,14 @@ async fn https_probe(
     proxy: Option<&AzureProxyConfig>,
 ) -> Result<(u16, String, u128), String> {
     // Explicit direct mode must not silently inherit an environment proxy.
+    // Certificate validation stays enabled: the probe must not leak the
+    // subscription key to a TLS-intercepting proxy that cannot present a
+    // trusted certificate. The trust decision uses the platform verifier
+    // (Windows certificate store), so corporate root CAs work as usual.
     let mut builder = reqwest::Client::builder()
         .no_proxy()
         .timeout(PROBE_TIMEOUT)
-        .redirect(reqwest::redirect::Policy::none())
-        .danger_accept_invalid_certs(true);
+        .redirect(reqwest::redirect::Policy::none());
     if let Some(proxy) = proxy {
         builder = builder.proxy(configured_proxy(proxy)?);
     }
@@ -143,6 +147,22 @@ async fn https_probe(
     let status = response.status().as_u16();
     let text = response.status().canonical_reason().unwrap_or("").to_string();
     Ok((status, text, start.elapsed().as_millis()))
+}
+
+/// Einstufung des HTTP-Status der HTTPS-Probe.
+///
+/// - `2xx`: Der Endpoint hat regulär geantwortet — Erfolg.
+/// - `401`/`403`: Der Endpoint ist erreichbar, der Speech-Key fehlt oder ist
+///   ungültig. Das ist eine Warnung, kein Transportfehler.
+/// - `407`: Der Proxy verlangt Authentifizierung — Fehler.
+/// - Alles andere (z. B. `404`, `5xx`): Warnung, weil die Ursache
+///   nicht eindeutig ist.
+fn https_status_step_status(status: u16) -> StepStatus {
+    match status {
+        200..=299 => StepStatus::Ok,
+        407 => StepStatus::Error,
+        _ => StepStatus::Warn,
+    }
 }
 
 pub async fn diagnose(
@@ -181,8 +201,10 @@ pub async fn diagnose(
     });
     steps.push(Step {
         step: "https-tls".into(),
-        status: StepStatus::Warn,
-        detail: "HTTPS-Diagnose ignoriert Zertifikatsprüfungen (unsicher). Dies gilt nicht für Speech/WSS.".into(),
+        status: StepStatus::Ok,
+        detail: "HTTPS-Diagnose prüft TLS-Zertifikate gegen den System-Vertrauensspeicher. \
+Bei TLS-Inspection muss das Firmen-Root-CA dort vertrauenswürdig sein."
+            .into(),
     });
     steps.push(Step {
         step: "endpoint".into(),
@@ -228,11 +250,15 @@ pub async fn diagnose(
     match https_probe(&probe_url, subscription_key, proxy).await {
         Ok((status, text, _)) => {
             let latency = https_start.elapsed().as_millis() as u64;
-            let status_label = if status == 401 || status == 403 { StepStatus::Ok } else { StepStatus::Warn };
+            let status_label = https_status_step_status(status);
+            let hint = match status {
+                401 | 403 => " — Endpoint erreichbar, Speech-Key fehlt oder ist ungültig",
+                _ => "",
+            };
             steps.push(Step {
                 step: "https-probe".into(),
                 status: status_label,
-                detail: format!("HTTPS-Probe HTTP {status} {text} ({latency} ms)"),
+                detail: format!("HTTPS-Probe HTTP {status} {text} ({latency} ms){hint}"),
             });
             ConnectivityResult {
                 probe_url,
@@ -287,6 +313,21 @@ mod tests {
     }
 
     #[test]
+    fn classifies_https_status_codes_consistently() {
+        // 2xx ist der Normalfall: Der Endpoint hat regulär geantwortet.
+        assert!(matches!(https_status_step_status(200), StepStatus::Ok));
+        assert!(matches!(https_status_step_status(204), StepStatus::Ok));
+        // 401/403 bedeuten: erreichbar, aber der Speech-Key fehlt oder ist ungültig.
+        assert!(matches!(https_status_step_status(401), StepStatus::Warn));
+        assert!(matches!(https_status_step_status(403), StepStatus::Warn));
+        // 407 kommt vom Proxy und ist ein Fehler.
+        assert!(matches!(https_status_step_status(407), StepStatus::Error));
+        // Unklare Antworten bleiben Warnung.
+        assert!(matches!(https_status_step_status(404), StepStatus::Warn));
+        assert!(matches!(https_status_step_status(500), StepStatus::Warn));
+    }
+
+    #[test]
     fn validates_proxy_host_and_port_without_leaking_credentials() {
         for host in ["", "http://proxy.test", "u:p@proxy.test", "proxy.test/path"] {
             let proxy = AzureProxyConfig { host: host.into(), port: 8080, username: None, password: None };
@@ -323,5 +364,59 @@ mod tests {
         assert!(error.contains("proxy authorization required"), "{error}");
         assert!(!error.contains("fake-key"));
         tokio::time::timeout(PROBE_TIMEOUT, server).await.unwrap().unwrap();
+    }
+
+    /// Regressionsschutz: die HTTPS-Diagnose darf ein nicht vertrauenswürdiges
+    /// Zertifikat nicht akzeptieren. Der Test startet einen lokalen TLS-Server
+    /// mit einem selbstsignierten Zertifikat; ohne aktivierte
+    /// Zertifikatsprüfung würde die Probe ein HTTP-200 liefern.
+    #[tokio::test]
+    async fn https_probe_rejects_untrusted_certificate() {
+        use rcgen::{CertificateParams, KeyPair, SanType};
+        use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
+        use rustls::ServerConfig;
+        use std::net::{IpAddr, Ipv4Addr};
+        use std::sync::Arc;
+        use tokio_rustls::TlsAcceptor;
+
+        let mut params = CertificateParams::new(Vec::new()).unwrap();
+        params
+            .subject_alt_names
+            .push(SanType::IpAddress(IpAddr::V4(Ipv4Addr::LOCALHOST)));
+        let key = KeyPair::generate().unwrap();
+        let cert = params.self_signed(&key).unwrap();
+
+        let server_config = ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(
+                vec![cert.der().clone()],
+                PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(key.serialized_der().to_vec())),
+            )
+            .unwrap();
+        let acceptor = TlsAcceptor::from(Arc::new(server_config));
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut tls = match acceptor.accept(stream).await {
+                Ok(tls) => tls,
+                // Der Client hat das Zertifikat abgelehnt — genau das erwarten wir.
+                Err(_) => return false,
+            };
+            let mut buffer = [0; 1024];
+            let _ = tls.read(&mut buffer).await;
+            let _ = tls.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n").await;
+            true
+        });
+
+        let error = https_probe(&format!("https://127.0.0.1:{port}/"), "fake-key", None)
+            .await
+            .expect_err("HTTPS-Probe muss ein nicht vertrauenswürdiges Zertifikat ablehnen");
+        assert!(error.to_lowercase().contains("cert"), "{error}");
+        assert!(!error.contains("fake-key"));
+
+        let handshake_succeeded = tokio::time::timeout(PROBE_TIMEOUT, server).await.unwrap().unwrap();
+        assert!(!handshake_succeeded, "Der Client hätte das Zertifikat nicht annehmen dürfen");
     }
 }

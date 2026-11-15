@@ -1,84 +1,25 @@
 #!/usr/bin/env node
 
-import { existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, rmSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const SIDECAR_ROOT = join(process.cwd(), 'sidecar')
-const CSPROJ_PATH = join(SIDECAR_ROOT, 'MeetingNotes.Sidecar.csproj')
-const OUTPUT_DIRS = ['bin', 'obj']
+const root = dirname(dirname(fileURLToPath(import.meta.url)))
+const paths = [
+  join(root, 'src-tauri', 'target', 'sidecar-artifacts'),
+  join(root, 'src-tauri', 'target', 'sidecar-publish'),
+  join(root, 'src-tauri', 'target', 'sidecar-validation-artifacts'),
+  join(root, 'sidecar', 'bin'),
+  join(root, 'sidecar', 'obj'),
+  join(root, 'sidecar', 'publish'),
+  join(root, 'sidecar', 'Validation', 'bin'),
+  join(root, 'sidecar', 'Validation', 'obj')
+]
 
-function isDirectory(path) {
-  try {
-    return statSync(path).isDirectory()
-  } catch {
-    return false
-  }
+const dryRun = process.argv.includes('--dry-run')
+for (const path of paths) {
+  if (!existsSync(path)) continue
+  console.log(`${dryRun ? 'Wuerde entfernen' : 'Entferne'}: ${path}`)
+  if (!dryRun) rmSync(path, { recursive: true, force: true })
 }
-
-/**
- * Liest die aktiven Target-Frameworks aus dem Sidecar-csproj.
- * Unterstützt sowohl einzelne `<TargetFramework>` als auch Multi-Target
- * `<TargetFrameworks>` (Semikolon-getrennt). Fallback: ['net10.0-windows'].
- */
-function readActiveTargetFrameworks() {
-  if (!existsSync(CSPROJ_PATH)) {
-    console.warn(`Warnung: csproj nicht gefunden: ${CSPROJ_PATH}`)
-    return ['net10.0-windows']
-  }
-
-  const xml = readFileSync(CSPROJ_PATH, 'utf8')
-  const singleMatch = xml.match(/<TargetFramework>([^<]+)<\/TargetFramework>/i)
-  if (singleMatch) {
-    return [singleMatch[1].trim()]
-  }
-
-  const multiMatch = xml.match(/<TargetFrameworks>([^<]+)<\/TargetFrameworks>/i)
-  if (multiMatch) {
-    return multiMatch[1].split(';').map((value) => value.trim()).filter(Boolean)
-  }
-
-  return ['net10.0-windows']
-}
-
-function listSubdirectories(path) {
-  if (!isDirectory(path)) return []
-  return readdirSync(path, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-}
-
-function cleanStaleTargets() {
-  const activeTargets = new Set(readActiveTargetFrameworks())
-  console.log(`Aktive Target-Frameworks (aus csproj): ${[...activeTargets].join(', ')}`)
-
-  let removed = 0
-
-  for (const sub of OUTPUT_DIRS) {
-    const root = join(SIDECAR_ROOT, sub)
-    if (!isDirectory(root)) continue
-
-    for (const config of listSubdirectories(root)) {
-      const configPath = join(root, config)
-      const targetDirs = listSubdirectories(configPath)
-
-      for (const target of targetDirs) {
-        if (activeTargets.has(target)) continue
-
-        const targetPath = join(configPath, target)
-        rmSync(targetPath, { recursive: true, force: true })
-        console.log(`entfernt: ${targetPath}`)
-        removed += 1
-      }
-    }
-  }
-
-  return removed
-}
-
-if (!existsSync(SIDECAR_ROOT)) {
-  console.error(`Sidecar-Verzeichnis nicht gefunden: ${SIDECAR_ROOT}`)
-  process.exit(1)
-}
-
-const removed = cleanStaleTargets()
-console.log(`Sidecar-Cleanup abgeschlossen. ${removed} stale Verzeichnis(se) entfernt.`)
+console.log(dryRun ? 'Keine Dateien geloescht.' : 'Sidecar-Cleanup abgeschlossen; Rust-Caches bleiben erhalten.')

@@ -22,7 +22,7 @@ NuGet-Paket `Microsoft.CognitiveServices.Speech` (1.53.x) zum Sidecar-Projekt hi
 - Audio-Push direkt aus dem Sidecar an `SpeechRecognizer` / `ConversationTranscriber` — **keine** Pipe-Marshalling-Schritte für PCM-Frames.
 - Logging auf jedem Recognizer-Event für Diagnose (analog zum bestehenden `azure-transcription-service.ts`).
 - Lifecycle-Korrektheit: `StopTranscribingAsync` für `ConversationTranscriber`, `StopContinuousRecognitionAsync` für `SpeechRecognizer`.
-- Native Windows-SDK-Zertifikatsprüfungen bleiben aktiv; der unsichere HTTPS-Diagnose-Bypass in Rust gilt nicht für Speech/WSS.
+- Native Windows-SDK-Zertifikatsprüfungen bleiben aktiv; die HTTPS-Diagnose in Rust prüft Zertifikate ebenfalls aktiv (gleicher System-Vertrauensspeicher).
 
 ## Log
 - 2026-06-25: Spec angelegt.

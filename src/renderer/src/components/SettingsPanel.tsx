@@ -18,9 +18,7 @@ type SettingsPanelProps = {
   statusRunning: boolean
   settings: UserSettings
   devices: AudioDeviceSnapshot
-  settingsError: string | null
   setSettings: React.Dispatch<React.SetStateAction<UserSettings>>
-  onSaveSettings: () => Promise<void>
 }
 
 export function SettingsPanel(props: SettingsPanelProps) {
@@ -28,9 +26,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     statusRunning,
     settings,
     devices,
-    settingsError,
-    setSettings,
-    onSaveSettings
+    setSettings
   } = props
 
   return (
@@ -166,11 +162,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
         </label>
         <p className="meta">Änderungen gelten nach dem Speichern für die nächste Aufnahme.</p>
       </div>
-
-      <button className="primary-button settings-save-button" type="button" onClick={() => void onSaveSettings()} disabled={statusRunning}>
-        Einstellungen speichern
-      </button>
-      {settingsError && <div className="hint">{settingsError}</div>}
     </section>
   )
 }

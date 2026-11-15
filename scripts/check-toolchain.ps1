@@ -1,85 +1,85 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    Verify that the meeting-notes-tauri toolchain is installed and
-    functional. Exits 0 if all components are OK, 1 otherwise.
-
-.DESCRIPTION
-    Checks:
-      * Node >= 22.12.0 (per package.json engines)
-      * .NET SDK 8.0.x (sidecar build target)
-      * Rust (cargo) — any toolchain
-      * MinGW-w64 gcc (w64devkit) — required for the GNU build target
-
-    Searches the user profile (%USERPROFILE%\.cargo\bin,
-    %USERPROFILE%\dotnet, %USERPROFILE%\w64devkit\w64devkit\bin) so
-    the check works even when the system PATH doesn't include them.
-
-    The script invokes each tool via cmd.exe (which handles the
-    process startup reliably under PowerShell 5.1 where `& $cmd`
-    can hang on certain short-output native binaries).
-
+    Prueft Node gemaess package.json, .NET 10, Rust-MSVC und C++-Buildtools.
 .EXAMPLE
-    powershell -File scripts/check-toolchain.ps1
+    powershell -File scripts\check-toolchain.ps1
 #>
-
-$ErrorActionPreference = 'Continue'
-
-# Extend PATH for this session so toolchain binaries are discoverable.
-$toolchainPaths = @(
-  (Join-Path $env:USERPROFILE '.cargo\bin'),
-  (Join-Path $env:USERPROFILE 'dotnet'),
-  (Join-Path $env:USERPROFILE 'w64devkit\w64devkit\bin')
-) | Where-Object { Test-Path $_ }
-if ($toolchainPaths.Count -gt 0) {
-  $env:Path = ($toolchainPaths -join ';') + ';' + $env:Path
-}
-if (-not $env:DOTNET_ROOT) {
-  $dotnetExe = Join-Path $env:USERPROFILE 'dotnet\dotnet.exe'
-  if (Test-Path $dotnetExe) { $env:DOTNET_ROOT = Join-Path $env:USERPROFILE 'dotnet' }
-}
-
-$outFile = Join-Path $env:TEMP 'check-toolchain.out'
-$errFile = Join-Path $env:TEMP 'check-toolchain.err'
-
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'run-with-toolchain.ps1')
+$root = Split-Path $PSScriptRoot -Parent
 $failures = @()
 
-function Probe([string]$label, [string]$cmdLine, [string]$pattern) {
-  Write-Host -NoNewline "  $label ... "
-  Remove-Item $outFile, $errFile -ErrorAction SilentlyContinue
-  cmd /c "$cmdLine > `"$outFile`" 2> `"$errFile`""
-  $output = ''
-  if (Test-Path $outFile) { $output += (Get-Content $outFile -Raw) }
-  if (Test-Path $errFile) { $output += "`n" + (Get-Content $errFile -Raw) }
-  Remove-Item $outFile, $errFile -ErrorAction SilentlyContinue
-
-  if ($pattern -and $output -notmatch $pattern) {
-    Write-Host "FAIL" -ForegroundColor Red
-    $snippet = $output.Substring(0, [Math]::Min(120, $output.Length)).Trim()
-    Write-Host "    Output: $snippet"
-    Write-Host "    Pattern: $pattern"
-    $script:failures += $label
-  } else {
-    $firstLine = ($output -split "`r?`n" | Select-Object -First 1).Trim()
-    Write-Host "OK" -ForegroundColor Green
-    if ($firstLine) { Write-Host "    $firstLine" -ForegroundColor DarkGray }
-  }
+function Probe([string]$label, [string]$executable, [string[]]$arguments, [string]$pattern) {
+    $tool = Get-Command $executable -ErrorAction SilentlyContinue
+    if (-not $tool) {
+        Write-Host "FEHLER: $label - $executable nicht gefunden."
+        $script:failures += $label
+        return
+    }
+    $output = & $tool.Source @arguments
+    $code = $LASTEXITCODE
+    $text = $output -join "`n"
+    if ($code -ne 0 -or ($pattern -and $text -notmatch $pattern)) {
+        Write-Host "FEHLER: $label (Exit $code)`n$text"
+        $script:failures += $label
+    } else {
+        Write-Host "OK: $label`n$text"
+    }
 }
 
-Write-Host ''
-Write-Host '== Toolchain-Check fuer meeting-notes-tauri ==' -ForegroundColor Cyan
+$nodeCheck = @'
+const fs = require('node:fs');
+const range = JSON.parse(fs.readFileSync(process.argv[1], 'utf8')).engines.node;
+const bounds = /^>=(\d+)\.(\d+)\.(\d+) <(\d+)$/.exec(range);
+if (!bounds) throw new Error('Nicht unterstuetztes engines.node-Format: ' + range);
+const current = process.versions.node.split('.').map(Number);
+const minimum = bounds.slice(1, 4).map(Number);
+const comparison = current.map((n, i) => n - minimum[i]).find(n => n !== 0) || 0;
+console.log('Node ' + process.versions.node + ' (erlaubt: ' + range + ')');
+if (comparison < 0 || current[0] >= Number(bounds[4])) process.exit(1);
+'@
+Probe 'Node' 'node' @('-e', $nodeCheck, (Join-Path $root 'package.json')) ''
+Probe '.NET 10 SDK' 'dotnet' @('--list-sdks') '(?m)^10\.0\.'
+Probe '.NET 10 Runtime' 'dotnet' @('--list-runtimes') '(?m)^Microsoft.NETCore.App 10\.0\.'
+Probe 'Cargo' 'cargo' @('--version') '^cargo \d+\.'
+Probe 'Rust-MSVC x64' 'rustc' @('-vV') '(?m)^host: x86_64-pc-windows-msvc$'
 
-Probe 'Node (>=22.12.0)' 'node --version' '^v(2[2-9]|[3-9]\d)\.'
-Probe '.NET 8 SDK' 'dotnet --list-sdks' '8\.0\.'
-Probe 'Rust (cargo)' 'cargo --version' '\d+\.\d+\.\d+'
-Probe 'MinGW-w64 (gcc)' 'gcc --version' 'GCC'
+$manifest = Get-Content (Join-Path $root 'src-tauri\Cargo.toml') -Raw
+$minimumRust = [regex]::Match($manifest, '(?m)^rust-version\s*=\s*"([^"]+)"').Groups[1].Value
+$rustc = Get-Command rustc -ErrorAction SilentlyContinue
+if ($rustc) {
+    $versionText = & $rustc.Source --version
+    $version = [regex]::Match(($versionText -join ''), '^rustc (\d+\.\d+\.\d+)').Groups[1].Value
+    if (-not $version -or -not $minimumRust -or [version]$version -lt [version]$minimumRust) {
+        Write-Host "FEHLER: Rust-Version; benoetigt mindestens $minimumRust."
+        $failures += 'Rust-Mindestversion'
+    }
+}
 
-Write-Host ''
-if ($failures.Count -eq 0) {
-  Write-Host "Alle Toolchain-Komponenten OK." -ForegroundColor Green
-  exit 0
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+$visualStudio = if (Test-Path $vswhere) {
+    & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+}
+$linkers = if ($visualStudio) {
+    Get-ChildItem (Join-Path ($visualStudio | Select-Object -First 1) 'VC\Tools\MSVC') -Directory |
+        Where-Object { Test-Path (Join-Path $_.FullName 'bin\Hostx64\x64\link.exe') }
+}
+$sdkInclude = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\Include'
+$windowsSdks = if (Test-Path $sdkInclude) {
+    Get-ChildItem $sdkInclude -Directory |
+        Where-Object { (Test-Path (Join-Path $_.FullName 'um\Windows.h')) -and (Test-Path (Join-Path $_.FullName 'ucrt\stdio.h')) }
+}
+if (-not $linkers -or -not $windowsSdks) {
+    Write-Host 'FEHLER: Visual Studio C++-Buildtools und Windows SDK erforderlich (Desktopentwicklung mit C++).'
+    $failures += 'MSVC/Windows SDK'
 } else {
-  Write-Host "Fehlende Komponenten: $($failures -join ', ')" -ForegroundColor Red
-  Write-Host "Setup: powershell -File scripts/setup-toolchain.ps1" -ForegroundColor Yellow
-  exit 1
+    Write-Host 'OK: Visual Studio C++-Buildtools und Windows SDK vorhanden.'
 }
+
+if ($failures.Count -gt 0) {
+    Write-Host "Toolchain unvollstaendig: $($failures -join ', ')"
+    exit 1
+}
+Write-Host 'Alle Toolchain-Pruefungen erfolgreich.'
+exit 0

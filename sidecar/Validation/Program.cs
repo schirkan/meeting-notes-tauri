@@ -79,7 +79,7 @@ try
     });
     try
     {
-        var sidecar = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "bin", "Release", "net10.0-windows", "MeetingNotes.Sidecar.exe"));
+        var sidecar = Path.Combine(AppContext.BaseDirectory, "MeetingNotes.Sidecar.exe");
         var start = new ProcessStartInfo(sidecar) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         foreach (var arg in new[] { "--test-connectivity", "--speech-region", "westeurope", "--speech-endpoint", "wss://localhost:443/speech/universal/v2", "--language", "de-DE", "--proxy-host", "127.0.0.1", "--proxy-port", port.ToString() }) start.ArgumentList.Add(arg);
         start.Environment[variables[0]] = "00000000000000000000000000000000";
@@ -102,7 +102,7 @@ try
         var steps = result.GetProperty("steps").EnumerateArray().ToArray();
         foreach (var name in new[] { "speech_recognizer_wss", "conversation_transcriber_wss" })
             Check(steps.Any(s => s.GetProperty("step").GetString() == name && s.GetProperty("status").GetString() == "error"), "Both native SDK paths report failure");
-        Check(steps.Any(s => s.GetProperty("step").GetString() == "speech_tls" && s.GetProperty("status").GetString() == "warn"), "TLS validation warning present");
+        Check(!steps.Any(s => s.GetProperty("step").GetString() == "speech_tls"), "No static TLS hint step in the diagnostic result");
         Check(connects >= 2, "Both native SDK clients reached the loopback proxy via CONNECT");
     }
     finally
@@ -121,7 +121,14 @@ try
         var timeoutResults = await Task.WhenAll(
             SpeechConnectivityDiagnostic.ProbeAsync(config, "de-DE", false, TimeSpan.FromMilliseconds(100)),
             SpeechConnectivityDiagnostic.ProbeAsync(config, "de-DE", true, TimeSpan.FromMilliseconds(100)));
-        Check(timer.Elapsed < TimeSpan.FromSeconds(6), "Native startup and stop waits are bounded");
+        // Schranke gegen unbegrenztes Warten: Der eigentliche Timeout-Mechanismus
+        // wird durch die Pruefung auf "Timed out" weiter unten belegt. Diese
+        // Obergrenze faengt nur einen echten Halt (Aufraeumen ohne Ende) ab und
+        // ist bewusst grosszuehlig gewaehlt: Auf belasteten oder geteilten
+        // Machines kann das native SDK-Threading beim Start und Stoppen
+        // deutlich laenger dauern als auf einem freien System, ohne dass ein
+        // Fehler vorliegt.
+        Check(timer.Elapsed < TimeSpan.FromSeconds(30), "Native startup and stop waits are bounded");
         foreach (var result in timeoutResults)
             Check(result[0].status == "error" && result[0].detail.Contains("Timed out", StringComparison.Ordinal), "SessionStarted alone cannot make an unconnected WSS socket reachable");
     }

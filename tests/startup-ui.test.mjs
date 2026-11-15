@@ -157,7 +157,7 @@ test('settings separates Proxy into a third responsive column and preserves save
     await proxy.getByLabel('Proxy Benutzername (optional)', { exact: true }).fill('test-user')
     await proxy.getByLabel('Proxy Passwort (optional)', { exact: true }).fill('test-password')
     const proxyConfig = { host: 'proxy.test', port: 8080, username: 'test-user', password: 'test-password' }
-    await azure.getByRole('button', { name: 'Azure-Konfiguration speichern', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => !!window.lastSavedConfig)
     assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), { ...validConfig, proxy: proxyConfig })
     const desktopBoxes = await Promise.all([0, 1, 2].map((index) => panels.nth(index).boundingBox()))
@@ -180,6 +180,37 @@ test('settings separates Proxy into a third responsive column and preserves save
   }
 })
 
+test('settings offers a single save button in the footer that persists config and settings together', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
+    const footer = dialog.locator('.settings-dialog-footer')
+
+    // Genau ein Speichern-Button im Dialog, und er liegt im Footer.
+    assert.equal(await dialog.getByRole('button', { name: 'Speichern', exact: true }).count(), 1)
+    assert.equal(await footer.getByRole('button', { name: 'Speichern', exact: true }).count(), 1)
+    assert.equal(await dialog.locator('.panel').getByRole('button', { name: 'Speichern', exact: true }).count(), 0)
+    // Die alten, panelspezifischen Buttons existieren nicht mehr.
+    assert.equal(await dialog.getByRole('button', { name: 'Einstellungen speichern', exact: true }).count(), 0)
+    assert.equal(await dialog.getByRole('button', { name: 'Azure-Konfiguration speichern', exact: true }).count(), 0)
+
+    // Der Button steht unterhalb aller drei Bereiche.
+    const footerBox = await footer.boundingBox()
+    const panelBoxes = await Promise.all([0, 1, 2].map((index) => dialog.locator('.panel').nth(index).boundingBox()))
+    assert.ok(footerBox.y >= Math.max(...panelBoxes.map((box) => box.y + box.height)))
+
+    // Ein Klick speichert beide Abschnitte: Benutzereinstellungen und Azure-Konfiguration.
+    await dialog.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('en-US')
+    await dialog.getByRole('button', { name: 'Speichern', exact: true }).click()
+    await page.waitForFunction(() => !!window.lastSavedSettings && !!window.lastSavedConfig)
+    assert.equal(await page.evaluate(() => window.lastSavedSettings.language), 'en-US')
+    assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), validConfig)
+  } finally {
+    await page.close()
+  }
+})
+
 test('language dropdown saves the selection and forwards it to connectivity testing', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, deferConnectivity: true })
   try {
@@ -189,7 +220,7 @@ test('language dropdown saves the selection and forwards it to connectivity test
     assert.equal(await language.locator('option').count(), 10)
     assert.equal(await page.getByRole('radiogroup').count(), 0)
     await language.selectOption('en-US')
-    await page.getByRole('button', { name: 'Einstellungen speichern', exact: true }).click()
+    await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.language === 'en-US')
     await page.getByRole('button', { name: 'Verbindung testen', exact: true }).click()
     await page.getByRole('dialog', { name: 'Verbindungstest', exact: true }).waitFor()
@@ -204,7 +235,7 @@ test('language dropdown preserves a configured language outside the default opti
   try {
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
     assert.equal(await page.getByRole('combobox', { name: 'Sprache', exact: true }).inputValue(), 'fr-CA')
-    await page.getByRole('button', { name: 'Einstellungen speichern', exact: true }).click()
+    await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.language === 'fr-CA')
   } finally {
     await page.close()
@@ -234,7 +265,7 @@ test('diarization settings default on and independently save all source combinat
     for (const settings of [{ mic: false, speaker: true }, { mic: true, speaker: false }, { mic: false, speaker: false }, { mic: true, speaker: true }]) {
       await mic.setChecked(settings.mic)
       await speaker.setChecked(settings.speaker)
-      await page.getByRole('button', { name: 'Einstellungen speichern', exact: true }).click()
+      await page.getByRole('button', { name: 'Speichern', exact: true }).click()
       await page.waitForFunction((value) => window.lastSavedSettings?.diarization.mic === value.mic && window.lastSavedSettings?.diarization.speaker === value.speaker, settings)
       assert.equal(await mic.isChecked(), settings.mic)
       assert.equal(await speaker.isChecked(), settings.speaker)
@@ -349,8 +380,8 @@ test('saving a complete configuration replaces the warning and enables recording
     await page.getByRole('textbox', { name: 'Endpoint', exact: true }).fill(validConfig.endpoint)
     await page.getByRole('textbox', { name: 'Region', exact: true }).fill(validConfig.region)
     await page.getByLabel('Speech Key', { exact: true }).fill(validConfig.speechKey)
-    await page.getByRole('button', { name: 'Azure-Konfiguration speichern', exact: true }).click()
-    await page.waitForFunction(() => document.querySelector('.toast-info')?.textContent.includes('Azure-Konfiguration gespeichert.'))
+    await page.getByRole('button', { name: 'Speichern', exact: true }).click()
+    await page.waitForFunction(() => document.querySelector('.toast-info')?.textContent.includes('Einstellungen gespeichert.'))
     await page.getByRole('button', { name: 'Dialog schließen', exact: true }).click()
     await page.locator('.hero-controls .primary-button:not(:disabled)').waitFor()
     assert.equal(await page.getByRole('dialog').count(), 0)

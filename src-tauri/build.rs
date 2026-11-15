@@ -4,7 +4,7 @@ use std::process::Command;
 
 /// Build the C# sidecar before Tauri compiles.
 ///
-/// The Tauri bundle resources glob (`../sidecar/publish/sidecar/*` in
+/// The Tauri bundle resources glob (`target/sidecar-publish/*` in
 /// `tauri.conf.json`) expects the publish output to exist when the
 /// bundler scans it. Without this script we'd have to run
 /// `npm run publish:sidecar` manually before every `tauri build`.
@@ -14,7 +14,7 @@ use std::process::Command;
 ///
 /// Pattern adapted from exphert/TauriCS (Apache-2.0).
 fn main() {
-    // Re-run the script whenever something inside the sidecar tree changes.
+    // Generated .NET files live outside this watched source tree.
     println!("cargo:rerun-if-changed=../sidecar");
 
     // Map Cargo profile → .NET configuration.
@@ -42,7 +42,7 @@ fn main() {
     };
 
     let sidecar_csproj = PathBuf::from("../sidecar/MeetingNotes.Sidecar.csproj");
-    let sidecar_out = PathBuf::from("../sidecar/publish/sidecar");
+    let sidecar_out = PathBuf::from("target/sidecar-publish");
 
     println!(
         "build.rs: publishing sidecar (config={config}, rid={rid}) → {}",
@@ -58,6 +58,8 @@ fn main() {
         .arg(rid)
         .arg("--self-contained")
         .arg("false")
+        .arg("--artifacts-path")
+        .arg("target/sidecar-artifacts")
         .arg("-o")
         .arg(&sidecar_out)
         .status()

@@ -29,8 +29,7 @@ export function App() {
     onPause,
     onResetTranscript,
     onResume,
-    onSaveConfig,
-    onSaveSettings,
+    onSaveAll,
     onTestConnectivity,
     isTestingConnectivity,
     connectivityResult,
@@ -110,17 +109,26 @@ export function App() {
         isOpen={settingsDialogOpen}
         onClose={closeSettingsDialog}
         columns={3}
-        footer={configState && (
-          <p className="meta-path">Konfiguration: {configState.path}</p>
-        )}
+        footer={
+          <div className="settings-dialog-footer-content">
+            <button
+              className="primary-button settings-save-button"
+              type="button"
+              onClick={() => void onSaveAll()}
+              disabled={status.running}
+            >
+              Speichern
+            </button>
+            {settingsHint && <div className="hint">{settingsHint}</div>}
+            {configState && <p className="meta-path">Konfiguration: {configState.path}</p>}
+          </div>
+        }
       >
         <SettingsPanel
           statusRunning={status.running}
           settings={settings}
           devices={devices}
-          settingsError={settingsHint}
           setSettings={setSettings}
-          onSaveSettings={onSaveSettings}
         />
 
         <ConfigPanel
@@ -128,7 +136,6 @@ export function App() {
           configDraft={configDraft}
           statusRunning={status.running}
           setConfigDraft={setConfigDraft}
-          onSaveConfig={onSaveConfig}
           onTestConnectivity={onTestConnectivity}
           onOpenConnectivityDialog={onOpenConnectivityDialog}
           isTestingConnectivity={isTestingConnectivity}

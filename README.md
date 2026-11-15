@@ -25,7 +25,7 @@ Dieses Projekt ist die **Tauri-Migration** des bestehenden Electron-Projekts `pr
 - Mic- und Speaker-IDs werden getrennt angezeigt und zugeordnet: z. B. `Mic · Guest-1` und `Speaker · Guest-1`. Aliase gelten auch für die Anzeige des letzten Sprechers und den Clipboard-Export. Die Zuordnung ist sessionsicher: Azure vergibt die IDs pro Sitzung neu, deshalb kann ein Alias aus einer vorigen Sitzung nicht still auf eine andere Person fallen.
 - Optionale Proxy-Konfiguration für Azure Speech
 - Sidecar-Resampling auf 16 kHz / 16-bit / mono
-- Einstellungen mit drei Bereichen: **Allgemein**, **Azure-Konfiguration** und **Proxy** (rechts daneben; bei schmalen Fenstern untereinander). Proxy-Einstellungen befinden sich im Proxy-Bereich, **Verbindung testen** in der Azure-Konfiguration. Gespeichert werden Azure- und Proxy-Einstellungen gemeinsam über **Azure-Konfiguration speichern**. Der Pfad der gemeinsamen Konfigurationsdatei wird unterhalb aller drei Bereiche angezeigt.
+- Einstellungen mit drei Bereichen: **Allgemein**, **Azure-Konfiguration** und **Proxy** (rechts daneben; bei schmalen Fenstern untereinander). Proxy-Einstellungen befinden sich im Proxy-Bereich, **Verbindung testen** in der Azure-Konfiguration. Ein einziger Button **Speichern** unterhalb aller drei Bereiche schreibt Azure-, Proxy- und Benutzereinstellungen gemeinsam. Der Pfad der gemeinsamen Konfigurationsdatei wird unterhalb aller drei Bereiche angezeigt.
 
 ## Voraussetzungen
 - Node gemäß `package.json`: ≥22.12.0 <23 oder ≥24.0.0 <24.16.0 (Empfehlung: 22 LTS)
@@ -40,6 +40,22 @@ npm ci
 ```
 Die Tauri-CLI ist eine devDependency; keine globale Installation erforderlich.
 
+Fuer native Builds werden Rust stable (x64/MSVC), .NET 10 SDK sowie Visual
+Studio oder Build Tools mit **Desktopentwicklung mit C++** und Windows SDK
+benoetigt. MinGW/GCC wird nicht verwendet. Toolchain pruefen:
+
+```powershell
+powershell -NoProfile -File scripts\check-toolchain.ps1
+```
+
+`scripts/setup-toolchain.ps1` installiert .NET 10 SDK und Rust-MSVC; Node und
+die Visual-Studio-Komponenten sind separat bereitzustellen.
+`scripts/run-with-toolchain.ps1` waehlt eine passende .NET-Installation und
+Rust-MSVC nur fuer den gestarteten Prozess. Der persistente PATH und Rusts
+globale Standard-Toolchain werden nicht geaendert. Die Node-Pruefung liest die
+Anforderung direkt aus `package.json`; ein separates `check-node.mjs` gibt es
+nicht mehr.
+
 ### Azure konfigurieren
 1. `meeting-notes.config.example.json` → `meeting-notes.config.json` kopieren (direkt neben die EXE bzw. ins Repository-Root im Dev-Build)
 2. Speech-Key direkt im Feld `azure.speechKey` eintragen
@@ -50,10 +66,10 @@ Beim Start mit fehlender, nicht lesbarer oder unvollständiger Azure-Konfigurati
 ### HTTPS und Speech/WSS getrennt testen
 - **Verbindung testen** nutzt die aktuellen, auch ungespeicherten UI-Werte einschließlich Proxy und Sitzungssprache.
 - Rust prüft DNS/TCP zum Proxy (oder direkt zum Endpoint bei deaktiviertem Proxy) und führt eine HTTPS-HEAD-Probe aus. Deaktivierter Proxy bedeutet explizite Direktverbindung, ohne automatische Umgebungsproxies. DNS am Ziel-Endpoint muss im Proxy-Modus lokal nicht funktionieren.
-- **Die HTTPS-Diagnose ignoriert Zertifikatsprüfungen immer (unsicher).** Ein nicht vertrauenswürdiger Proxy kann dadurch den Speech-Key abfangen. Redirects werden nicht verfolgt. Dieses Verhalten ist nur für die Diagnose vorgesehen und kein Nachweis vertrauenswürdiger TLS-Verbindungen.
+- **Die HTTPS-Diagnose prüft TLS-Zertifikate gegen den System-Vertrauensspeicher** (gleiche Prüfung wie der native Speech/WSS-Pfad). Ein selbstsigniertes oder TLS-inspektiertes Zertifikat ohne vertrauenswürdige Firmen-Root-CA schlägt deshalb fehl. Redirects werden nicht verfolgt. Ein erfolgreicher HTTPS-Test belegt damit eine vertrauenswürdige TLS-Verbindung, aber weiterhin keine gültigen Azure-Zugangsdaten.
 - Ein separater Sidecar-Diagnoseprozess öffnet native Speech-SDK-Sitzungen für `SpeechRecognizer` und `ConversationTranscriber`, ohne Mikrofon oder Loopback aufzunehmen. Er verwendet dieselben Endpoint-/Proxy-Einstellungen wie die Aufnahme. HTTPS-Erreichbarkeit allein beweist weder gültige Azure-Zugangsdaten noch Speech/WSS-Erreichbarkeit.
-- Ein separater **Verbindungstest-Dialog** zeigt den laufenden Test sowie anschließend alle Diagnose-Schritte mit Status und kopierbaren Fehlerdetails, HTTP-Status, Endpoint und Dauer. HTTPS und Speech/WSS werden getrennt ausgewiesen; insgesamt erfolgreich ist der Test nur, wenn beide funktionieren. Auch als Strings oder Objekte zurückgewiesene IPC-Aufrufe werden mit ihren Details angezeigt, nicht nur als generischer Fehler. Der Dialog lässt sich schließen und aus den Einstellungen wieder öffnen, ohne den laufenden Test abzubrechen. Ein HTTP 401/403 bestätigt lediglich HTTP-Erreichbarkeit, nicht erfolgreiche Speech-Authentifizierung.
-- Speech/WSS behält unter Windows die native Zertifikatsprüfung bei: Für das verwendete .NET Speech-SDK 1.53 wurde kein offiziell dokumentierter Abschaltmechanismus gefunden. OpenSSL-/CRL-Schalter für Linux werden nicht als Windows-Zertifikatsbypass verwendet. Bei TLS-Inspection müssen die Firmenzertifikate daher weiterhin für den nativen SDK-Transport vertrauenswürdig sein. Die WSS-Proben erwarten sowohl `Connected` als auch `SessionStarted`; bloßes lokales Starten reicht nicht für ein positives Ergebnis.
+- Ein separater **Verbindungstest-Dialog** zeigt den laufenden Test sowie anschließend alle Diagnose-Schritte mit Status und kopierbaren Fehlerdetails, HTTP-Status, Endpoint und Dauer. HTTPS und Speech/WSS werden getrennt ausgewiesen; insgesamt erfolgreich ist der Test nur, wenn beide funktionieren. Auch als Strings oder Objekte zurückgewiesene IPC-Aufrufe werden mit ihren Details angezeigt, nicht nur als generischer Fehler. Der Dialog lässt sich schließen und aus den Einstellungen wieder öffnen, ohne den laufenden Test abzubrechen. Die Schritte werden nach dem HTTP-Status eingestuft: `2xx` als Erfolg, `401`/`403` als Warnung (Endpoint erreichbar, Speech-Key fehlt oder ist ungültig), `407` als Fehler. Ein HTTP 401/403 bestätigt lediglich HTTP-Erreichbarkeit, nicht erfolgreiche Speech-Authentifizierung.
+- Speech/WSS behält unter Windows die native Zertifikatsprüfung bei: Für das verwendete .NET Speech-SDK 1.53 wurde kein offiziell dokumentierter Abschaltmechanismus gefunden. OpenSSL-/CRL-Schalter für Linux werden nicht als Windows-Zertifikatsbypass verwendet. Bei TLS-Inspection müssen die Firmenzertifikate daher weiterhin für den nativen SDK-Transport vertrauenswürdig sein — und jetzt auch für die HTTPS-Diagnose. Die WSS-Proben erwarten sowohl `Connected` als auch `SessionStarted`; bloßes lokales Starten reicht nicht für ein positives Ergebnis.
 - Der native Diagnoseprozess ist auf 45 Sekunden begrenzt; DNS-/TCP-/HTTPS-Proben haben jeweils 5 Sekunden Timeout. Dies ist keine garantierte 45-Sekunden-Obergrenze des gesamten UI-Aufrufs einschließlich Prozessstart. Einzelne Schritte erscheinen erst nach Abschluss, nicht live während der Prüfung. Der Test kann Azure-Verbindungen und gegebenenfalls Kosten verursachen, sendet aber keine aufgenommenen Audiodaten. Firmenproxy-Allowlisting, CONNECT-Unterstützung und Authentifizierung sind separat im Zielnetz zu prüfen.
 
 ### Benutzereinstellungen (optional)
@@ -75,12 +91,46 @@ npm run tauri -- build # MSI/NSIS-Installer inklusive Sidecar
 > manuelle Schritt `npm run publish:sidecar` ist nicht mehr nötig —
 > das Skript existiert weiterhin für Ad-hoc-Rebuilds ohne Tauri-Build.
 
+Build-Ausgaben liegen getrennt von den C#-Quellen: Publish unter
+`src-tauri/target/sidecar-publish/`, .NET-Zwischenartefakte unter
+`src-tauri/target/sidecar-artifacts/`. Dadurch verändert der Publish nicht
+seine eigenen überwachten Eingaben. Neue und geänderte C#-Dateien lösen
+weiterhin automatisch einen Publish aus. Das Release-Profil aktiviert
+inkrementelle Kompilierung und deaktiviert Debug-Informationen explizit;
+Optimierungsstufe und Laufzeitverhalten bleiben unverändert.
+
+Messung nach der Umstellung: unveraenderte `cargo build --release`-Aufrufe
+ca. 0,8 s; komplette warme `tauri build --no-bundle`-Aufrufe 17,5 s und
+10,0 s. Der komplette Ablauf baut den Renderer erneut und bindet dessen
+Ausgabe in die EXE ein; er ist deshalb nicht mit dem reinen Cargo-Cache-Test
+gleichzusetzen. Die erste Kompilierung nach Profilwechsel bleibt teurer.
+
+```powershell
+npm run build:sidecar  # .NET-Build nach src-tauri/target/sidecar-artifacts
+npm run test:sidecar   # C#-Validierung nach src-tauri/target/sidecar-validation-artifacts
+npm run clean:sidecar -- --dry-run  # Cleanup nur anzeigen
+```
+
+`npm run clean:sidecar` entfernt die drei Sidecar-Artefaktordner unter
+`src-tauri/target/` sowie alte `sidecar/bin`, `sidecar/obj`, `sidecar/publish`
+und `sidecar/Validation/bin`/`obj`. Rust-Caches und die Portable-Ausgabe bleiben
+erhalten. Die Anwendung vorher beenden; anschliessend bei Bedarf neu bauen.
+
 UI-Regressionstests: `node --test tests/startup-ui.test.mjs` (lokaler Vite-Testserver und headless Microsoft Edge; keine Azure-Verbindungen).
 
 ### Entwicklerwerkzeuge
 F12 öffnet bzw. schließt die WebView2-DevTools, auch im Release-/Portable-Build. Dazu ist das Tauri-Feature `devtools` aktiviert.
 
+Die Geraeteabfrage beim Start und nach dem Speichern startet den Sidecar unter
+Windows ohne Konsolenfenster (`CREATE_NO_WINDOW`); stdout/stderr bleiben fuer
+JSON-Lines und Fehlerausgaben verfuegbar.
+
 ## Portable Build
+Beim unterstuetzten x64/MSVC-Build ist der WebView2-Loader statisch in der
+Haupt-EXE enthalten. Eine separate `WebView2Loader.dll` wird nicht verteilt.
+Die installierte WebView2 Runtime auf dem Zielsystem bleibt erforderlich;
+die Sidecar-DLLs im Unterordner `sidecar/` werden weiterhin benoetigt.
+
 Bestehende VS-Code-Aufgabe **Build portable distribution** verwenden oder nach dem Setup:
 ```powershell
 npm run tauri -- build --no-bundle

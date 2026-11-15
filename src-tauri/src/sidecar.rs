@@ -276,7 +276,7 @@ pub async fn stop(handle: SidecarHandle) -> Result<(), SidecarError> {
 }
 
 /// Locate the sidecar EXE. Search order:
-///   1. CWD-relative dev paths (`sidecar/publish/sidecar/`, `../sidecar/bin/Release/`)
+///   1. Development publish path under `src-tauri/target/sidecar-publish/`
 ///   2. Bundled resource dir (`app.path().resource_dir()/sidecar/`)
 ///   3. Tauri-EXE directory + `sidecar/` (portable distribution layout)
 ///   4. Tauri-EXE directory directly (fallback)
@@ -284,14 +284,11 @@ pub fn resolve_sidecar_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, S
     let exe = if cfg!(windows) { "MeetingNotes.Sidecar.exe" } else { "MeetingNotes.Sidecar" };
 
     // 1. CWD-relative dev paths
-    if let Ok(cwd) = std::env::current_dir() {
-        let candidate = cwd.join("sidecar").join("publish").join("sidecar").join(exe);
+    if cfg!(debug_assertions) {
+        let candidate = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target").join("sidecar-publish").join(exe);
         if candidate.exists() {
             return Ok(candidate);
-        }
-        let candidate2 = cwd.join("..").join("sidecar").join("bin").join("Release").join("net10.0-windows").join(exe);
-        if candidate2.exists() {
-            return Ok(candidate2);
         }
     }
 
@@ -319,6 +316,6 @@ pub fn resolve_sidecar_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, S
     }
 
     Err(SidecarError::Spawn(format!(
-        "Sidecar-EXE '{exe}' nicht gefunden. Erwartet unter sidecar/publish/sidecar/ oder als Bundle-Resource."
+        "Sidecar-EXE '{exe}' nicht gefunden. Erwartet als Bundle-Resource oder im Entwicklungs-Publish unter src-tauri/target/sidecar-publish/."
     )))
 }

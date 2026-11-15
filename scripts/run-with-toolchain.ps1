@@ -1,41 +1,48 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    Run a command with the meeting-notes-tauri toolchain on PATH.
-
+    Fuehrt einen Befehl mit .NET 10 und Rust-MSVC aus.
 .DESCRIPTION
-    Sets PATH to include cargo, .NET 8, and w64devkit (GCC/ld) and
-    exports DOTNET_ROOT so the .NET runtime is discovered. Useful as
-    a wrapper for npm/npx/cargo when the toolchain isn't on the
-    system PATH yet.
-
+    Bevorzugt ein passendes dotnet im bestehenden PATH, danach die System-
+    und Benutzerinstallation. Aendert nur die Prozessumgebung, nicht den
+    persistenten PATH oder die globale Rust-Toolchain.
+    Dot-Sourcing ohne Befehl initialisiert nur die Umgebung fuer den Checker.
 .EXAMPLE
-    pwsh scripts/run-with-toolchain.ps1 npm install
-    pwsh scripts/run-with-toolchain.ps1 npm run tauri build
-    pwsh scripts/run-with-toolchain.ps1 npm run dist:portable
-
-.NOTES
-    Does NOT modify the global PATH or DOTNET_ROOT — only the
-    current process. After exiting, the system PATH is unchanged.
+    powershell -File scripts\run-with-toolchain.ps1 npm run tauri -- build --no-bundle
 #>
+$executable = if ($args.Count -gt 0) { $args[0] }
+$commandArguments = @($args | Select-Object -Skip 1)
 
-[CmdletBinding()]
-param(
-  [Parameter(ValueFromRemainingArguments=$true)]
-  [string[]]$Command
-)
+$ErrorActionPreference = 'Stop'
+$cargo = Join-Path $env:USERPROFILE '.cargo\bin'
+if (Test-Path $cargo) { $env:Path = "$cargo;$env:Path" }
 
-if ($Command.Count -eq 0) {
-  Write-Error 'Usage: run-with-toolchain.ps1 <command> [args...]'
-  exit 1
+$existingDotnet = Get-Command dotnet -ErrorAction SilentlyContinue
+$candidates = @(
+    if ($existingDotnet) { $existingDotnet.Source }
+    Join-Path $env:ProgramFiles 'dotnet\dotnet.exe'
+    Join-Path $env:USERPROFILE 'dotnet\dotnet.exe'
+) | Select-Object -Unique
+
+$dotnetRoot = $null
+foreach ($candidate in $candidates) {
+    if (-not (Test-Path -LiteralPath $candidate)) { continue }
+    $sdks = & $candidate --list-sdks
+    if ($LASTEXITCODE -eq 0 -and ($sdks -match '^10\.0\.')) {
+        $dotnetRoot = Split-Path $candidate -Parent
+        break
+    }
+}
+if (-not $dotnetRoot) { throw '.NET 10 SDK fehlt. Bitte setup-toolchain.ps1 ausfuehren.' }
+
+$env:Path = "$dotnetRoot;$env:Path"
+$env:DOTNET_ROOT = $dotnetRoot
+$env:RUSTUP_TOOLCHAIN = 'stable-x86_64-pc-windows-msvc'
+
+if (-not $executable) {
+    if ($MyInvocation.InvocationName -eq '.') { return }
+    throw 'Aufruf: run-with-toolchain.ps1 <Befehl> [Argumente...]'
 }
 
-$w64 = Join-Path $env:USERPROFILE 'w64devkit\w64devkit'
-$dotnet = Join-Path $env:USERPROFILE 'dotnet'
-$cargo = Join-Path $env:USERPROFILE '.cargo\bin'
-
-$env:Path = "$cargo;$dotnet;$w64\bin;$env:Path"
-$env:DOTNET_ROOT = $dotnet
-
-& $Command[0] @($Command | Select-Object -Skip 1)
+& $executable @commandArguments
 exit $LASTEXITCODE

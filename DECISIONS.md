@@ -251,6 +251,8 @@ Architekturentscheidungen für die Windows-Variante (Tauri-Container). Wird fort
 - Rust lädt/speichert `config/azure.json` und `config/user-settings.json` neben der Release-EXE, im Dev-Build im Repository. Unabhängig vom Arbeitsverzeichnis, ohne AppData-Fallback/Migration. Beide Backend-Pfade werden im Settings-Footer angezeigt.
 - HTTPS-Diagnose: expliziter HTTP-CONNECT-Proxy mit optionaler Basic-Authentifizierung; ohne Proxy `.no_proxy()`. System-DNS/TCP prüfen Proxy oder direkten Endpoint, kein öffentlicher DNS-Fallback.
 - **HTTPS-Zertifikatsprüfung wird ausschließlich in der Diagnose immer ignoriert (bewusst unsicher).** Kein Redirect-Following. Native Windows-Speech-SDK-Zertifikatsprüfung bleibt aktiv: kein offiziell unterstützter .NET-Bypass für Speech SDK 1.53 gefunden.
+
+> **Überholt 2026-11-15 (AD-014):** Der Zertifikatsbypass der HTTPS-Diagnose ist entfernt. HTTPS und Speech/WSS validieren beide aktiv gegen den System-Vertrauensspeicher.
 - **Risiko:** Der HTTPS-Bypass kann den Speech-Key einem nicht vertrauenswürdigen Proxy offenlegen. Positives HTTPS ist keine Aussage zu TLS-Vertrauen, gültigem Key oder Speech/WSS. Bei TLS-Inspection gegebenenfalls Unternehmens-Root-CA/Allowlisting für den nativen Transport erforderlich.
 - Separate native Diagnose ohne Capture nutzt denselben `SpeechConfiguration`-Builder wie Aufnahme (`SetProxy`, Endpoint, Sprache, Continuous LID) und verlangt `Connected` plus `SessionStarted` für Recognizer und Transcriber. Credentials nur über child-lokale Env-Variablen, Host/Port über nicht geheime CLI-Args.
 - HTTPS und Speech werden parallel geprüft; Gesamterfolg verlangt beide. HTTP 401/403 zählt nur als HTTPS-Erreichbarkeit. DNS/TCP/HTTP jeweils 5 s Timeout; nativer Prozess maximal 45 s ab Spawn, keine garantierte Gesamt-UI-Zeitgrenze.
@@ -305,7 +307,89 @@ baut die Sprecherzuordnung dann sichtbar neu auf.
 
 Siehe [T-507](./specs/T-507-pause-stop-und-sitzungsgebundene-sprecherzuordnung.md).
 
+---
+
+## AD-014 · HTTPS-Diagnose prueft Zertifikate; ein Speichern-Button im Settings-Dialog (2026-11-15)
+
+**Kontext:** Zwei Nutzerwuerche. (a) Die HTTPS-Diagnose ignorierte
+Zertifikatspruefungen immer (bewusst unsicher, AD-012) — ein TLS-inspektierender
+Proxy konnte dadurch den Speech-Key abfangen. (b) Der Settings-Dialog hatte
+zwei Speichern-Buttons in unterschiedlichen Panels ("Einstellungen speichern"
+im Allgemein-Bereich, "Azure-Konfiguration speichern" im Azure-Bereich), was
+unklar liess, was gespeichert wird.
+
+**Entscheidung — TLS:**
+- Die HTTPS-HEAD-Probe in [connectivity.rs](./src-tauri/src/connectivity.rs)
+  validiert TLS-Zertifikate **aktiv** gegen den System-Vertrauensspeicher
+  (`rustls` mit Platform-Verifier, also der Windows-Zertifikatsspeicher).
+  `danger_accept_invalid_certs` ist entfernt.
+- Damit gelten fuer HTTPS und den nativen Speech/WSS-Pfad dieselbe
+  Vertrauensentscheidung. Bei TLS-Inspection muss das Firmen-Root-CA im
+  Windows-Vertrauensspeicher hinterlegt sein — sonst schlaegt die
+  HTTPS-Probe fehl. Es gibt keinen Bypass mehr, auf keinem der beiden Pfade.
+- Ein positives HTTPS-Ergebnis belegt damit eine vertrauenswuerdige
+  TLS-Verbindung, aber weiterhin keine gueltigen Azure-Zugangsdaten.
+
+**Entscheidung — Settings-Dialog:**
+- Es gibt genau **einen** Speichern-Button: **Speichern** im Dialog-Footer
+  unterhalb der drei Bereiche Allgemein / Azure-Konfiguration / Proxy.
+  Die Panels enthalten keine eigenen Speichern-Buttons mehr.
+- Der Button schreibt beide Abschnitte der gemeinsamen Datei
+  `meeting-notes.config.json`: Benutzereinstellungen zuerst, danach die
+  Azure-Konfiguration inklusive Proxy. Die Reihenfolge ist Absicht: beim
+  automatischen Oeffnen nach einem Start ohne Azure-Konfiguration darf eine
+  noch unvollstaendige Azure-Konfiguration die Sprach-/Geraeteauswahl nicht
+  verwerfen.
+- Fehler aus beiden Abschnitten werden gemeinsam als Toast und als Hinweis im
+  Footer angezeigt; die Fertigmeldung lautet "Einstellungen gespeichert.".
+
+**Entscheidung — Diagnose-Einstufung:**
+- Die HTTPS-Probe stuft ihren HTTP-Status nach der Bedeutung ein: `2xx` ist
+  Erfolg, `401`/`403` ist eine Warnung (Endpoint erreichbar, Speech-Key fehlt
+  oder ist ungueltig — mit entsprechendem Detailhinweis), `407` ist ein Fehler
+  (Proxy verlangt Authentifizierung), alle uebrigen Codes sind eine Warnung.
+  Vorher wurde alles ausser 401/403 pauschal als „Warnung" etikettiert, also
+  auch ein erfolgreiches HTTP 200 — die Step-Zeile widersprach damit dem
+  Gesamtstatus „HTTPS: erreichbar".
+- Der native Diagnosepfad emittiert **keinen** statischen `speech_tls`-Schritt
+  mehr. Die Zertifikatspruefung ist eine feste Eigenschaft des SDK-Pfads und
+  keine Messgroesse des Tests; sie aeussert sich ohnehin als Fehler in den
+  eigentlichen WSS-Proben, wenn die Kette nicht vertrauenswuerdig ist. Der
+  Dialog weist die Pruefung einmal statisch als Hinweis aus.
+
+**Begruendung.** Der TLS-Bypass war eine bewusste Kompromissloesung fuer
+restriktive Firmennetze, hat aber das Schlimmste ermoeglicht: Der
+Subscription-Key im `Ocp-Apim-Subscription-Key`-Header wurde an einen Proxy
+uebergeben, dessen Zertifikat niemand vertraute. Da der native
+Speech/WSS-Pfad ohnehin streng prueft, war die Luecke in der Diagnose
+inkonsistent — sie lieferte ein positives "HTTPS erreichbar" fuer einen
+Transport, den der eigentliche Aufnahmepfad nie nutzen wuerde. Der
+System-Vertrauensspeicher loest das praktische Problem (Firmen-Root-CA ist
+dort meist ohnehin hinterlegt, weil der native SDK-Pfad es braucht) ohne das
+Sicherheitsproblem.
+
+Der eine Speichern-Button macht die Wirkung der Aktion eindeutig: alle drei
+Bereiche, ein Vorgang, eine Meldung.
+
+**Validierung:** Rust-Regressionstest `https_probe_rejects_untrusted_certificate`
+(startet einen lokalen TLS-Server mit selbstsigniertem Zertifikat und belegt,
+dass die Probe es ablehnt), 19 Rust-Tests, Browser-UI-Regressionstests,
+TypeScript-Build und Portable-Smoke erfolgreich.
+
+Siehe [T-304](./specs/T-304-connectivity-diagnose-in-rust.md) und
+[T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md).
+
 ## Offene Fragen
+
+**Build-Fortschreibung 2026-11-15 (AD-009):** Der direkte `dotnet publish`-Aufruf
+bleibt in `build.rs`. Publish-Ausgaben liegen jetzt unter
+`src-tauri/target/sidecar-publish/`, .NET-Build-Ausgaben via `--artifacts-path`
+unter `src-tauri/target/sidecar-artifacts/`, ausserhalb des ueberwachten
+Quellbaums. Tauri-Ressourcen, Entwicklungsaufloesung und Portable-Skripte
+verwenden den neuen Pfad. Kein eigener Hash-/Staging-Publisher erforderlich.
+Release: `incremental = true`, `debug = false`, `strip = "debuginfo"`.
+Debug-Informationen waren bereits standardmaessig deaktiviert; diese explizite
+Einstellung ist keine zusaetzliche gemessene Beschleunigung.
 
 | # | Frage | Status |
 |---|---|---|

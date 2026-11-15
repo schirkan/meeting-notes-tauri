@@ -7,7 +7,6 @@ type ConfigPanelProps = {
   configDraft: ConfigDraft
   statusRunning: boolean
   setConfigDraft: React.Dispatch<React.SetStateAction<ConfigDraft>>
-  onSaveConfig: () => Promise<void>
   onTestConnectivity: () => Promise<void>
   onOpenConnectivityDialog: () => void
   isTestingConnectivity: boolean
@@ -20,7 +19,6 @@ export function ConfigPanel(props: ConfigPanelProps) {
     configDraft,
     statusRunning,
     setConfigDraft,
-    onSaveConfig,
     onTestConnectivity,
     onOpenConnectivityDialog,
     isTestingConnectivity,
@@ -86,19 +84,11 @@ export function ConfigPanel(props: ConfigPanelProps) {
 
       <div className="settings-action-row">
         <button
-          className="primary-button settings-save-button"
-          type="button"
-          onClick={() => void onSaveConfig()}
-          disabled={statusRunning}
-        >
-          Azure-Konfiguration speichern
-        </button>
-        <button
           className="secondary-button"
           type="button"
           onClick={() => void onTestConnectivity()}
           disabled={isTestingConnectivity || !configDraft.endpoint || !configDraft.speechKey || !configDraft.region}
-          title="HTTPS ohne Zertifikatsprüfung und native Speech/WSS-Sitzungen getrennt über den konfigurierten Proxy testen (ohne Audioaufnahme)"
+          title="HTTPS und native Speech/WSS-Sitzungen getrennt über den konfigurierten Proxy testen; TLS-Zertifikate werden geprüft (ohne Audioaufnahme)"
         >
           {isTestingConnectivity ? 'Teste …' : 'Verbindung testen'}
         </button>

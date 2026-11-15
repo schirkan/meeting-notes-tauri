@@ -17,7 +17,7 @@
  *
  * Pre-requisites:
  *   - `npm run tauri build`        → src-tauri/target/release/meeting-notes.exe
- *   - Sidecar-Publish              → sidecar/publish/sidecar/
+ *   - Sidecar-Publish              → src-tauri/target/sidecar-publish/
  *                                    (lief automatisch via src-tauri/build.rs seit AD-009)
  */
 
@@ -28,7 +28,7 @@ import { pipeline } from 'node:stream/promises'
 
 const PROJECT_ROOT = process.cwd()
 const TAURI_EXE_SRC = join(PROJECT_ROOT, 'src-tauri', 'target', 'release', 'meeting-notes.exe')
-const SIDECAR_SRC = join(PROJECT_ROOT, 'sidecar', 'publish', 'sidecar')
+const SIDECAR_SRC = join(PROJECT_ROOT, 'src-tauri', 'target', 'sidecar-publish')
 const CONFIG_TEMPLATE = 'meeting-notes.config.example.json'
 const CONFIG_TEMPLATE_SRC = join(PROJECT_ROOT, CONFIG_TEMPLATE)
 const PORTABLE_OUT = join(PROJECT_ROOT, 'dist', 'portable')
@@ -128,25 +128,6 @@ async function main() {
   // 1. Tauri-EXE
   info(`Kopiere ${TAURI_EXE_NAME} …`)
   copyFileSync(TAURI_EXE_SRC, join(PORTABLE_OUT, TAURI_EXE_NAME))
-
-  // 1a. Tauri-Support-DLLs aus dem Release-Ordner. Wir kopieren nur
-  // eine explizite Whitelist, weil Cargo hier auch Lib-Artefakte
-  // (z. B. meeting_notes_tauri_lib.dll bei crate-type=cdylib)
-  // ablegen kann, die nichts im Portable-Output zu suchen haben.
-  // Aktuell bekannt: WebView2Loader.dll (Tauri 2 Delayed-Load-DLL).
-  const TAURI_PORTABLE_DLLS = ['WebView2Loader.dll']
-  const tauriReleaseDir = TAURI_EXE_SRC.replace(/[\\/][^\\/]+$/, '')
-  const copiedDlls = []
-  for (const dll of TAURI_PORTABLE_DLLS) {
-    const src = join(tauriReleaseDir, dll)
-    if (existsSync(src)) {
-      copyFileSync(src, join(PORTABLE_OUT, dll))
-      copiedDlls.push(dll)
-    }
-  }
-  if (copiedDlls.length > 0) {
-    info(`Kopiere Tauri-Support-DLLs (${copiedDlls.join(', ')}) …`)
-  }
 
   // 2. Sidecar-Verzeichnis
   info(`Kopiere Sidecar (${SIDECAR_EXE_NAME} + DLLs) …`)

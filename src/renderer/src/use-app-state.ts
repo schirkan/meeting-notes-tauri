@@ -469,32 +469,42 @@ export function useAppState() {
     setAutoScrollEnabled(true)
   }
 
-  const onSaveSettings = async () => {
+  // Einziger Speichern-Pfad fuer den Settings-Dialog: der Button im
+  // Dialog-Footer schreibt beide Abschnitte (Azure-Konfiguration inkl. Proxy
+  // und Benutzereinstellungen). Die Benutzereinstellungen werden zuerst
+  // geschrieben, damit eine unvollstaendige Azure-Konfiguration (z. B. beim
+  // automatischen Oeffnen nach einem Start ohne Konfiguration) die
+  // Sprache-/Geraete-Auswahl nicht verwerft.
+  const onSaveAll = async () => {
+    const errors: string[] = []
+
     try {
       const saved = await window.transcriptApi.saveSettings(settings)
       setSettings(normalizeUserSettings(saved))
       const refreshedDevices = await window.transcriptApi.getDevices()
       setDevices(refreshedDevices)
       setSettingsHint(null)
-      setToast({ message: 'Einstellungen gespeichert.', variant: 'info', persistent: false })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Einstellungen konnten nicht gespeichert werden.'
-      setSettingsHint(message)
-      setToast({ message, variant: 'error', persistent: true })
+      errors.push(error instanceof Error ? error.message : 'Einstellungen konnten nicht gespeichert werden.')
     }
-  }
 
-  const onSaveConfig = async () => {
     try {
       const payload = draftToConfig(configDraft)
       const savedState = await window.transcriptApi.saveConfig(payload)
       setConfigState(savedState)
       setConfigDraft(toConfigDraft(savedState.config))
-      setToast({ message: 'Azure-Konfiguration gespeichert.', variant: 'info', persistent: false })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Azure-Konfiguration konnte nicht gespeichert werden.'
-      setToast({ message, variant: 'error', persistent: true })
+      errors.push(error instanceof Error ? error.message : 'Azure-Konfiguration konnte nicht gespeichert werden.')
     }
+
+    if (errors.length > 0) {
+      const message = errors.join(' ')
+      setSettingsHint(message)
+      setToast({ message, variant: 'error', persistent: true })
+      return
+    }
+
+    setToast({ message: 'Einstellungen gespeichert.', variant: 'info', persistent: false })
   }
 
   const [connectivityResult, setConnectivityResult] = useState<ConnectivityResult | null>(null)
@@ -693,8 +703,7 @@ export function useAppState() {
     onCopyTranscript,
     onOpenSettingsDialog: () => setSettingsDialogOpen(true),
     onResetTranscript,
-    onSaveConfig,
-    onSaveSettings,
+    onSaveAll,
     onTestConnectivity,
     isTestingConnectivity,
     connectivityResult,

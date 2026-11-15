@@ -33,7 +33,7 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../sidecar/publish/sidecar/*": "sidecar/"
+      "target/sidecar-publish/*": "sidecar/"
     }
   },
   "plugins": {

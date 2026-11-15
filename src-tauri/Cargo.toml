@@ -16,6 +16,11 @@ name = "meeting_notes_lib"
 # mitkopiert).
 crate-type = ["staticlib", "rlib"]
 
+[profile.release]
+incremental = true
+debug = false
+strip = "debuginfo"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -32,3 +37,12 @@ thiserror = "2"
 # Platform-Verifier und damit den Windows-Zertifikatsspeicher.
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 url = "2"
+
+[dev-dependencies]
+# Regressionsschutz fuer die HTTPS-Diagnose: der Test startet einen lokalen
+# TLS-Server mit selbstsigniertem Zertifikat und prueft, dass die Probe das
+# Zertifikat ablehnt. `aws-lc-rs` passt zum Provider von `reqwest`/`rustls`,
+# damit kein Provider-Konflikt entsteht.
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem", "aws_lc_rs"] }
+rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "std", "tls12"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["aws_lc_rs", "tls12", "logging"] }

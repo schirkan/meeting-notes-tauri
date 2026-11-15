@@ -18,7 +18,8 @@ Standardisierte Build-Pipeline für die Tauri-Variante.
 - [x] `npm run typecheck` ist grün.
 - [ ] `npm run lint` (sofern konfiguriert) ist grün — **offen**: kein Lint-Setup im Projekt.
 - [x] `npm run publish:sidecar` ist nur noch ein optionales Skript für Ad-hoc-Rebuilds ohne Tauri-Build.
-- [x] Toolchain-Setup-Skripte (`scripts/setup-toolchain.ps1`, `scripts/check-toolchain.ps1`, `scripts/run-with-toolchain.ps1`, `scripts/patch-w64devkit-gcc-eh.ps1`) reproduzieren die Build-Umgebung auf einer frischen Windows-Maschine.
+- [x] Toolchain-Skripte verwenden .NET 10 SDK und Rust stable x64/MSVC. Der Checker liest Node-Anforderungen aus `package.json`, Rusts Mindestversion aus `Cargo.toml` und prueft Visual Studio C++-Buildtools sowie Windows SDK. Node und Visual-Studio-Komponenten werden separat installiert; Setup installiert .NET und Rust ohne globale Rust-Standardaenderung. GNU-Patch und ungenutzter Node-Checker sind entfernt.
+- [x] `build:sidecar` und `test:sidecar` legen ihre Ausgaben ausserhalb des C#-Quellbaums ab. `clean:sidecar` entfernt gezielt aktuelle und historische Sidecar-Ausgaben, nicht Rust-Caches; `--dry-run` zeigt nur die Ziele.
 
 ## Approach
 - `src-tauri/build.rs` ruft `dotnet publish` mit korrektem RID auf, bevor Cargo kompiliert. `cargo:rerun-if-changed=../sidecar` sorgt dafür, dass nur bei Sidecar-Quelländerungen neu publisht wird.

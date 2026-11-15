@@ -19,7 +19,7 @@ export function ConnectivityDialog({ isOpen, isTesting, result, onClose }: Conne
           {isTesting ? 'Verbindungstest läuft … (maximal 45 Sekunden für Speech/WSS)' : result?.reachable ? 'HTTPS und Speech/WSS erreichbar' : 'Verbindungstest fehlgeschlagen'}
         </p>
         <p className="connectivity-result-meta">
-          HTTPS-Zertifikatsprüfung deaktiviert (unsicher); Speech/WSS prüft Zertifikate separat. Keine Audioaufnahme.
+          HTTPS und Speech/WSS prüfen TLS-Zertifikate gegen den System-Vertrauensspeicher. Keine Audioaufnahme.
         </p>
         {isTesting && (
           <ul className="connectivity-result-step-list">

@@ -32,7 +32,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = join(__dirname, '..')
 
 const TAURI_EXE = join(PROJECT_ROOT, 'src-tauri', 'target', 'release', 'meeting-notes.exe')
-const SIDECAR_EXE = join(PROJECT_ROOT, 'sidecar', 'publish', 'sidecar', 'MeetingNotes.Sidecar.exe')
+const SIDECAR_EXE = join(PROJECT_ROOT, 'src-tauri', 'target', 'sidecar-publish', 'MeetingNotes.Sidecar.exe')
 const DIST_DIR = join(PROJECT_ROOT, 'dist')
 const PORTABLE_DIR = join(PROJECT_ROOT, 'dist', 'portable')
 const PORTABLE_TAURI = join(PORTABLE_DIR, 'meeting-notes.exe')
@@ -96,7 +96,7 @@ header('3. Sidecar-EXE')
 
 if (existsSync(SIDECAR_EXE)) {
   const sizeMb = (statSync(SIDECAR_EXE).size / 1024 / 1024).toFixed(2)
-  pass('sidecar/publish/sidecar/MeetingNotes.Sidecar.exe', `${sizeMb} MB`)
+  pass('src-tauri/target/sidecar-publish/MeetingNotes.Sidecar.exe', `${sizeMb} MB`)
 
   console.log('  ...spawning with --list-devices')
   const proc = spawnSync(SIDECAR_EXE, ['--list-devices'], {
@@ -130,7 +130,7 @@ if (existsSync(SIDECAR_EXE)) {
     }
   }
 } else {
-  fail('sidecar/publish/sidecar/MeetingNotes.Sidecar.exe', 'missing — run `npm run tauri build`')
+  fail('src-tauri/target/sidecar-publish/MeetingNotes.Sidecar.exe', 'missing — run `npm run tauri build`')
 }
 
 // --- 4. Portable-Distribution + SHA256SUMS -------------------------------
