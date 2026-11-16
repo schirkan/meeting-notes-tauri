@@ -18,6 +18,16 @@ export interface DiarizationSettings {
   speaker: boolean
 }
 
+/**
+ * Which audio sources are transcribed. Independent of the diarization
+ * settings: a source can be transcribed without speaker recognition, and
+ * diarization can be switched off for a source that is still transcribed.
+ */
+export interface TranscriptionSettings {
+  mic: boolean
+  speaker: boolean
+}
+
 export interface MarkdownExportSettings {
   enabled: boolean
   path: string | null
@@ -29,6 +39,7 @@ export interface TranscriptSettings {
 
 export interface UserSettings {
   language: string
+  transcription: TranscriptionSettings
   diarization: DiarizationSettings
   devices: {
     micId: string | null
@@ -51,6 +62,7 @@ export interface AppConfigState {
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   language: 'de-DE',
+  transcription: { mic: true, speaker: true },
   diarization: { mic: true, speaker: true },
   devices: {
     micId: null,
@@ -67,8 +79,9 @@ export function isValidBcp47Language(input: unknown): input is string {
   return typeof input === 'string' && BCP47_PATTERN.test(input.trim())
 }
 
-type UserSettingsInput = Partial<Omit<UserSettings, 'devices' | 'diarization' | 'transcript'>> & {
+type UserSettingsInput = Partial<Omit<UserSettings, 'devices' | 'transcription' | 'diarization' | 'transcript'>> & {
   devices?: Partial<UserSettings['devices']> | null
+  transcription?: Partial<TranscriptionSettings> | null
   diarization?: Partial<DiarizationSettings> | null
   transcript?: Partial<TranscriptSettings> & {
     markdownExport?: Partial<MarkdownExportSettings> | null
@@ -81,6 +94,16 @@ export function normalizeUserSettings(input: UserSettingsInput | null | undefine
 
   return {
     language: safeLanguage,
+    transcription: {
+      mic:
+        typeof input?.transcription?.mic === 'boolean'
+          ? input.transcription.mic
+          : DEFAULT_USER_SETTINGS.transcription.mic,
+      speaker:
+        typeof input?.transcription?.speaker === 'boolean'
+          ? input.transcription.speaker
+          : DEFAULT_USER_SETTINGS.transcription.speaker
+    },
     diarization: {
       mic: typeof input?.diarization?.mic === 'boolean' ? input.diarization.mic : DEFAULT_USER_SETTINGS.diarization.mic,
       speaker: typeof input?.diarization?.speaker === 'boolean' ? input.diarization.speaker : DEFAULT_USER_SETTINGS.diarization.speaker

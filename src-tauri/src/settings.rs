@@ -5,7 +5,7 @@
 //!
 //!   meeting-notes.config.json
 //!     azure: { endpoint, region, speechKey, interimResults, proxy? }
-//!     user:  { language, devices, diarization, transcript }
+//!     user:  { language, devices, transcription, diarization, transcript }
 //!
 //! Both sections live in the same file. Every write re-reads the file
 //! first and replaces only the section that changed, so saving the Azure
@@ -52,9 +52,33 @@ pub struct UserSettings {
     #[serde(default)]
     pub devices: DeviceIds,
     #[serde(default)]
+    pub transcription: TranscriptionSettings,
+    #[serde(default)]
     pub diarization: DiarizationSettings,
     #[serde(default)]
     pub transcript: TranscriptSettings,
+}
+
+/// Which audio sources are transcribed.
+///
+/// Independent of the `diarization` settings: a source can be transcribed
+/// without speaker recognition, and diarization can be switched off for a
+/// source that is still transcribed. A source that is not transcribed is
+/// neither captured nor sent to Azure.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct TranscriptionSettings {
+    pub mic: bool,
+    pub speaker: bool,
+}
+
+impl Default for TranscriptionSettings {
+    fn default() -> Self {
+        Self {
+            mic: true,
+            speaker: true,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -298,6 +322,7 @@ pub fn default_user_settings() -> UserSettings {
     UserSettings {
         language: DEFAULT_LANGUAGE.into(),
         devices: DeviceIds::default(),
+        transcription: TranscriptionSettings::default(),
         diarization: DiarizationSettings::default(),
         transcript: TranscriptSettings::default(),
     }
@@ -340,6 +365,31 @@ async fn write_atomic(path: &PathBuf, bytes: &[u8]) -> Result<(), SettingsError>
 #[cfg(test)]
 mod config_tests {
     use super::*;
+
+    #[test]
+    fn transcription_defaults_and_persistence_preserve_each_source() {
+        assert_eq!(default_user_settings().transcription, TranscriptionSettings::default());
+        for (options, mic, speaker) in [
+            ("", true, true),
+            (r#", "transcription": {}"#, true, true),
+            (r#", "transcription": {"mic": false}"#, false, true),
+            (r#", "transcription": {"speaker": false}"#, true, false),
+            (r#", "transcription": {"mic": false, "speaker": false}"#, false, false),
+            (r#", "transcription": {"mic": true, "speaker": true}"#, true, true),
+        ] {
+            let raw = format!(r#"{{"language":"invalid","devices":{{}}{options}}}"#);
+            let settings = normalize_user_settings(serde_json::from_str(&raw).unwrap());
+            assert_eq!(settings.language, DEFAULT_LANGUAGE);
+            assert_eq!(settings.transcription, TranscriptionSettings { mic, speaker });
+            let persisted = serde_json::to_string_pretty(&settings).unwrap();
+            let json: serde_json::Value = serde_json::from_str(&persisted).unwrap();
+            assert_eq!(json["transcription"], serde_json::json!({"mic": mic, "speaker": speaker}));
+            assert_eq!(
+                serde_json::from_str::<UserSettings>(&persisted).unwrap().transcription,
+                settings.transcription
+            );
+        }
+    }
 
     #[test]
     fn diarization_defaults_and_persistence_preserve_each_source() {

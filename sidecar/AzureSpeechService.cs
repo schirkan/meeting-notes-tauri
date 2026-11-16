@@ -84,8 +84,9 @@ public sealed class AzureSpeechService : IDisposable
         if (_initialized) return;
         Logger.Info("azure", "init", "AzureSpeechService.init: SDK wird initialisiert.");
 
-        _speechConfig = SpeechConfiguration.Create(_config, _settings.Language,
-            _settings.Diarization.Mic || _settings.Diarization.Speaker);
+        // Die SDK-Eigenschaft gilt global. Wirksam ist sie nur, wenn
+        // mindestens eine transkribierte Quelle die Sprechererkennung nutzt.
+        _speechConfig = SpeechConfiguration.Create(_config, _settings.Language, EffectiveDiarization);
 
         if (_config.Proxy is not null)
             Logger.Info("azure", "proxy", "Azure Speech Proxy konfiguriert; Zugangsdaten werden nicht protokolliert.");
@@ -99,7 +100,8 @@ public sealed class AzureSpeechService : IDisposable
     }
 
     /// <summary>
-    /// Starts both Recognizers (mic + speaker) for the given audio format.
+    /// Starts the Recognizers of all transcribed sources for the given audio
+    /// format. A source that is not transcribed gets no Recognizer at all.
     /// Rolls back partially-started streams if any recognizer start fails.
     /// </summary>
     public async Task StartAsync(AzureAudioFormat format)
@@ -111,20 +113,43 @@ public sealed class AzureSpeechService : IDisposable
         _format = format;
         _stopping = false;
 
-        var micState = EnsureStreamForFormat(SourceMic, format);
-        var speakerState = EnsureStreamForFormat(SourceSpeaker, format);
+        var sources = TranscriptionSources;
+        if (sources.Count == 0)
+            throw new InvalidOperationException("Keine Audioquelle zum Transkribieren ausgewählt.");
+
+        var states = sources.Select(source => EnsureStreamForFormat(source, format)).ToArray();
         try
         {
-            await StartStreamAsync(micState);
-            await StartStreamAsync(speakerState);
+            foreach (var state in states)
+            {
+                await StartStreamAsync(state);
+            }
         }
         catch
         {
             await StopAsync();
             throw;
         }
-        Logger.Info("azure", "started", "Beide Recognizer laufen.");
+        Logger.Info(
+            "azure",
+            "started",
+            $"{states.Length} Recognizer laufen ({string.Join(", ", sources)}).");
     }
+
+    /// <summary>
+    /// Quellen, die transkribiert werden und daher einen Recognizer bekommen.
+    /// </summary>
+    internal IReadOnlyList<string> TranscriptionSources => new[] { SourceMic, SourceSpeaker }
+        .Where(source => _settings.Transcription.IsEnabled(source))
+        .ToArray();
+
+    /// <summary>
+    /// Sprechererkennung ist nur wirksam, wenn mindestens eine transkribierte
+    /// Quelle sie nutzt.
+    /// </summary>
+    internal bool EffectiveDiarization =>
+        (_settings.Transcription.Mic && _settings.Diarization.Mic)
+        || (_settings.Transcription.Speaker && _settings.Diarization.Speaker);
 
     public void PushFrame(AudioFrame frame)
     {
@@ -446,7 +471,25 @@ public sealed record AzureProxyConfig(string Host, int Port, string? Username, s
 
 public sealed record UserSettings(string Language, DeviceIds Devices)
 {
+    public TranscriptionSettings Transcription { get; init; } = new();
     public DiarizationSettings Diarization { get; init; } = new();
+}
+
+/// <summary>
+/// Welche Audioquellen transkribiert werden. Eigenstaendig von der
+/// Diarization: eine Quelle kann ohne Sprechererkennung transkribiert
+/// werden, und die Diarization kann fuer eine weiterhin transkribierte
+/// Quelle abgeschaltet sein. Eine nicht transkribierte Quelle erhaelt
+/// weder einen Recognizer noch Azure-Frames.
+/// </summary>
+public sealed record TranscriptionSettings(bool Mic = true, bool Speaker = true)
+{
+    public bool IsEnabled(string source) => source switch
+    {
+        AzureSpeechService.SourceMic => Mic,
+        AzureSpeechService.SourceSpeaker => Speaker,
+        _ => throw new ArgumentException("Unknown audio source.", nameof(source))
+    };
 }
 
 public sealed record DiarizationSettings(bool Mic = true, bool Speaker = true)

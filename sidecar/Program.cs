@@ -59,6 +59,26 @@ catch (ArgumentException)
     return 11;
 }
 
+// T-511: Welche Audioquellen transkribiert werden. Eigenstaendig von der
+// Diarization - eine Quelle kann ohne Sprechererkennung transkribiert
+// werden. Beide sind per Default aktiv.
+TranscriptionSettings transcription;
+try
+{
+    transcription = ArgsParser.ParseTranscription(argsMap);
+}
+catch (ArgumentException)
+{
+    Logger.Error("SIDECAR_START_FAILED", "Invalid transcription options: --transcription-mic and --transcription-speaker must be true or false.");
+    return 11;
+}
+if (!transcription.Mic && !transcription.Speaker)
+{
+    Logger.Error("SIDECAR_START_FAILED", "Keine Aufnahmequelle zum Transkribieren ausgewaehlt: --transcription-mic oder --transcription-speaker muss true sein.");
+    return 23;
+}
+Logger.Info("config", "transcription", $"Transkribierte Quellen: mic={transcription.Mic}, speaker={transcription.Speaker}.");
+
 AzureProxyConfig? proxy;
 try
 {
@@ -115,18 +135,29 @@ Console.CancelKeyPress += (_, e) =>
 try
 {
     using var mm = new MMDeviceEnumerator();
-    var micDevice = DeviceResolver.ResolveInputDevice(mm, micId);
-    var speakerDevice = DeviceResolver.ResolveOutputDevice(mm, speakerId);
 
-    if (speakerDevice is null)
+    // T-511: Nur transkribierte Quellen brauchen ein Geraet. Ohne
+    // Speaker-Transkription wird kein Ausgabegeraet vorausgesetzt - sonst
+    // waere "nur Mikrofon" auf einem Rechner ohne Ausgabe nicht moeglich.
+    MMDevice? micDevice = null;
+    if (transcription.Mic)
     {
-        Logger.Error("LOOPBACK_DEVICE_NOT_FOUND", "Kein Speaker-Device für Loopback gefunden.");
-        return 21;
+        micDevice = DeviceResolver.ResolveInputDevice(mm, micId);
+        if (micDevice is null)
+        {
+            Logger.Error("SIDECAR_START_FAILED", "Kein Mikrofon-Device gefunden.");
+            return 22;
+        }
     }
-    if (micDevice is null)
+    MMDevice? speakerDevice = null;
+    if (transcription.Speaker)
     {
-        Logger.Error("SIDECAR_START_FAILED", "Kein Mikrofon-Device gefunden.");
-        return 22;
+        speakerDevice = DeviceResolver.ResolveOutputDevice(mm, speakerId);
+        if (speakerDevice is null)
+        {
+            Logger.Error("LOOPBACK_DEVICE_NOT_FOUND", "Kein Speaker-Device für Loopback gefunden.");
+            return 21;
+        }
     }
 
     // NAudio 3.x (T-509): Die Aufnahme laeuft jetzt ueber WasapiRecorder.
@@ -144,7 +175,11 @@ try
             SpeechKey: speechKey!,
             InterimResults: true,
             Proxy: proxy);
-        var userSettings = new UserSettings(language, new DeviceIds(micId, speakerId)) { Diarization = diarization };
+        var userSettings = new UserSettings(language, new DeviceIds(micId, speakerId))
+        {
+            Transcription = transcription,
+            Diarization = diarization
+        };
         azure = new AzureSpeechService(azureConfig, userSettings);
         await azure.InitAsync();
         await azure.StartAsync(new AzureAudioFormat(sampleRate, 16, 1));
@@ -152,7 +187,11 @@ try
 
     var azurePushLock = new object();
 
-    using var micSource = AudioRecorderSource.Create(
+    // T-511: Nur transkribierte Quellen werden aufgenommen. Eine abgeschaltete
+    // Quelle erhaelt weder Recorder noch Azure-Stream.
+    using AudioRecorderSource? micSource = micDevice is null
+        ? null
+        : AudioRecorderSource.Create(
         micDevice,
         loopback: false,
         targetWaveFormat,
@@ -176,7 +215,9 @@ try
             }
         });
 
-    using var speakerSource = AudioRecorderSource.Create(
+    using AudioRecorderSource? speakerSource = speakerDevice is null
+        ? null
+        : AudioRecorderSource.Create(
         speakerDevice,
         loopback: true,
         targetWaveFormat,
@@ -200,13 +241,21 @@ try
             }
         });
 
-    micSource.Start();
-    speakerSource.Start();
+    micSource?.Start();
+    speakerSource?.Start();
 
-    Logger.Info("format", "mic_format", $"Mic Capture Format: {micSource.Format} (Modus: {micSource.ModeLabel})");
-    Logger.Info("format", "speaker_format", $"Speaker Capture Format: {speakerSource.Format} (Modus: {speakerSource.ModeLabel})");
+    var activeSources = new List<string>();
+    if (micSource is not null) activeSources.Add("Mic");
+    if (speakerSource is not null) activeSources.Add("Speaker-Loopback");
+
+    Logger.Info("format", "mic_format", micSource is null
+        ? "Mic: nicht transkribiert."
+        : $"Mic Capture Format: {micSource.Format} (Modus: {micSource.ModeLabel})");
+    Logger.Info("format", "speaker_format", speakerSource is null
+        ? "Speaker-Loopback: nicht transkribiert."
+        : $"Speaker Capture Format: {speakerSource.Format} (Modus: {speakerSource.ModeLabel})");
     Logger.Info("format", "azure_target", $"Azure Target Format: {targetWaveFormat}");
-    Logger.Info("status", "capturing", "Mic + Speaker Loopback aktiv.");
+    Logger.Info("status", "capturing", $"Aktiv: {string.Join(" + ", activeSources)}.");
     Logger.Event("status", new { phase = "started", running = true });
 
     // ---- stdin-Kommandoschale (T-507) ---------------------------------
@@ -296,8 +345,8 @@ try
         }
     }
 
-    micSource.Stop();
-    speakerSource.Stop();
+    micSource?.Stop();
+    speakerSource?.Stop();
     if (azure is not null) await azure.StopAsync();
     Logger.Info("status", "stopped", "Graceful shutdown abgeschlossen.");
     Logger.Event("status", new { phase = "stopped", running = false });

@@ -49,7 +49,13 @@ async function openApp(options) {
       },
       pause: async () => { window.lastPauseCalled = true; return currentStatus = { ...currentStatus, running: true, paused: true } },
       resume: async () => { window.lastResumeCalled = true; return currentStatus = { ...currentStatus, running: true, paused: false } },
-      getSettings: async () => ({ language: input.language ?? 'de-DE', devices: {}, diarization: input.diarization, transcript: input.transcript }),
+        getSettings: async () => ({
+          language: input.language ?? 'de-DE',
+          devices: {},
+          transcription: input.transcription,
+          diarization: input.diarization,
+          transcript: input.transcript
+        }),
       saveSettings: async (settings) => {
         window.lastSavedSettings = settings
         return settings
@@ -312,6 +318,38 @@ test('diarization settings default on and independently save all source combinat
     await page.close()
   }
 })
+
+test('transcription sources default on, persist independently and keep the last source enabled', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+    const mic = page.getByRole('checkbox', { name: 'Mikrofon transkribieren', exact: true })
+    const speaker = page.getByRole('checkbox', { name: 'Speaker-Loopback transkribieren', exact: true })
+    assert.equal(await mic.isChecked(), true)
+    assert.equal(await speaker.isChecked(), true)
+    // Speaker abschalten: nur der Mic bleibt aktiv und ist deshalb gesperrt.
+    await speaker.uncheck()
+    await page.getByRole('button', { name: 'Speichern', exact: true }).click()
+    await page.waitForFunction(() => window.lastSavedSettings?.transcription?.speaker === false)
+    assert.equal(await mic.isChecked(), true)
+    assert.equal(await speaker.isChecked(), false)
+    assert.equal(await mic.isDisabled(), true)
+    assert.equal(await speaker.isDisabled(), false)
+    // Speaker wieder einschalten: der Mic ist danach wieder freigeschaltet.
+    await speaker.check()
+    assert.equal(await mic.isDisabled(), false)
+    await page.getByRole('button', { name: 'Speichern', exact: true }).click()
+    await page.waitForFunction(() => window.lastSavedSettings?.transcription?.speaker === true)
+    // Ein deaktiviertes Quellgeraet wird nicht mehr gebraucht.
+    await speaker.uncheck()
+    assert.equal(await page.getByRole('combobox', { name: 'Speaker Loopback', exact: true }).isDisabled(), true)
+    await speaker.check()
+    assert.equal(await page.getByRole('combobox', { name: 'Speaker Loopback', exact: true }).isDisabled(), false)
+  } finally {
+    await page.close()
+  }
+})
+
 
 test('saved disabled diarization options remain disabled on startup', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, diarization: { mic: false, speaker: false } })
@@ -622,7 +660,7 @@ test('idle audio settings synchronize with dialog, persist, and reset is stopped
     await page.getByRole('heading', { name: 'Allgemeine Einstellungen', exact: true }).waitFor()
     const idle = page.locator('.idle-audio-panel')
     assert.equal(await idle.getByRole('combobox').count(), 3)
-    assert.equal(await idle.getByRole('checkbox').count(), 2)
+    assert.equal(await idle.getByRole('checkbox').count(), 4)
     assert.equal(await idle.getByLabel('Speicherpfad (optional)', { exact: true }).count(), 0)
     await idle.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('en-US')
     await idle.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).uncheck()

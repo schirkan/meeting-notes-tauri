@@ -39,6 +39,8 @@ impl From<tauri_plugin_shell::Error> for SidecarError {
 pub struct SidecarOptions {
     pub sample_rate: u32,
     #[serde(default)]
+    pub transcription: crate::settings::TranscriptionSettings,
+    #[serde(default)]
     pub diarization: crate::settings::DiarizationSettings,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
@@ -67,6 +69,11 @@ pub struct SidecarOptions {
 pub struct SidecarHandle {
     pub child: Arc<Mutex<Option<CommandChild>>>,
     pub events_rx: mpsc::Receiver<CommandEvent>,
+}
+
+fn transcription_arguments(settings: &crate::settings::TranscriptionSettings) -> [String; 4] {
+    ["--transcription-mic".into(), settings.mic.to_string(),
+        "--transcription-speaker".into(), settings.speaker.to_string()]
 }
 
 fn diarization_arguments(settings: &crate::settings::DiarizationSettings) -> [String; 4] {
@@ -165,6 +172,21 @@ mod connectivity_tests {
     use super::*;
 
     #[test]
+    fn transcription_arguments_forward_independent_explicit_booleans() {
+        for mic in [true, false] {
+            for speaker in [true, false] {
+                let settings = crate::settings::TranscriptionSettings { mic, speaker };
+                assert_eq!(transcription_arguments(&settings),
+                    ["--transcription-mic".to_string(), mic.to_string(),
+                        "--transcription-speaker".to_string(), speaker.to_string()]);
+            }
+        }
+        let options: SidecarOptions = serde_json::from_str(r#"{"sampleRate":16000}"#).unwrap();
+        assert_eq!(transcription_arguments(&options.transcription),
+            ["--transcription-mic", "true", "--transcription-speaker", "true"]);
+    }
+
+    #[test]
     fn diarization_arguments_forward_independent_explicit_booleans() {
         for mic in [true, false] {
             for speaker in [true, false] {
@@ -209,6 +231,7 @@ pub async fn start<R: Runtime>(
 
     let sample_rate = options.sample_rate.clamp(8000, 48000);
     command = command.args(["--sample-rate".to_string(), sample_rate.to_string()])
+        .args(transcription_arguments(&options.transcription))
         .args(diarization_arguments(&options.diarization));
 
     if let Some(language) = options.language.as_deref() {

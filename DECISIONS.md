@@ -418,6 +418,27 @@ mehr als 50 % von der Ziel-Bitrate ab, wird auf den Resampler umgeschaltet.
 
 Siehe [T-509](./specs/T-509-audio-capture-auf-wasapirecorderbuilder-umstellen.md).
 
+## AD-016 · Transkription ist eine eigene Achse neben der Diarization (2026-11-16)
+
+**Kontext:** Die Diarization steuert, ob fuer eine Quelle die Sprechererkennung
+verwendet wird (je Quelle ein Bool). Martin wollte zusaetzlich waehlen koennen,
+**welche Audioquelle ueberhaupt transkribiert** wird - Mic, Speaker oder beides.
+
+**Entscheidung:** Zusaetzlich zu `user.diarization` gibt es `user.transcription`
+mit zwei unabhaengigen Booleans (`mic`, `speaker`), Default beide `true`.
+Die beiden Achsen bleiben strikt getrennt: eine Quelle kann ohne
+Sprechererkennung transkribiert werden, und die Diarization kann fuer eine
+weiterhin transkribierte Quelle abgeschaltet sein.
+
+**Konsequenzen im Sidecar:** Eine nicht transkribierte Quelle erzeugt weder
+ein Aufnahmegeraet noch einen Azure-Recognizer und wird nicht an Azure gesendet.
+Sie **voraussetzt auch kein Geraet** - ohne Speaker-Transkription wird kein
+Ausgabegeraet gesucht, sonst waere "nur Mikrofon" auf einem Rechner ohne Ausgabe
+nicht moeglich. Beide Quellen ausgeschaltet wird als Konfigurationsfehler mit
+Exit-Code 23 abgewiesen, weil dann nichts transkribiert wuerde.
+
+Siehe [T-511](./specs/T-511-transkriptions-quellen-auswaehlen.md).
+
 ## Offene Fragen
 
 **Build-Fortschreibung 2026-11-15 (AD-009):** Der direkte `dotnet publish`-Aufruf

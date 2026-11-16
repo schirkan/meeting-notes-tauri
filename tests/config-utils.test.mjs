@@ -98,6 +98,37 @@ test('diarization normalization preserves every independent boolean combination'
   }
 })
 
+  test('transcription defaults enable both sources for legacy and partial settings', () => {
+    for (const input of [null, undefined, {}, { language: 'en-US' }, { transcription: null }, { transcription: {} }]) {
+      assert.deepEqual(contract.normalizeUserSettings(input).transcription, { mic: true, speaker: true })
+    }
+    assert.deepEqual(contract.normalizeUserSettings({ transcription: { mic: false } }).transcription, { mic: false, speaker: true })
+    assert.deepEqual(contract.normalizeUserSettings({ transcription: { speaker: false } }).transcription, { mic: true, speaker: false })
+  })
+
+  test('transcription normalization preserves every independent boolean combination', () => {
+    for (const mic of [true, false]) {
+      for (const speaker of [true, false]) {
+        const settings = contract.normalizeUserSettings({ transcription: { mic, speaker } })
+        assert.deepEqual(settings.transcription, { mic, speaker })
+        assert.deepEqual(contract.normalizeUserSettings(JSON.parse(JSON.stringify(settings))).transcription, { mic, speaker })
+      }
+    }
+  })
+
+  test('malformed transcription values do not become truthy checkbox settings', () => {
+    assert.deepEqual(contract.normalizeUserSettings({ transcription: { mic: 'false', speaker: 0 } }).transcription, { mic: true, speaker: true })
+  })
+
+  test('transcription and diarization stay independent axes', () => {
+    const settings = contract.normalizeUserSettings({
+      transcription: { mic: false, speaker: true },
+      diarization: { mic: true, speaker: false }
+    })
+    assert.deepEqual(settings.transcription, { mic: false, speaker: true })
+    assert.deepEqual(settings.diarization, { mic: true, speaker: false })
+  })
+
 test('malformed diarization values do not become truthy checkbox settings', () => {
   assert.deepEqual(contract.normalizeUserSettings({ diarization: { mic: 'false', speaker: 0 } }).diarization, { mic: true, speaker: true })
 })

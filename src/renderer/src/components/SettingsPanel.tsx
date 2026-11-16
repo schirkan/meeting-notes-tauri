@@ -68,7 +68,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 devices: { ...prev.devices, micId: event.target.value || null }
               }))
             }
-            disabled={statusRunning}
+            disabled={statusRunning || !settings.transcription.mic}
           >
             <option value="">System-Default</option>
             {devices.inputs.map((device) => (
@@ -82,14 +82,19 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <label className="checkbox-field">
           <input
             type="checkbox"
-            checked={settings.diarization.mic}
+            checked={settings.transcription.mic}
             onChange={(event) => setSettings((prev) => ({
               ...prev,
-              diarization: { ...prev.diarization, mic: event.target.checked }
+              transcription: { ...prev.transcription, mic: event.target.checked }
             }))}
-            disabled={statusRunning}
+            disabled={statusRunning || (settings.transcription.mic && !settings.transcription.speaker)}
+            title={
+              settings.transcription.mic && !settings.transcription.speaker
+                ? 'Mindestens eine Quelle muss transkribiert werden.'
+                : undefined
+            }
           />
-          <span>Sprechererkennung für Mikrofon</span>
+          <span>Mikrofon transkribieren</span>
         </label>
 
         <label>
@@ -102,7 +107,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 devices: { ...prev.devices, speakerLoopbackId: event.target.value || null }
               }))
             }
-            disabled={statusRunning}
+            disabled={statusRunning || !settings.transcription.speaker}
           >
             <option value="">System-Default</option>
             {devices.outputs.map((device) => (
@@ -116,12 +121,43 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <label className="checkbox-field">
           <input
             type="checkbox"
+            checked={settings.transcription.speaker}
+            onChange={(event) => setSettings((prev) => ({
+              ...prev,
+              transcription: { ...prev.transcription, speaker: event.target.checked }
+            }))}
+            disabled={statusRunning || (settings.transcription.speaker && !settings.transcription.mic)}
+            title={
+              settings.transcription.speaker && !settings.transcription.mic
+                ? 'Mindestens eine Quelle muss transkribiert werden.'
+                : undefined
+            }
+          />
+          <span>Speaker-Loopback transkribieren</span>
+        </label>
+
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
+            checked={settings.diarization.mic}
+            onChange={(event) => setSettings((prev) => ({
+              ...prev,
+              diarization: { ...prev.diarization, mic: event.target.checked }
+            }))}
+            disabled={statusRunning || !settings.transcription.mic}
+          />
+          <span>Sprechererkennung für Mikrofon</span>
+        </label>
+
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
             checked={settings.diarization.speaker}
             onChange={(event) => setSettings((prev) => ({
               ...prev,
               diarization: { ...prev.diarization, speaker: event.target.checked }
             }))}
-            disabled={statusRunning}
+            disabled={statusRunning || !settings.transcription.speaker}
           />
           <span>Sprechererkennung für Speaker</span>
         </label>

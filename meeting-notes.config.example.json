@@ -16,6 +16,10 @@
 
   "user": {
     "language": "de-DE",
+    "transcription": {
+      "mic": true,
+      "speaker": true
+    },
     "diarization": {
       "mic": true,
       "speaker": true
