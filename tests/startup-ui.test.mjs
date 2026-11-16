@@ -343,6 +343,11 @@ test('transcription sources default on, persist independently and keep the last 
     // Ein deaktiviertes Quellgeraet wird nicht mehr gebraucht.
     await speaker.uncheck()
     assert.equal(await page.getByRole('combobox', { name: 'Speaker Loopback', exact: true }).isDisabled(), true)
+    // Die Diarization-Checkboxen folgen der Quelle: ohne Transkription ist
+    // die Sprechererkennung fuer diese Quelle wirkungslos.
+    assert.equal(await page.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).isDisabled(), true)
+    assert.equal(await page.getByRole('checkbox', { name: 'Sprechererkennung für Mikrofon', exact: true }).isDisabled(), false)
+    assert.equal(await page.getByRole('combobox', { name: 'Mikrofon', exact: true }).isDisabled(), false)
     await speaker.check()
     assert.equal(await page.getByRole('combobox', { name: 'Speaker Loopback', exact: true }).isDisabled(), false)
   } finally {
