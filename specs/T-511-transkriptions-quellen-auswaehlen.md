@@ -102,12 +102,13 @@ Config-Datei `meeting-notes.config.json`:
 
 ## Log
 - 2026-11-16: Umgesetzt. Neuer Contract-Block `user.transcription`, zwei
-- 2026-11-16: Portable nach der Umstellung neu gebaut: Release-/Renderer-Build, Packaging und
-  Smoke-Test erfolgreich. Haupt-EXE 15.48 MB, Sidecar 7.62 MB (21 Dateien), Gesamt
-  **23.10 MB / 24 Dateien / 23 geprüfte Hashes**. Native Geräteabfrage: 0 Eingänge,
-  0 Ausgänge — der Hardware-Nachweis (nur eine Quelle aktiv, Transkriptinhalt, Latenz) bleibt offen.
   Checkboxen im Settings-Dialog, Weitergabe über `--transcription-mic` /
   `--transcription-speaker`. Der Sidecar nimmt nur transkribierte Quellen
   auf und erzeugt nur dafür einen Azure-Recognizer. Geräte werden nur für
   aktive Quellen aufgelöst. Beide Quellen ausgeschaltet wird mit Exit-Code 23
   abgewiesen.
+- 2026-11-16: Portable nach der Umstellung neu gebaut: Release-/Renderer-Build,
+  Packaging und Smoke-Test erfolgreich. Haupt-EXE 15.48 MB, Sidecar 7.62 MB
+  (21 Dateien), Gesamt **23.10 MB / 24 Dateien / 23 geprüfte Hashes**. Native
+  Geräteabfrage: 0 Eingänge, 0 Ausgänge — der Hardware-Nachweis (nur eine
+  Quelle aktiv, Transkriptinhalt, Latenz) bleibt offen.
