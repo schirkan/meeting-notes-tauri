@@ -145,7 +145,7 @@ npm run test:smoke
 
 **Den gesamten Portable-Ordner verteilen.** Sidecar-EXE und alle verwalteten/nativen DLLs liegen extern in `sidecar/`, nicht eingebettet in `meeting-notes.exe`. .NET 10 Runtime (win-x64) und WebView2 müssen auf dem Zielsystem vorhanden sein.
 
-Letzter verifizierter Portable-Build (2026-11-16, **Console-Design**): **23.02 MB gesamt**, davon Haupt-EXE `meeting-notes.exe` 15.40 MB und Sidecar 7.61 MB (21 Dateien); 24 Dateien einschließlich Config-Template und SHA256SUMS. Release-/Renderer-Build und `npm run test:smoke` erfolgreich: **23/23 Hashes**, native Sidecar-Geräteabfrage (0 Eingänge, 1 Ausgang). Die Console-Umsetzung wurde zuvor mit 62 Node-/UI-Tests geprüft. Keine persönliche Konfiguration enthalten; .NET 10 Runtime und WebView2 bleiben Voraussetzung. Kein neuer Live-Azure- oder Clean-Machine-Nachweis; MSI/NSIS wurden nicht gebaut.
+Letzter verifizierter Portable-Build (2026-11-16, **T-509**): **23.09 MB gesamt**, davon Haupt-EXE `meeting-notes.exe` 15.47 MB und Sidecar 7.61 MB (21 Dateien); 24 Dateien einschließlich Config-Template und SHA256SUMS. Release-/Renderer-Build und `npm run test:smoke` erfolgreich: **23/23 Hashes**, native Sidecar-Geräteabfrage (0 Eingänge, 0 Ausgänge). Der frühere Console-Design-Build desselben Tages kam auf 23.02 MB — zwei verifizierte Messungen derselben Quelle; der T-509-Stand umfasst die Aufnahme über `WasapiRecorderBuilder`. Keine persönliche Konfiguration enthalten; .NET 10 Runtime und WebView2 bleiben Voraussetzung. Kein neuer Live-Azure- oder Clean-Machine-Nachweis; MSI/NSIS wurden nicht gebaut.
 
 ## Lizenz
 

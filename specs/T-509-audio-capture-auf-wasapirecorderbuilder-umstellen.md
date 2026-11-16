@@ -126,6 +126,10 @@ hier nicht nachweisbar. Ablauf auf einem Rechner mit Mic und Ausgabe:
   werden duerfen.
 
 ## Log
+- 2026-11-16: Portable nach dem Umbau neu gebaut: Release-/Renderer-Build, Packaging und
+  Smoke-Test erfolgreich. Haupt-EXE 15.47 MB, Sidecar 7.61 MB (21 Dateien), Gesamt
+  **23.09 MB / 24 Dateien / 23 gepruefte Hashes**. Native Geraeteabfrage: 0 Eingaenge,
+  0 Ausgaenge — der Hardware-Nachweis fuer Konvertierungsweg und Loopback bleibt offen.
 - 2026-11-13: Spec angelegt. Aufwand am Code und an der installierten
   NAudio-Wasapi-3.3.0-DLL gemessen: rund ein Tag Code plus ein
   Verifikationsfenster mit Audio-Hardware. API-Fakten per Reflection und
