@@ -73,7 +73,8 @@ Diese Entwicklungsmaschine meldet `--list-devices` mit **0** Eingangs- und
 **0** Ausgabegeraeten. Der Konvertierungsweg und das Loopback-Verhalten sind
 hier nicht nachweisbar. Ablauf auf einem Rechner mit Mic und Ausgabe:
 
-1. Portable-Build erzeugen und `MeetingNotes.Sidecar.exe` mit
+1. Portable-Build erzeugen (`npm run tauri -- build --no-bundle`) und
+   `src-tauri/target/sidecar-publish/MeetingNotes.Sidecar.exe` mit
    `--list-devices` pruefen (Mic und Ausgabe muessen erscheinen).
 2. Aufnahme starten, Mic und Loopback besprechen, Transkript im UI pruefen:
    Segmente kommen an, Format ist 16 kHz/16-Bit/mono, kein Rauschen, keine

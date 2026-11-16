@@ -95,6 +95,7 @@ plus ein Verifikationsfenster mit Audio-Hardware.
 
 ## Log
 - 2026-11-13: Alle Referenzen und Pakete aktualisiert (npm, TypeScript 7, .NET 10,
+- 2026-11-16: Git-Sync mit `origin/main` (Commits `107265c`, `8238bc5`): Fast-forward ohne Konflikte. Enthommen: Compact-Console-UI (Renderer-Grundriss neu, `Icon.tsx`), bereinigte Toolchain-Skripte (`check-toolchain.ps1`, `setup-toolchain.ps1`, `run-with-toolchain.ps1`) und die Build-Umstellung auf `src-tauri/target/sidecar-publish/` bzw. `sidecar-artifacts`. T-507 (Pause/Stop, sessionsichere Sprecherzuordnung) sowie T-508/T-509 sind vollstaendig erhalten. Portable neu gebaut: Haupt-EXE 15.47 MB, Sidecar 7.61 MB (21 Dateien), Gesamt 23.08 MB / 24 Dateien / 23 SHA256-Summen. Verifiziert: 62 Node-Tests, 21 Rust-Tests, 467 C#-Assertions, Release-Build und Smoke-Test gruen.
   NAudio 3.3.0, Speech SDK 1.53.0, reqwest 0.13, thiserror 2). NAudio-3.x-API-Bruch
   (span-basiertes `IWaveProvider.Read`, obsoletes `MMDevice.AudioClient`) per
   Reflection ermittelt und angepasst. Verifiziert: 51 Node-Tests, 18 Rust-Tests,
