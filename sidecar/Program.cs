@@ -144,12 +144,12 @@ try
         DiscardOnBufferOverflow = true,
         ReadFully = false
     };
-
-    // NAudio 3.x markiert WasapiCapture/WasapiLoopbackCapture als
-    // obsolet (Empfehlung: WasapiRecorderBuilder). Die Umstellung aendert
-    // das Aufnahmemodell (IAsyncEnumerable statt DataAvailable-Event) und
-    // damit das Verhalten der Aufnahme — sie ist ein eigener Schritt und
-    // nicht Teil dieser Paket-Aktualisierung (T-508).
+    // NAudio 3.x markiert WasapiCapture/WasapiLoopbackCapture als obsolet
+    // (Empfehlung: WasapiRecorderBuilder, siehe T-509). Die Umstellung ist ein
+    // eigener Schritt und nicht Teil dieser Paket-Aktualisierung (T-508).
+    // Korrektur zur ersten Fassung dieses Kommentars: WasapiRecorder BEHAELT das
+    // DataAvailable-Event (jetzt mit ReadOnlySpan<byte>) - es ist KEIN
+    // IAsyncEnumerable-Modellwechsel.
 #pragma warning disable CS0618
     using var micCapture = new WasapiCapture(micDevice);
     using var speakerCapture = new WasapiLoopbackCapture(speakerDevice);
