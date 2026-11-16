@@ -18,6 +18,14 @@ Push in den Azure-`PushAudioInputStream` bleiben semantisch identisch.
 - `sidecar/AudioCaptureClient.cs` (62 Zeilen), `MicCaptureClient.cs` (17) und
   `LoopbackCaptureClient.cs` (17) haben **0 externe Verwendungen** — die
   Pipeline liegt vollstaendig inline in `Program.cs`.
+- Verifikation per `git grep` ueber alle versionierten `.cs`-Dateien
+  (am 2026-11-16): `AudioResampler`, `DrainResampled`, `AudioCaptureClient`,
+  `MicCaptureClient`, `LoopbackCaptureClient`, `MediaFoundationResampler`,
+  `BufferedWaveProvider`, `WasapiCapture` und `WasapiLoopbackCapture` kommen
+  **ausschliesslich** in `sidecar/*.cs` vor. Die C#-Validierung
+  (`sidecar/Validation/`) und die Node-/Rust-Tests referenzieren sie nicht —
+  der Wegfall dieser rund 160 Zeilen fasst **keine** Test- oder
+  Harness-Aenderung nach sich.
 - `NAudio.Wave.WasapiRecorder` (3.3.0) bietet **beide** Konsumwege:
   `EVENT DataAvailable : CaptureDataAvailableHandler` (jetzt `ReadOnlySpan<byte>`,
   Zero-Copy) **und** `M CaptureAsync(CancellationToken) -> IAsyncEnumerable`.
