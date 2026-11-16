@@ -18,7 +18,7 @@ die externen Sidecar-Abhaengigkeiten bleiben erforderlich.
   - [x] `sidecar/MeetingNotes.Sidecar.exe` + DLLs (framework-dependent)
   - [x] `meeting-notes.config.example.json` — die Config-Vorlage wird mitgeliefert; keine persönlichen Configs oder Credentials.
 - [ ] Portable Build auf einem **frischen** Windows-11-System mit .NET 10 Runtime und WebView2 validiert. Bisherige native Tests erfolgten nur auf dem lokalen Entwicklungsrechner.
-- [x] SHA256SUMS-Datei wird erzeugt und geprüft. Stand 2026-11-13: **26 Summen** für 1 App-EXE + 24 Sidecar-Dateien + 1 Config-Template; **27 Dateien** inklusive SHA256SUMS. `npm run test:smoke` bestätigt 25/25 Hashes.
+- [x] SHA256SUMS-Datei wird erzeugt und geprüft. Stand 2026-11-16: **23 Summen** für 1 App-EXE + 21 Sidecar-Dateien + 1 Config-Template; **24 Dateien** inklusive SHA256SUMS. `npm run test:smoke` bestätigt 23/23 Hashes.
 - [x] Bundle-Größe wird im Build-Output geloggt (App-EXE / Sidecar / Config-Template / SHA256SUMS / Gesamt).
 
 ## Approach
@@ -31,6 +31,9 @@ die externen Sidecar-Abhaengigkeiten bleiben erforderlich.
 - Tauri-Bundle-Konfiguration (`bundle.targets: ["nsis", "msi"]`) bleibt für Installer-Distribution aktiv und unabhängig vom portable-Pfad.
 
 ## Log
+- 2026-11-16: Temporäre Browser-Vorschau beendet und beide Preview-Hilfsdateien entfernt. Portable mit aktuellem Settings-Footer, regulären Tab-Hintergründen und symmetrischem Settings-Zahnrad neu gebaut. 23.02 MB / 24 Distributionsdateien / 23 geprüfte Hashes; Smoke-Test erfolgreich. Persönliche lokale Konfiguration gesichert und unverändert wiederhergestellt, nicht Teil des Distributionsmanifests.
+- 2026-11-16: Vollständiger Neuaufbau nach geleertem Rust-Target inklusive aktuellem Settings-Footer: Renderer, Rust-Release und C#-Sidecar neu gebaut; Rust-Kompilierung 2 min 05 s. Portable unverändert 23.02 MB / 24 Distributionsdateien / 23 geprüfte Hashes; Smoke-Test erfolgreich. Vorhandene persönliche Portable-Konfiguration vor dem Build gesichert und danach hashgleich wiederhergestellt; sie gehört nicht zum Distributionsmanifest und ist vor Weitergabe zu entfernen.
+- 2026-11-16: Portable mit Console-Design neu gebaut: Release-/Renderer-Build, Packaging und Smoke-Test erfolgreich. Haupt-EXE 15.40 MB, Sidecar 7.61 MB (21 Dateien), Gesamt 23.02 MB / 24 Dateien / 23 geprüfte Hashes. Native Geräteabfrage: 0 Eingänge, 1 Ausgang. Keine persönlichen Configs mitgeliefert; keine Installer und kein Clean-Machine-Test.
 - 2026-06-25: Spec angelegt.
 - 2026-06-26: `scripts/dist-portable.mjs` + `npm run dist:portable` implementiert. Config-Templates als optional markiert (gehört zu T-103/T-305).
 - 2026-11-13: Portable nach der Paket-Aktualisierung neu gebaut (T-508): Haupt-EXE 15.44 MB, Sidecar 8.06 MB (24 Dateien), Gesamt 23.50 MB, 27 Dateien, 26/26 SHA256-Summen. Der Sidecar waechst, weil NAudio 3.x die Capture-Assemblies als Teilpakete ausliefert; die Haupt-EXE waechst durch reqwest 0.13 mit rustls-Platform-Verifier.

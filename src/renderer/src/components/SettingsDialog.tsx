@@ -1,11 +1,12 @@
-import { useEffect, useRef } from 'react'
+import { Children, useEffect, useRef, useState } from 'react'
+import { Icon } from './Icon'
 
 type SettingsDialogProps = {
   isOpen: boolean
   onClose: () => void
   children: React.ReactNode
   title?: string
-  columns?: 2 | 3
+  tabs?: string[]
   footer?: React.ReactNode
 }
 
@@ -19,7 +20,9 @@ const FOCUSABLE_SELECTOR = [
 ].join(',')
 
 export function SettingsDialog(props: SettingsDialogProps) {
-  const { isOpen, onClose, children, title = 'Einstellungen', columns = 2, footer } = props
+  const { isOpen, onClose, children, title = 'Einstellungen', tabs, footer } = props
+  const [activeTab, setActiveTab] = useState(0)
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const dialogRef = useRef<HTMLElement | null>(null)
   // Ref statt State, damit onClose-Wechsel den Initial-Focus-Effekt nicht
   // erneut auslösen. Außerdem den Initial-Fokus nur einmalig pro Open-Phase
@@ -45,7 +48,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
 
       const focusables = Array.from(
         dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
-      ).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null)
+      ).filter((el) => el.tabIndex >= 0 && el.offsetParent !== null)
 
       if (focusables.length === 0) {
         event.preventDefault()
@@ -76,6 +79,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
   // Tastatureingaben direkt in den Settings landen.
   useEffect(() => {
     if (!isOpen) return
+    const previousFocus = document.activeElement
 
     // requestAnimationFrame, damit der DOM nach dem Conditional-Render
     // (if (!isOpen) return null) vollständig gemounted ist, bevor wir suchen.
@@ -86,9 +90,9 @@ export function SettingsDialog(props: SettingsDialogProps) {
       // Erstes echtes Eingabe-Element (input/select/textarea) im Dialog suchen.
       // Bewusst NICHT den Schließen-Button, da dieser Fokus bei jedem Re-Render
       // der Settings den Nutzer aus Eingabefeldern reißen würde.
-      const firstInput = dialog.querySelector<HTMLElement>(
+      const firstInput = Array.from(dialog.querySelectorAll<HTMLElement>(
         'input:not([type="checkbox"]):not([type="radio"]):not([disabled]), select:not([disabled]), textarea:not([disabled])'
-      )
+      )).find((element) => element.offsetParent !== null)
 
       if (firstInput instanceof HTMLElement) {
         firstInput.focus()
@@ -99,7 +103,10 @@ export function SettingsDialog(props: SettingsDialogProps) {
       }
     })
 
-    return () => cancelAnimationFrame(rafId)
+    return () => {
+      cancelAnimationFrame(rafId)
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus()
+    }
   }, [isOpen])
 
   if (!isOpen) {
@@ -110,21 +117,38 @@ export function SettingsDialog(props: SettingsDialogProps) {
     <div className="settings-dialog-overlay" role="presentation" onClick={onClose}>
       <section
         ref={dialogRef}
-        className={columns === 3 ? 'settings-dialog settings-dialog-three-columns' : 'settings-dialog'}
+        className={`settings-dialog ${tabs ? 'settings-dialog-tabbed' : ''}`}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="settings-dialog-title"
+        aria-label={title}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="settings-dialog-header">
-          <h2 id="settings-dialog-title">{title}</h2>
+          <h2>{title}</h2>
           <button className="settings-dialog-close" type="button" onClick={onClose} aria-label="Dialog schließen">
-            ×
+            <Icon name="close" />
           </button>
         </div>
 
+        {tabs && <div className="settings-tabs" role="tablist" aria-label="Einstellungsbereiche">
+          {tabs.map((tab, index) => <button key={tab} type="button" role="tab" id={`settings-tab-${index}`}
+            ref={(element) => { tabRefs.current[index] = element }} aria-controls={`settings-panel-${index}`}
+            aria-selected={activeTab === index} tabIndex={activeTab === index ? 0 : -1}
+            onClick={() => setActiveTab(index)} onKeyDown={(event) => {
+              let next = index
+              if (event.key === 'ArrowRight') next = (index + 1) % tabs.length
+              else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length
+              else if (event.key === 'Home') next = 0
+              else if (event.key === 'End') next = tabs.length - 1
+              else return
+              event.preventDefault()
+              setActiveTab(next)
+              tabRefs.current[next]?.focus()
+            }}>{tab}</button>)}
+        </div>}
         <div className="settings-dialog-grid">
-          {children}
+          {tabs ? Children.toArray(children).map((child, index) => <div key={tabs[index]} role="tabpanel"
+            id={`settings-panel-${index}`} aria-labelledby={`settings-tab-${index}`} hidden={activeTab !== index}>{child}</div>) : children}
         </div>
 
         {footer && <div className="settings-dialog-footer">{footer}</div>}

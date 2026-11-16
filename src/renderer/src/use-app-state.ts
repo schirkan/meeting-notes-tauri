@@ -64,6 +64,7 @@ export function useAppState() {
   const [now, setNow] = useState(() => Date.now())
   const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null)
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
+  const autoScrollEnabledRef = useRef(true)
   const transcriptListRef = useRef<HTMLUListElement | null>(null)
 
   useEffect(() => {
@@ -179,6 +180,7 @@ export function useAppState() {
     })
 
     const unsubStatus = transcriptApi.onStatus((nextStatus) => {
+      setNow(Date.now())
       setStatus(nextStatus)
     })
 
@@ -200,10 +202,11 @@ export function useAppState() {
     if (!list) return
 
     const handleScroll = () => {
-      // Auto-Scroll aktiv, solange der Nutzer maximal 32 px vom Listenende entfernt ist.
+      // Auto-Scroll aktiv, solange der Nutzer maximal 24 px vom Listenende entfernt ist.
       // Sobald hochgescrollt wird, wird Auto-Scroll deaktiviert.
       const distanceFromBottom = list.scrollHeight - list.scrollTop - list.clientHeight
-      const nearBottom = distanceFromBottom <= 32
+      const nearBottom = distanceFromBottom <= 24
+      autoScrollEnabledRef.current = nearBottom
       setAutoScrollEnabled(nearBottom)
     }
 
@@ -217,8 +220,13 @@ export function useAppState() {
 
   useEffect(() => {
     if (!autoScrollEnabled || !transcriptListRef.current) return
-    transcriptListRef.current.scrollTop = transcriptListRef.current.scrollHeight
-  }, [segments, autoScrollEnabled])
+    const list = transcriptListRef.current
+    const follow = () => { if (autoScrollEnabledRef.current) list.scrollTop = list.scrollHeight }
+    follow()
+    const observer = new ResizeObserver(follow)
+    observer.observe(list)
+    return () => observer.disconnect()
+  }, [segments, speakerAliases, autoScrollEnabled])
 
   useEffect(() => {
     if (!status.running || !status.startedAt) return
@@ -344,8 +352,16 @@ export function useAppState() {
   const pausedAccumulatedMsRef = useRef(0)
   const pausedSinceRef = useRef<number | null>(null)
   const wasPausedRef = useRef(false)
+  const timedSessionRef = useRef<string | null>(null)
 
   useEffect(() => {
+    const session = status.startedAt ?? sessionStartedAt
+    if (timedSessionRef.current !== session) {
+      timedSessionRef.current = session
+      pausedAccumulatedMsRef.current = 0
+      pausedSinceRef.current = null
+      wasPausedRef.current = false
+    }
     if (status.paused && !wasPausedRef.current) {
       pausedSinceRef.current = Date.now()
     } else if (!status.paused && wasPausedRef.current && pausedSinceRef.current !== null) {
@@ -353,14 +369,15 @@ export function useAppState() {
       pausedSinceRef.current = null
     }
     wasPausedRef.current = !!status.paused
-  }, [status.paused])
+    setNow(Date.now())
+  }, [status.paused, status.running, status.startedAt, sessionStartedAt])
 
   const durationLabel = useMemo(() => {
     const startedAt = status.startedAt ?? sessionStartedAt
     if (!startedAt) return '00:00'
 
     const startedAtMs = new Date(startedAt).getTime()
-    const endAtMs = status.running ? now : Date.now()
+    const endAtMs = now
 
     if (Number.isNaN(startedAtMs)) return '00:00'
 
@@ -376,7 +393,7 @@ export function useAppState() {
     }
 
     return [minutes, seconds].map((value) => String(value).padStart(2, '0')).join(':')
-  }, [now, sessionStartedAt, status.running, status.startedAt])
+  }, [now, sessionStartedAt, status.paused, status.running, status.startedAt])
 
   const onStart = async () => {
     setIsStarting(true)
@@ -388,7 +405,10 @@ export function useAppState() {
       // fallen.
       setSegments([])
       setSpeakerAliases({})
+      autoScrollEnabledRef.current = true
+      setAutoScrollEnabled(true)
       const next = await window.transcriptApi.start()
+      setNow(Date.now())
       setStatus(next)
       setSessionStartedAt(next.startedAt ?? new Date().toISOString())
       setToast({ message: 'Neues Transkript gestartet.', variant: 'info', persistent: false })
@@ -404,10 +424,12 @@ export function useAppState() {
   const onStop = async () => {
     try {
       const next = await window.transcriptApi.stop()
+      setNow(Date.now())
       setStatus(next)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Stop fehlgeschlagen.'
       setLastError({ code: 'UI_STOP_FAILED', message })
+      setToast({ message: `UI_STOP_FAILED: ${message}`, variant: 'error', persistent: true })
     }
   }
 
@@ -416,6 +438,7 @@ export function useAppState() {
   const onPause = async () => {
     try {
       const next = await window.transcriptApi.pause()
+      setNow(Date.now())
       setStatus(next)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Pause fehlgeschlagen.'
@@ -427,6 +450,7 @@ export function useAppState() {
   const onResume = async () => {
     try {
       const next = await window.transcriptApi.resume()
+      setNow(Date.now())
       setStatus(next)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Fortsetzen fehlgeschlagen.'
@@ -445,27 +469,17 @@ export function useAppState() {
   }
 
   const onResetTranscript = async () => {
+    if (status.running || isStarting) return
     const shouldReset = window.confirm('Transkript, Startzeit und Dauer wirklich zurücksetzen?')
     if (!shouldReset) {
       return
-    }
-
-    if (status.running) {
-      try {
-        const next = await window.transcriptApi.stop()
-        setStatus(next)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Stop fehlgeschlagen.'
-        setLastError({ code: 'UI_STOP_FAILED', message })
-        setToast({ message: `UI_STOP_FAILED: ${message}`, variant: 'error', persistent: true })
-        return
-      }
     }
 
     setSegments([])
     setSpeakerAliases({})
     setSessionStartedAt(null)
     setStatus((prev) => ({ ...prev, startedAt: undefined }))
+    autoScrollEnabledRef.current = true
     setAutoScrollEnabled(true)
   }
 
@@ -701,6 +715,14 @@ export function useAppState() {
     lastError,
     latestSegment,
     onCopyTranscript,
+    onExportTranscript: () => persistTranscript(labeledSegments),
+    autoScrollEnabled,
+    onFollowTranscript: () => {
+      autoScrollEnabledRef.current = true
+      setAutoScrollEnabled(true)
+      const list = transcriptListRef.current
+      if (list) list.scrollTop = list.scrollHeight
+    },
     onOpenSettingsDialog: () => setSettingsDialogOpen(true),
     onResetTranscript,
     onSaveAll,

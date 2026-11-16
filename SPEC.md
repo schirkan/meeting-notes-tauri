@@ -61,20 +61,22 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 
 ## 5. UI (React)
 - Anzeige der Transkripte mit Sprecher/Quelle, Zeitstempel, Text (sofern verfügbar).
-- Verbesserte Sprecherdarstellung über Speaker-Badges/Farben.
+- Dunkle Console-Oberfläche mit voller Fensterhöhe, einer 52-px-Kopfzeile und intern scrollendem Transkript. Timer und farbiger Statuspunkt stehen direkt neben dem Titel; Aufnahmeaktionen bleiben zentriert und beim Statuswechsel positionsstabil. Startzeit und Statusbeschreibung stehen als Tooltips zur Verfügung. Einstellungen immer als Icon; responsive Grenzen bei 800 und 500 px.
+- Transkript mit 120-px-Spalte für farbigen Sprechernamen und `Uhrzeit | Sprache`. Namen sind direkt editierbar ohne Layout-Verschiebung (Enter/Verlassen übernimmt, Escape verwirft). Die standardmäßig geschlossene Sprecherzuordnung zeigt farblich passende Eingaben. Ein schwebender **Folgen**-Button erscheint beim Zurückscrollen (mehr als 24 px vom Ende) und aktiviert Auto-Scroll wieder.
 - Sprecher-Alias-Mapping im UI für beide Quellen. Identitäten sind quellenspezifisch (`mic:Guest-1`, `speaker:Guest-1`), Standardlabels zeigen `Mic · Guest-1` bzw. `Speaker · Guest-1`; gleiche SDK-IDs verschiedener Quellen teilen keinen Alias. Nummerierte Mic-IDs nutzen einen Offset von 15 innerhalb der 30 zyklischen Farbslots.
 - Aufnahmesteuerung mit **Start**, **Pause**/**Weiter** und **Stop**. Pause haelt die Azure-Sitzung am Leben, speist aber kein Audio zu: der pausierte Abschnitt erscheint nicht im Transkript, und die Sprecher-IDs der Sitzung bleiben gueltig. Stop beendet die Sitzung endgueltig; der naechste Start beginnt ein neues Transkript mit frischer Sprecherbasis. Ein Fortsetzen nach Stop ist nicht moeglich. Pausen zaehlen nicht als Aufnahmezeit.
-- Bei geänderter SDK-Sprecher-ID ersetzt ein neues Interim-/Final-Event ältere Interims derselben Quelle; andere Quellen und finale Segmente bleiben erhalten. Die letzter-Sprecher-Anzeige berücksichtigt Aliase.
+- Bei geänderter SDK-Sprecher-ID ersetzt ein neues Interim-/Final-Event ältere Interims derselben Quelle; andere Quellen und finale Segmente bleiben erhalten. Transkript, Sprecherzuordnung und Export berücksichtigen Aliase.
 - Diagnostikbereich mit laufendem Debug-Log (App/Sidecar/IPC).
-- Diagnostikbereich mit separaten Öffnen-/Schließen-Aktionen und manueller Log-Leerung.
-- Einstellungen haben drei responsive Bereiche: **Allgemein**, **Azure-Konfiguration**, **Proxy** (rechts). Unterhalb aller Bereiche steht der tatsächliche Backend-Pfad der gemeinsamen Konfigurationsdatei. Bis 960 px Fensterbreite stehen die Bereiche untereinander.
+- Die Debug-Fußzeile ist initial unsichtbar und wird über **Debug-Log** im Drei-Punkte-Menü umgeschaltet. Beim ersten Anzeigen öffnet sich der Logbereich nach oben, maximal bis 50 % des Inhaltsbereichs. Späteres Aus-/Einblenden erhält seinen Öffnungszustand. Fußzeile mit Fehlerzähler, farblicher Fehlerhervorhebung und **Log löschen**.
+- Einstellungen haben drei Tabs: **Allgemein**, **Azure-Konfiguration**, **Proxy**. Die Dialogposition und -größe bleiben beim Wechsel gleich; Inhalte scrollen intern. Der Footer enthält den einzigen **Speichern**-Button und den tatsächlichen Backend-Pfad der gemeinsamen Konfigurationsdatei. Tabs unterstützen Pfeiltasten, Home und End; Escape und Focus-Trap bleiben erhalten.
+- Bei leerem Transkript und gestoppter Aufnahme zeigt der Hauptbereich nur Sprache und Audioeinstellungen mit Speichern-Aktion. Mikrofon-/Loopback-Auswahl und jeweilige Sprechererkennung stehen paarweise nebeneinander; bei höchstens 500 px untereinander. **Löschen** im Header ist während Aufnahme, Pause und Start deaktiviert und auch im Handler gesperrt.
 - Nutzer kann Sprache/Devices sowie Azure-Konfiguration und Proxy bearbeiten. Proxy wird gemeinsam mit Azure gespeichert; **Verbindung testen** und laufende/letzte Ergebnisse öffnen liegen im Azure-Bereich.
 - Spracheinstellung und unabhängige Sprechererkennung für Mic/Speaker werden über Neustarts hinweg persistiert. Beide Diarization-Checkboxen stehen bei den jeweiligen Geräten im Bereich **Allgemein** und sind während der Aufnahme deaktiviert. Gespeicherte Änderungen gelten für die nächste Aufnahme.
 - Im Bereich **Allgemein** stehen außerdem **Transkript automatisch als Markdown speichern** (standardmäßig aktiv) und das optionale Feld **Speicherpfad**. Leer bedeutet Anwendungsverzeichnis.
 - Bei fehlender, nicht lesbarer oder unvollständiger Azure-Konfiguration öffnen sich Einstellungen beim Start automatisch; schließbarer Bottom-Toast ohne Verschiebung des Hauptinhalts. Das ist lokale Pflichtfeldprüfung, keine Azure-Key-Verifikation.
 - Separater Diagnose-Dialog mit Transportstatus und vollständiger Schritttabelle nach Abschluss. Schließen kehrt zu Einstellungen zurück, ohne einen laufenden Test abzubrechen; Ergebnisse können wieder geöffnet werden.
 - F12 öffnet/schließt DevTools auch im Release-/Portable-Build.
-- Bestehende UI bleibt Grundlage; Settings-/Diagnose-UX ist eine bewusste Ausnahme zur ursprünglichen 1:1-Portierung (siehe [DECISIONS.md](./DECISIONS.md), Fortschreibung AD-004 und [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md)).
+- Das auf Nutzerwunsch übernommene Console-Design ersetzt die ursprüngliche 1:1-Darstellung; Backend, IPC, Konfiguration und Diagnose verwenden weiterhin die bestehende Implementierung (siehe [DECISIONS.md](./DECISIONS.md), Fortschreibung AD-004 und [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md)).
 
 ## 6. Konfiguration
 - Azure-Konfiguration und Benutzeroptionen liegen gemeinsam in **einer** Datei `meeting-notes.config.json` (Abschnitte `azure` und `user`): im Release direkt neben der EXE, in Entwicklung im Repository-Root. Unabhängig vom Start-Arbeitsverzeichnis, ohne AppData-Migration/-Fallback.
@@ -117,6 +119,7 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 ## 7. Export
 - Automatischer Dateiexport als Markdown mit YAML-Frontmatter (siehe [T-506](./specs/T-506-transkript-markdown-export-und-frontmatter.md)); kein Export in weitere Formate.
 - Vollständiges Transkript per Copy-to-Clipboard als Markdown — identisch zur automatisch gespeicherten Datei.
+- **Markdown exportieren** im Drei-Punkte-Menü speichert manuell über denselben Backend-Pfad und Builder wie der automatische Export; Fehler erscheinen als Toast.
 - Exportinhalt: YAML-Frontmatter (`title`, `date`, `start`, `end`, `duration`, `language`, `segments`, `speakers`) plus finale Segmentliste mit Sprecher/Uhrzeit/Text. Sprecherlabels berücksichtigen quellenspezifische UI-Aliase; ohne Alias wird die Quelle mit ausgegeben, z. B. `Mic · Guest-1`.
 - Zeitformat: deutsches Datums-/Zeitformat. Der Zielpfad des Datei-Exports ist optional; ohne Angabe landet die Datei im Anwendungsverzeichnis, relative Pfade werden dort aufgelöst.
 

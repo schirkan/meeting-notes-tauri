@@ -17,15 +17,18 @@ Dieses Projekt ist die **Tauri-Migration** des bestehenden Electron-Projekts `pr
 - Live-Transkript mit Interim/Final und verbesserter Lesbarkeit
 - Speaker-Badges/Farben inkl. Alias-Mapping
 - Fehler-/Status-Events via Tauri-Bridge
-- Debug-Log im UI (separate Öffnen/Schließen-Aktionen + Log löschen)
+- Kompakte dunkle Console-Oberfläche über die gesamte Fensterhöhe: eine gemeinsame Kopfzeile, Timer-Status, zentrierte Aufnahmeaktionen und direkt editierbare Sprechernamen
+- Sprecherzuordnung standardmäßig ausgeblendet; **Folgen** erscheint nur nach manuellem Zurückscrollen
+- Debug-Log über das Drei-Punkte-Menü einblenden: die zunächst unsichtbare Fußzeile öffnet den Logbereich beim ersten Anzeigen direkt nach oben (maximal 50 % des Inhaltsbereichs). Fehlerzähler und **Log löschen** bleiben in der Fußzeile; späteres Aus-/Einblenden erhält den Öffnungszustand.
 - Persistente Einstellungen (Sprache, Devices, Sprechererkennung separat für Mic und Speaker)
 - Markdown-Export mit YAML-Frontmatter: automatisches Speichern beim Ende der Aufnahme (Pfad optional, Standard ist das Anwendungsverzeichnis) sowie Kopieren in die Zwischenablage — beide erzeugen dasselbe Dokument
 - C#-Sidecar (NAudio WASAPI Mic + Loopback, Azure Speech SDK, JSON-Lines nach Tauri)
 - Azure Speech: pro Quelle unabhängig `ConversationTranscriber` mit Sprechererkennung oder `SpeechRecognizer` ohne Sprechererkennung. Beide Optionen sind standardmäßig aktiviert, auch bei älteren Konfigurationen ohne diese Felder.
-- Mic- und Speaker-IDs werden getrennt angezeigt und zugeordnet: z. B. `Mic · Guest-1` und `Speaker · Guest-1`. Aliase gelten auch für die Anzeige des letzten Sprechers und den Clipboard-Export. Die Zuordnung ist sessionsicher: Azure vergibt die IDs pro Sitzung neu, deshalb kann ein Alias aus einer vorigen Sitzung nicht still auf eine andere Person fallen.
+- Mic- und Speaker-IDs werden getrennt angezeigt und zugeordnet: z. B. `Mic · Guest-1` und `Speaker · Guest-1`. Ein Klick auf den farbigen Namen im Transkript erlaubt die Bearbeitung ohne Layout-Verschiebung (Enter/Verlassen übernimmt, Escape verwirft). Aliase gelten auch für die Sprecherzuordnung und den Markdown-/Clipboard-Export. Die Zuordnung ist sessionsicher: Azure vergibt die IDs pro Sitzung neu, deshalb kann ein Alias aus einer vorigen Sitzung nicht still auf eine andere Person fallen.
 - Optionale Proxy-Konfiguration für Azure Speech
 - Sidecar-Resampling auf 16 kHz / 16-bit / mono
-- Einstellungen mit drei Bereichen: **Allgemein**, **Azure-Konfiguration** und **Proxy** (rechts daneben; bei schmalen Fenstern untereinander). Proxy-Einstellungen befinden sich im Proxy-Bereich, **Verbindung testen** in der Azure-Konfiguration. Ein einziger Button **Speichern** unterhalb aller drei Bereiche schreibt Azure-, Proxy- und Benutzereinstellungen gemeinsam. Der Pfad der gemeinsamen Konfigurationsdatei wird unterhalb aller drei Bereiche angezeigt.
+- Einstellungen mit drei Tabs: **Allgemein**, **Azure-Konfiguration** und **Proxy**. Der Dialog behält beim Tabwechsel seine Größe; Inhalte scrollen intern. Mikrofon und Sprechererkennung sowie Loopback und Sprechererkennung stehen jeweils in einer Zeile. Ein einziger **Speichern**-Button im Dialog-Footer schreibt Azure-, Proxy- und Benutzereinstellungen gemeinsam; dort steht auch der Konfigurationspfad.
+- Bei leerem Transkript und gestoppter Aufnahme stehen Sprache und Audioeinstellungen direkt im Hauptbereich; **Speichern** übernimmt die Änderungen für die nächste Aufnahme. Exportoptionen bleiben im Dialog. **Löschen** im Header ist nur gestoppt möglich; manueller Markdown-Export liegt im Drei-Punkte-Menü. Responsive Grenzen: 800 px (kompakter Header), 500 px (einspaltiger Inhalt).
 
 ## Voraussetzungen
 - Node gemäß `package.json`: ≥22.12.0 <23 oder ≥24.0.0 <24.16.0 (Empfehlung: 22 LTS)
@@ -142,7 +145,7 @@ npm run test:smoke
 
 **Den gesamten Portable-Ordner verteilen.** Sidecar-EXE und alle verwalteten/nativen DLLs liegen extern in `sidecar/`, nicht eingebettet in `meeting-notes.exe`. .NET 10 Runtime (win-x64) und WebView2 müssen auf dem Zielsystem vorhanden sein.
 
-Letzter verifizierter Portable-Build (2026-11-13): **23.50 MB gesamt**, davon Haupt-EXE `meeting-notes.exe` 15.44 MB und Sidecar 8.06 MB; 27 Dateien einschließlich 1 Config-Template und SHA256SUMS, alle 26 Hashes geprüft (`npm run test:smoke`: 26/26). 51 Node-Tests, 18 Rust-Tests, 467 C#-Assertions sowie fokussierte TypeScript-/Rust-Prüfungen erfolgreich. Native lokale Tests bestätigen F12, relative Config-Pfade und detaillierte negative Transportdiagnosen; der positive Azure-/Firmenproxy-Nachweis erfolgte am 2026-11-12 separat (siehe [T-505](./specs/T-505-proxy-aware-azure-transport.md)). Kein Clean-Machine-Nachweis. MSI/NSIS wurden nicht neu gebaut.
+Letzter verifizierter Portable-Build (2026-11-16, **Console-Design**): **23.02 MB gesamt**, davon Haupt-EXE `meeting-notes.exe` 15.40 MB und Sidecar 7.61 MB (21 Dateien); 24 Dateien einschließlich Config-Template und SHA256SUMS. Release-/Renderer-Build und `npm run test:smoke` erfolgreich: **23/23 Hashes**, native Sidecar-Geräteabfrage (0 Eingänge, 1 Ausgang). Die Console-Umsetzung wurde zuvor mit 62 Node-/UI-Tests geprüft. Keine persönliche Konfiguration enthalten; .NET 10 Runtime und WebView2 bleiben Voraussetzung. Kein neuer Live-Azure- oder Clean-Machine-Nachweis; MSI/NSIS wurden nicht gebaut.
 
 ## Lizenz
 

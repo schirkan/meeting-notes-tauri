@@ -72,7 +72,6 @@ export function ProxyPanel(props: ProxyPanelProps) {
         </label>
       </div>
 
-      <p className="settings-inline-hint">Proxy-Einstellungen werden mit der Azure-Konfiguration gespeichert.</p>
     </section>
   )
 }

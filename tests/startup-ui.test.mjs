@@ -38,10 +38,17 @@ async function openApp(options) {
   }))
   await page.addInitScript((input) => {
     const noSubscription = () => () => {}
+    let currentStatus = { running: input.running ?? false, paused: false }
     window.transcriptApi = {
-      getStatus: async () => ({ running: input.running ?? false, paused: false }),
-      pause: async () => { window.lastPauseCalled = true; return { running: true, paused: true } },
-      resume: async () => { window.lastResumeCalled = true; return { running: true, paused: false } },
+      getStatus: async () => currentStatus,
+      start: async () => { window.lastStartCalled = true; return currentStatus = { running: true, startedAt: new Date().toISOString() } },
+      stop: async () => {
+        window.lastStopCalled = true
+        if (input.stopError) throw new Error(input.stopError)
+        return currentStatus = { ...currentStatus, running: false, paused: false }
+      },
+      pause: async () => { window.lastPauseCalled = true; return currentStatus = { ...currentStatus, running: true, paused: true } },
+      resume: async () => { window.lastResumeCalled = true; return currentStatus = { ...currentStatus, running: true, paused: false } },
       getSettings: async () => ({ language: input.language ?? 'de-DE', devices: {}, diarization: input.diarization, transcript: input.transcript }),
       saveSettings: async (settings) => {
         window.lastSavedSettings = settings
@@ -51,7 +58,8 @@ async function openApp(options) {
         if (input.devicesError) throw new Error('Gerätetest fehlgeschlagen')
         return { inputs: [], outputs: [], fetchedAtIso: new Date(0).toISOString() }
       },
-      getDebugLog: async () => [],
+      getDebugLog: async () => input.debugLog ?? [],
+      clearDebugLog: async () => { window.lastClearLogCalled = true; return { cleared: input.debugLog?.length ?? 0 } },
       getConfig: async () => {
         if (input.configError) throw new Error('Konfiguration nicht lesbar')
         return input.configState
@@ -78,8 +86,8 @@ async function openApp(options) {
         return () => { delete window.emitSegment }
       },
       onError: noSubscription,
-      onStatus: noSubscription,
-      onDebugLog: noSubscription
+      onStatus: (callback) => { window.emitStatus = (value) => { currentStatus = value; callback(value) }; return () => { delete window.emitStatus } },
+      onDebugLog: (callback) => { window.emitDebugLog = callback; return () => { delete window.emitDebugLog } }
     }
   }, options)
   await page.goto(baseUrl)
@@ -129,7 +137,7 @@ test('valid startup configuration leaves settings closed', async () => {
   }
 })
 
-test('settings separates Proxy into a third responsive column and preserves save and test payloads', async () => {
+test('settings separates Proxy into a fixed-size tab and preserves save and test payloads', async () => {
   const page = await openApp({
     configState: { exists: true, path: 'test-config', config: validConfig },
     connectivityError: 'Local diagnostic test'
@@ -141,15 +149,20 @@ test('settings separates Proxy into a third responsive column and preserves save
     assert.deepEqual(await panels.locator('h2').allTextContents(), ['Allgemein', 'Azure-Konfiguration', 'Proxy'])
     const azure = panels.nth(1)
     const proxy = panels.nth(2)
+    await dialog.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).click()
     assert.equal(await azure.getByLabel('Proxy verwenden').count(), 0)
     assert.equal(await proxy.getByRole('button', { name: 'Verbindung testen', exact: true }).count(), 0)
     assert.equal(await azure.getByRole('button', { name: 'Verbindung testen', exact: true }).count(), 1)
+    assert.equal(await azure.getByRole('button', { name: 'Verbindung testen', exact: true }).getAttribute('title'), null)
     assert.equal(await panels.locator('.meta-path').count(), 0)
     const footer = dialog.locator('.settings-dialog-footer')
     assert.deepEqual(await footer.locator('.meta-path').allTextContents(), [
       'Konfiguration: test-config'
     ])
     assert.equal(await dialog.locator('.settings-dialog-grid .settings-dialog-footer').count(), 0)
+    const dialogBox = await dialog.boundingBox()
+    await dialog.getByRole('tab', { name: 'Proxy', exact: true }).click()
+    assert.equal(await proxy.locator('.settings-inline-hint').count(), 0)
     assert.equal(await proxy.getByLabel('Proxy Host', { exact: true }).isDisabled(), true)
     await proxy.getByLabel('Proxy verwenden').check()
     await proxy.getByLabel('Proxy Host', { exact: true }).fill('proxy.test')
@@ -160,18 +173,18 @@ test('settings separates Proxy into a third responsive column and preserves save
     await dialog.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => !!window.lastSavedConfig)
     assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), { ...validConfig, proxy: proxyConfig })
-    const desktopBoxes = await Promise.all([0, 1, 2].map((index) => panels.nth(index).boundingBox()))
-    assert.ok(desktopBoxes[0].x < desktopBoxes[1].x && desktopBoxes[1].x < desktopBoxes[2].x)
-    assert.equal(desktopBoxes[0].y, desktopBoxes[2].y)
-    assert.ok((await footer.boundingBox()).y >= Math.max(...desktopBoxes.map((box) => box.y + box.height)))
-    for (const width of [800, 560]) {
+    assert.deepEqual(await dialog.boundingBox(), dialogBox)
+    for (const width of [1280, 800, 560, 390]) {
       await page.setViewportSize({ width, height: 860 })
-      const boxes = await Promise.all([0, 1, 2].map((index) => panels.nth(index).boundingBox()))
-      assert.equal(boxes[0].x, boxes[2].x)
-      assert.ok(boxes[0].y < boxes[1].y && boxes[1].y < boxes[2].y)
-      assert.ok((await footer.boundingBox()).y >= boxes[2].y + boxes[2].height)
+      const before = await dialog.boundingBox()
+      for (const tab of ['Allgemein', 'Azure-Konfiguration', 'Proxy']) {
+        await dialog.getByRole('tab', { name: tab, exact: true }).click()
+        assert.deepEqual(await dialog.boundingBox(), before)
+        assert.equal(await dialog.getByRole('tabpanel').count(), 1)
+      }
       assert.equal(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth), true)
     }
+    await dialog.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).click()
     await azure.getByRole('button', { name: 'Verbindung testen', exact: true }).click()
     await page.getByRole('dialog', { name: 'Verbindungstest', exact: true }).locator('tbody tr').waitFor()
     assert.deepEqual(await page.evaluate(() => window.lastConnectivityPayload), { ...validConfig, proxy: proxyConfig, language: 'de-DE' })
@@ -187,6 +200,26 @@ test('settings offers a single save button in the footer that persists config an
     const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
     const footer = dialog.locator('.settings-dialog-footer')
 
+    assert.equal(await dialog.boundingBox().then((box) => box.height), 620)
+    assert.equal(await dialog.locator('.settings-dialog-grid').getByText('Änderungen gelten nach dem Speichern für die nächste Aufnahme.', { exact: true }).count(), 0)
+    const hint = footer.getByText('Änderungen gelten nach dem Speichern für die nächste Aufnahme.', { exact: true })
+    assert.equal(await hint.count(), 1)
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 860 })
+      const copy = await footer.locator('.settings-dialog-footer-copy').boundingBox()
+      const save = await footer.getByRole('button', { name: 'Speichern', exact: true }).boundingBox()
+      const hintBox = await hint.boundingBox()
+      const path = await footer.locator('.meta-path').boundingBox()
+      const content = await footer.locator('.settings-dialog-footer-content').boundingBox()
+      assert.equal(hintBox.x, path.x)
+      assert.ok(path.y >= hintBox.y + hintBox.height)
+      assert.ok(save.x >= copy.x + copy.width)
+      assert.equal(save.y, copy.y)
+      assert.equal(save.height, copy.height)
+      assert.equal(save.x + save.width, content.x + content.width)
+    }
+    await page.setViewportSize({ width: 1280, height: 860 })
+
     // Genau ein Speichern-Button im Dialog, und er liegt im Footer.
     assert.equal(await dialog.getByRole('button', { name: 'Speichern', exact: true }).count(), 1)
     assert.equal(await footer.getByRole('button', { name: 'Speichern', exact: true }).count(), 1)
@@ -197,8 +230,8 @@ test('settings offers a single save button in the footer that persists config an
 
     // Der Button steht unterhalb aller drei Bereiche.
     const footerBox = await footer.boundingBox()
-    const panelBoxes = await Promise.all([0, 1, 2].map((index) => dialog.locator('.panel').nth(index).boundingBox()))
-    assert.ok(footerBox.y >= Math.max(...panelBoxes.map((box) => box.y + box.height)))
+    const bodyBox = await dialog.locator('.settings-dialog-grid').boundingBox()
+    assert.ok(footerBox.y >= bodyBox.y + bodyBox.height)
 
     // Ein Klick speichert beide Abschnitte: Benutzereinstellungen und Azure-Konfiguration.
     await dialog.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('en-US')
@@ -222,6 +255,7 @@ test('language dropdown saves the selection and forwards it to connectivity test
     await language.selectOption('en-US')
     await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.language === 'en-US')
+    await page.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).click()
     await page.getByRole('button', { name: 'Verbindung testen', exact: true }).click()
     await page.getByRole('dialog', { name: 'Verbindungstest', exact: true }).waitFor()
     assert.equal((await page.evaluate(() => window.lastConnectivityPayload)).language, 'en-US')
@@ -306,17 +340,18 @@ test('Mic speakers get independent badges, aliases, interim handling and export 
       await page.evaluate((segment) => window.emitSegment(segment), { ...event, id: `segment-${index}`, language: 'de-DE', timestampIso: new Date(2026, 10, 9, 13, 0, index).toISOString() })
     }
     await page.locator('.segment.final').nth(3).waitFor()
+    await page.getByRole('button', { name: 'Sprecherzuordnung einblenden', exact: true }).click()
     assert.equal(await page.locator('.segment.interim').count(), 0)
-    assert.equal(await page.locator('.speaker-mapping-table tbody tr').count(), 3)
+    assert.equal(await page.locator('.speaker-mapping-list .speaker-row').count(), 3)
     assert.deepEqual(await page.locator('.speaker-badge').allTextContents(), ['Mic · Guest-1', 'Mic · Guest-2', 'Speaker · Guest-1', 'Mic · Guest-2'])
-    const badges = await page.locator('.speaker-badge').evaluateAll((elements) => elements.map((element) => element.className))
+    const badges = await page.locator('.speaker-editor').evaluateAll((elements) => elements.map((element) => element.className))
     assert.notEqual(badges[0], badges[1])
     assert.notEqual(badges[0], badges[2])
     await page.getByRole('textbox', { name: 'Anzeigename für Mic · Guest-1', exact: true }).fill('Anna')
     await page.getByRole('textbox', { name: 'Anzeigename für Mic · Guest-2', exact: true }).fill('Clara')
     await page.getByRole('textbox', { name: 'Anzeigename für Speaker · Guest-1', exact: true }).fill('Bert')
     assert.deepEqual(await page.locator('.speaker-badge').allTextContents(), ['Anna', 'Clara', 'Bert', 'Clara'])
-    assert.equal(await page.locator('.hero-stats div').nth(1).locator('strong').innerText(), 'Clara')
+    assert.equal(await page.locator('.speaker-badge').last().innerText(), 'Clara')
     await page.getByRole('button', { name: 'Transkript kopieren', exact: true }).click()
     await page.waitForFunction(() => !!window.lastCopiedSegments)
     const copied = await page.evaluate(() => window.lastCopiedSegments)
@@ -332,14 +367,16 @@ test('pause and resume keep the session running and report the paused state', as
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, running: true })
   try {
     await page.locator('.hero-controls').waitFor()
-    assert.match(await page.locator('.hero-card-topbar strong').innerText(), /Läuft/)
+    assert.match(await page.locator('.live-badge').getAttribute('aria-label'), /Läuft/)
     await page.getByRole('button', { name: /Pause/ }).click()
     await page.waitForFunction(() => !!window.lastPauseCalled)
-    assert.match(await page.locator('.hero-card-topbar strong').innerText(), /Pausiert/)
-    assert.match(await page.locator('.hero-status-card span').first().innerText(), /Sitzung bleibt aktiv/)
+    await page.waitForFunction(() => document.querySelector('.live-badge')?.classList.contains('paused'))
+    assert.match(await page.locator('.live-badge').getAttribute('aria-label'), /Pausiert/)
+    assert.match(await page.locator('.live-badge').getAttribute('title'), /Sitzung bleibt aktiv/)
     await page.getByRole('button', { name: /Weiter/ }).click()
     await page.waitForFunction(() => !!window.lastResumeCalled)
-    assert.match(await page.locator('.hero-card-topbar strong').innerText(), /Läuft/)
+    await page.waitForFunction(() => !document.querySelector('.live-badge')?.classList.contains('paused'))
+    assert.match(await page.locator('.live-badge').getAttribute('aria-label'), /Läuft/)
   } finally {
     await page.close()
   }
@@ -359,7 +396,8 @@ test('the same SDK id in two sessions stays two separate speakers with separate 
     await page.locator('.segment.final').nth(1).waitFor()
     // Zwei Sitzungen, zwei Identitaeten: kein Zusammenfuehren ueber die Grenze.
     assert.equal(await page.locator('.segment.final').count(), 2)
-    assert.equal(await page.locator('.speaker-mapping-table tbody tr').count(), 2)
+    await page.getByRole('button', { name: 'Sprecherzuordnung einblenden', exact: true }).click()
+    assert.equal(await page.locator('.speaker-mapping-list .speaker-row').count(), 2)
     await page.getByRole('textbox', { name: 'Anzeigename für Mic · Guest-1 #1', exact: true }).fill('Anna')
     await page.getByRole('textbox', { name: 'Anzeigename für Mic · Guest-1 #2', exact: true }).fill('Bert')
     assert.deepEqual(await page.locator('.speaker-badge').allTextContents(), ['Anna', 'Bert'])
@@ -377,6 +415,7 @@ test('saving a complete configuration replaces the warning and enables recording
   const page = await openApp({ configState: { exists: false, path: 'test-config', config: null } })
   try {
     await page.getByRole('dialog', { name: 'Einstellungen' }).waitFor()
+    await page.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).click()
     await page.getByRole('textbox', { name: 'Endpoint', exact: true }).fill(validConfig.endpoint)
     await page.getByRole('textbox', { name: 'Region', exact: true }).fill(validConfig.region)
     await page.getByLabel('Speech Key', { exact: true }).fill(validConfig.speechKey)
@@ -395,6 +434,7 @@ for (const error of ['Proxy CONNECT: 407 Proxy Authentication Required', { messa
     const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, connectivityError: error })
     try {
       await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+      await page.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).click()
       await page.getByRole('button', { name: 'Verbindung testen', exact: true }).click()
       const dialog = page.getByRole('dialog', { name: 'Verbindungstest', exact: true })
       await dialog.locator('tbody tr').waitFor()
@@ -412,13 +452,17 @@ test('connectivity dialog displays pending test and all results, and can reopen 
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, deferConnectivity: true })
   try {
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+    await page.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).click()
     await page.getByRole('button', { name: 'Verbindung testen', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Verbindungstest', exact: true })
     await dialog.waitFor()
     assert.match(await dialog.innerText(), /Verbindungstest läuft/)
-    const gridBox = await dialog.locator('.settings-dialog-grid').boundingBox()
+    const gridWidth = await dialog.locator('.settings-dialog-grid').evaluate((element) => {
+      const css = getComputedStyle(element)
+      return element.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight)
+    })
     const contentBox = await dialog.locator('.connectivity-dialog-content').boundingBox()
-    assert.ok(Math.abs(contentBox.width - gridBox.width) < 1)
+    assert.ok(Math.abs(contentBox.width - gridWidth) < 1)
     await dialog.getByRole('button', { name: 'Dialog schließen', exact: true }).click()
     assert.equal(await page.getByRole('button', { name: 'Teste …', exact: true }).isDisabled(), true)
     await page.getByRole('button', { name: 'Laufenden Verbindungstest anzeigen' }).click()
@@ -445,10 +489,13 @@ test('connectivity dialog displays pending test and all results, and can reopen 
     assert.equal((await page.evaluate(() => window.lastConnectivityPayload)).language, 'de-DE')
     for (const width of [1280, 800, 560]) {
       await page.setViewportSize({ width, height: 860 })
-      const grid = await dialog.locator('.settings-dialog-grid').boundingBox()
+      const innerWidth = await dialog.locator('.settings-dialog-grid').evaluate((element) => {
+        const css = getComputedStyle(element)
+        return element.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight)
+      })
       const content = await dialog.locator('.connectivity-dialog-content').boundingBox()
       const table = await dialog.locator('.connectivity-step-table').boundingBox()
-      assert.ok(Math.abs(content.width - grid.width) < 1, `Content should fill the dialog at ${width}px`)
+      assert.ok(Math.abs(content.width - innerWidth) < 1, `Content should fill the dialog at ${width}px`)
       assert.ok(Math.abs(table.width - content.width) < 1, `Table should fill the content at ${width}px`)
       assert.equal(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth), true)
     }
@@ -485,4 +532,250 @@ test('other startup failures do not prevent opening settings for missing configu
   } finally {
     await page.close()
   }
+})
+
+async function emitSegments(page, count = 2) {
+  await page.waitForFunction(() => typeof window.emitSegment === 'function')
+  await page.evaluate((length) => {
+    for (let index = 0; index < length; index++) {
+      window.emitSegment({ id: `console-${index}`, sessionId: 'console-session', source: index % 2 ? 'speaker' : 'mic',
+        speaker: 'Guest-1', language: 'de-DE', timestampIso: new Date(2026, 10, 16, 14, 34, 42).toISOString(),
+        text: `Transkript ${index}: Besprechung und naechste Schritte.`, state: 'final' })
+    }
+  }, count)
+  await page.locator('.segment').nth(count - 1).waitFor()
+}
+
+async function toggleDebug(page) {
+  await page.locator('.overflow-menu > summary').click()
+  await page.getByRole('button', { name: 'Debug-Log', exact: true }).click()
+}
+
+test('Console header stays compact, centered and stable across states and breakpoint boundaries', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await emitSegments(page)
+    for (const width of [1280, 801, 800, 501, 500, 390, 320]) {
+      await page.setViewportSize({ width, height: 700 })
+      assert.equal((await page.locator('.console-header').boundingBox()).height, 52)
+      assert.equal((await page.locator('.container').boundingBox()).height, 700)
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), true)
+      const [title, center, utilities] = await Promise.all(['.console-title-group', '.recording-center', '.utility-actions'].map((selector) => page.locator(selector).boundingBox()))
+      assert.ok(title.x + title.width <= center.x && center.x + center.width <= utilities.x, `No header overlap at ${width}px`)
+      const buttons = await page.locator('.recording-actions').boundingBox()
+      assert.ok(Math.abs(buttons.x + buttons.width / 2 - center.x - center.width / 2) < 1)
+      assert.equal(await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).innerText(), '')
+      const firstColumn = await page.locator('.segment').first().evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ')[0])
+      if (width > 500) assert.equal(firstColumn, '120px')
+    }
+    await page.setViewportSize({ width: 1280, height: 860 })
+    const before = await page.locator('.recording-actions').boundingBox()
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
+    await page.getByRole('button', { name: 'Pause', exact: true }).click()
+    assert.deepEqual(await page.locator('.recording-actions').boundingBox(), before)
+    await page.getByRole('button', { name: 'Weiter', exact: true }).click()
+    await page.getByRole('button', { name: 'Stop', exact: true }).click()
+    assert.deepEqual(await page.locator('.recording-actions').boundingBox(), before)
+    assert.match(await page.locator('.live-badge').innerText(), /^\d{2}:\d{2}$/)
+  } finally { await page.close() }
+})
+
+test('inline speaker editing has no reflow, cancels with Escape, and updates mapping and Markdown', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await emitSegments(page)
+    const tag = page.locator('.speaker-editor').first()
+    const textBox = await page.locator('.segment-text').first().boundingBox()
+    const tagBox = await tag.boundingBox()
+    const palette = await tag.evaluate((element) => ({ background: getComputedStyle(element).backgroundColor, color: getComputedStyle(element).color }))
+    await tag.locator('button').click()
+    const input = tag.getByRole('textbox', { name: 'Sprechername', exact: true })
+    assert.deepEqual(await input.boundingBox(), tagBox)
+    assert.equal(await input.evaluate((element) => getComputedStyle(element).outlineStyle), 'none')
+    await input.fill('Anna')
+    assert.deepEqual(await page.locator('.segment-text').first().boundingBox(), textBox)
+    await input.press('Escape')
+    assert.equal(await tag.innerText(), 'Mic · Guest-1')
+    await tag.locator('button').click()
+    await input.fill('Anna')
+    await input.press('Enter')
+    await page.getByRole('button', { name: 'Sprecherzuordnung einblenden', exact: true }).click()
+    const mapping = page.getByRole('textbox', { name: 'Anzeigename für Mic · Guest-1', exact: true })
+    assert.equal(await mapping.inputValue(), 'Anna')
+    assert.deepEqual(await mapping.evaluate((element) => ({ background: getComputedStyle(element).backgroundColor, color: getComputedStyle(element).color })), palette)
+    await tag.locator('button').click()
+    await input.fill('Anita')
+    await mapping.click()
+    assert.equal(await mapping.inputValue(), 'Anita')
+    await page.locator('.overflow-menu > summary').click()
+    await page.getByRole('button', { name: 'Markdown exportieren', exact: true }).click()
+    await page.waitForFunction(() => window.lastSavedMarkdown?.includes('Anita'))
+    assert.ok((await page.evaluate(() => window.lastSavedMarkdown)).includes('Speaker · Guest-1'))
+    await page.getByRole('button', { name: 'Transkript kopieren', exact: true }).click()
+    await page.waitForFunction(() => window.lastCopiedSegments?.[0].speaker === 'Anita')
+  } finally { await page.close() }
+})
+
+test('idle audio settings synchronize with dialog, persist, and reset is stopped-only', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.getByRole('heading', { name: 'Allgemeine Einstellungen', exact: true }).waitFor()
+    const idle = page.locator('.idle-audio-panel')
+    assert.equal(await idle.getByRole('combobox').count(), 3)
+    assert.equal(await idle.getByRole('checkbox').count(), 2)
+    assert.equal(await idle.getByLabel('Speicherpfad (optional)', { exact: true }).count(), 0)
+    await idle.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('en-US')
+    await idle.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).uncheck()
+    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
+    assert.equal(await dialog.getByRole('combobox', { name: 'Sprache', exact: true }).inputValue(), 'en-US')
+    assert.equal(await dialog.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).isChecked(), false)
+    await dialog.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('fr-FR')
+    await dialog.getByRole('button', { name: 'Dialog schließen', exact: true }).click()
+    assert.equal(await idle.getByRole('combobox', { name: 'Sprache', exact: true }).inputValue(), 'fr-FR')
+    await idle.getByRole('button', { name: 'Speichern', exact: true }).click()
+    await page.waitForFunction(() => window.lastSavedSettings?.language === 'fr-FR')
+    assert.equal(await page.getByRole('button', { name: 'Transkript löschen', exact: true }).isDisabled(), true)
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
+    await emitSegments(page)
+    assert.equal(await idle.count(), 0)
+    await page.getByRole('button', { name: 'Pause', exact: true }).click()
+    assert.equal(await page.getByRole('button', { name: 'Transkript löschen', exact: true }).isDisabled(), true)
+    assert.equal(await idle.count(), 0)
+    await page.getByRole('button', { name: 'Stop', exact: true }).click()
+    assert.equal(await idle.count(), 0)
+    page.once('dialog', (confirmation) => confirmation.accept())
+    await page.getByRole('button', { name: 'Transkript löschen', exact: true }).click()
+    await idle.waitFor()
+    assert.equal(await page.locator('.segment').count(), 0)
+    assert.equal(await page.locator('.live-badge time').innerText(), '00:00')
+  } finally { await page.close() }
+})
+
+test('Debug dock starts hidden, opens upward within half the workspace, and clears without collapsing', async () => {
+  const logs = Array.from({ length: 70 }, (_, index) => ({ id: `log-${index}`, timestampIso: new Date().toISOString(), source: 'ipc',
+    level: index < 2 ? 'error' : 'info', message: `Log ${index}: Status und Details` }))
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, debugLog: logs })
+  try {
+    await emitSegments(page)
+    assert.equal(await page.locator('.console-debug').count(), 0)
+    await toggleDebug(page)
+    await page.locator('.debug-log-entry').nth(69).waitFor()
+    assert.equal(await page.locator('.debug-summary .count-pill').innerText(), '2 Fehler')
+    assert.equal(await page.locator('.console-debug.has-errors').count(), 1)
+    for (const height of [860, 420]) {
+      await page.setViewportSize({ width: 800, height })
+      const workspace = await page.locator('.console-grid').boundingBox()
+      const content = await page.locator('.debug-content').boundingBox()
+      const footer = await page.locator('.debug-summary').boundingBox()
+      assert.ok(content.height <= workspace.height / 2 + .5)
+      assert.ok(content.y >= workspace.y)
+      assert.ok(Math.abs(content.y + content.height - footer.y) <= 1)
+      assert.equal(footer.y + footer.height, height)
+    }
+    await page.getByRole('button', { name: 'Log löschen', exact: true }).click()
+    await page.waitForFunction(() => !!window.lastClearLogCalled)
+    await page.locator('.debug-content .empty').waitFor()
+    assert.equal(await page.locator('.debug-summary .count-pill').innerText(), '0 Fehler')
+    await page.getByRole('button', { name: 'Debug-Log schließen', exact: true }).click()
+    await toggleDebug(page)
+    assert.equal(await page.locator('.console-debug').count(), 0)
+    await toggleDebug(page)
+    assert.equal(await page.locator('.debug-content').count(), 0)
+    await page.getByRole('button', { name: 'Debug-Log öffnen', exact: true }).click()
+    await page.evaluate(() => window.emitDebugLog({ id: 'new-error', timestampIso: new Date().toISOString(), source: 'sidecar', level: 'error', message: 'Fehlermeldung' }))
+    await page.waitForFunction(() => document.querySelector('.debug-summary .count-pill')?.textContent === '1 Fehler')
+    assert.equal(await page.locator('.debug-log-entry.error').innerText().then((value) => value.includes('Fehlermeldung')), true)
+  } finally { await page.close() }
+})
+
+test('Follow appears only after manual scrolling and resumes automatic following', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.setViewportSize({ width: 800, height: 420 })
+    await emitSegments(page, 80)
+    const list = page.locator('.transcript-list')
+    await page.waitForFunction(() => { const list = document.querySelector('.transcript-list'); return list.scrollHeight - list.scrollTop - list.clientHeight <= 1 })
+    assert.equal(await page.getByRole('button', { name: 'Folgen', exact: true }).count(), 0)
+    await list.evaluate((element) => { element.scrollTop = 100 })
+    await page.getByRole('button', { name: 'Folgen', exact: true }).waitFor()
+    const scrollTop = await list.evaluate((element) => element.scrollTop)
+    await page.evaluate(() => window.emitSegment({ id: 'after-scroll', sessionId: 'console-session', source: 'mic', speaker: 'Guest-2', text: 'Neuer Eintrag', state: 'final', timestampIso: new Date().toISOString() }))
+    await page.locator('.segment').nth(80).waitFor()
+    assert.equal(await list.evaluate((element) => element.scrollTop), scrollTop)
+    await page.getByRole('button', { name: 'Folgen', exact: true }).click()
+    await page.waitForFunction(() => { const list = document.querySelector('.transcript-list'); return list.scrollHeight - list.scrollTop - list.clientHeight <= 1 })
+    assert.equal(await page.getByRole('button', { name: 'Folgen', exact: true }).count(), 0)
+  } finally { await page.close() }
+})
+
+test('recording timer excludes pauses, freezes after stop and resets on a new start', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, transcript: { markdownExport: { enabled: false } } })
+  try {
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
+    await page.evaluate(() => window.emitStatus({ running: true, startedAt: new Date(Date.now() - 60000).toISOString() }))
+    await page.waitForFunction(() => document.querySelector('.live-badge time')?.textContent === '01:00')
+    await page.getByRole('button', { name: 'Pause', exact: true }).click()
+    const paused = await page.locator('.live-badge time').innerText()
+    await page.waitForTimeout(2100)
+    assert.equal(await page.locator('.live-badge time').innerText(), paused)
+    await page.getByRole('button', { name: 'Weiter', exact: true }).click()
+    await page.waitForTimeout(1100)
+    await page.getByRole('button', { name: 'Stop', exact: true }).click()
+    const stopped = await page.locator('.live-badge time').innerText()
+    await page.waitForTimeout(1100)
+    await emitSegments(page)
+    assert.equal(await page.locator('.live-badge time').innerText(), stopped)
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
+    assert.equal(await page.locator('.live-badge time').innerText(), '00:00')
+  } finally { await page.close() }
+})
+
+test('settings tabs preserve input focus, support keyboard selection and trap focus in the active panel', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
+    await dialog.getByRole('tab', { name: 'Allgemein', exact: true }).focus()
+    await page.keyboard.press('ArrowRight')
+    assert.equal(await dialog.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).getAttribute('aria-selected'), 'true')
+    const tab = dialog.getByRole('tab', { name: 'Azure-Konfiguration', exact: true })
+    assert.equal(await tab.evaluate((element) => getComputedStyle(element).outlineStyle), 'none')
+    const endpoint = dialog.getByRole('textbox', { name: 'Endpoint', exact: true })
+    await endpoint.fill('https://changed.test')
+    assert.deepEqual(await tab.evaluate((element) => {
+      const style = getComputedStyle(element)
+      return [style.borderLeftWidth, style.borderRightWidth, style.outlineStyle]
+    }), ['0px', '0px', 'none'])
+    assert.equal(await endpoint.evaluate((element) => element === document.activeElement), true)
+    const before = await dialog.boundingBox()
+    await dialog.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).focus()
+    await page.keyboard.press('End')
+    assert.equal(await dialog.getByRole('tab', { name: 'Proxy', exact: true }).getAttribute('aria-selected'), 'true')
+    assert.deepEqual(await dialog.boundingBox(), before)
+    await page.keyboard.press('Home')
+    assert.equal(await dialog.getByRole('tab', { name: 'Allgemein', exact: true }).getAttribute('aria-selected'), 'true')
+    await dialog.getByRole('button', { name: 'Speichern', exact: true }).focus()
+    await page.keyboard.press('Tab')
+    assert.equal(await dialog.getByRole('button', { name: 'Dialog schließen', exact: true }).evaluate((element) => element === document.activeElement), true)
+    await page.keyboard.press('Shift+Tab')
+    assert.equal(await dialog.getByRole('button', { name: 'Speichern', exact: true }).evaluate((element) => element === document.activeElement), true)
+    await page.keyboard.press('Escape')
+    assert.equal(await page.getByRole('dialog').count(), 0)
+    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+    await page.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).click()
+    assert.equal(await page.getByRole('textbox', { name: 'Endpoint', exact: true }).inputValue(), 'https://changed.test')
+  } finally { await page.close() }
+})
+
+test('failed Stop surfaces details and leaves recording and reset protection intact', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, running: true, stopError: 'Sidecar antwortet nicht' })
+  try {
+    await emitSegments(page)
+    await page.getByRole('button', { name: 'Stop', exact: true }).click()
+    await page.locator('.toast-error').waitFor()
+    assert.match(await page.locator('.toast-error').innerText(), /UI_STOP_FAILED: Sidecar antwortet nicht/)
+    assert.equal(await page.getByRole('button', { name: 'Transkript löschen', exact: true }).isDisabled(), true)
+    assert.equal(await page.locator('.segment').count(), 2)
+  } finally { await page.close() }
 })

@@ -1,4 +1,4 @@
-import { formatSpeakerIdentity } from '../speaker-utils'
+import { formatSpeakerIdentity, getSpeakerClassForIdentity } from '../speaker-utils'
 
 type SpeakerMappingPanelProps = {
   knownSpeakers: string[]
@@ -7,50 +7,21 @@ type SpeakerMappingPanelProps = {
   setSpeakerAliases: React.Dispatch<React.SetStateAction<Record<string, string>>>
 }
 
-export function SpeakerMappingPanel(props: SpeakerMappingPanelProps) {
-  const { knownSpeakers, speakerLabels, speakerAliases, setSpeakerAliases } = props
-  const labelOf = (speaker: string) => speakerLabels[speaker] ?? formatSpeakerIdentity(speaker)
-
+export function SpeakerMappingPanel({ knownSpeakers, speakerLabels, speakerAliases, setSpeakerAliases }: SpeakerMappingPanelProps) {
   return (
-    <section className="panel speaker-mapping-panel">
-      <div className="panel-header">
-        <h2>Sprecherzuordnung</h2>
-        <span className="subtle-pill">{knownSpeakers.length} IDs</span>
-      </div>
-
-      {knownSpeakers.length === 0 ? (
-        <p className="empty">Sobald Sprecher erkannt wurden, kannst du ihnen hier Anzeigenamen zuweisen.</p>
-      ) : (
-        <div className="speaker-mapping-table-wrap">
-          <table className="speaker-mapping-table">
-            <thead>
-              <tr>
-                <th scope="col">Speaker-ID</th>
-                <th scope="col">Anzeigename</th>
-              </tr>
-            </thead>
-            <tbody>
-              {knownSpeakers.map((speaker) => (
-                <tr key={speaker}>
-                  <td className="speaker-mapping-id">{labelOf(speaker)}</td>
-                  <td>
-                    <input
-                      type="text"
-                      value={speakerAliases[speaker] ?? ''}
-                      onChange={(event) =>
-                        setSpeakerAliases((prev) => ({
-                          ...prev,
-                          [speaker]: event.target.value
-                        }))
-                      }
-                      placeholder="Anzeigename"
-                      aria-label={`Anzeigename für ${labelOf(speaker)}`}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <section className="speaker-mapping-panel">
+      <div className="panel-header"><h2 id="console-speakers-title">Sprecherzuordnung</h2><span className="count-pill">{knownSpeakers.length}</span></div>
+      {knownSpeakers.length === 0 ? <p className="empty">Sobald Sprecher erkannt wurden, kannst du ihnen hier Anzeigenamen zuweisen.</p> : (
+        <div className="speaker-mapping-list">
+          {knownSpeakers.map((speaker) => {
+            const label = speakerLabels[speaker] ?? formatSpeakerIdentity(speaker)
+            return <label className="speaker-row" key={speaker}>
+              <span>{label}</span>
+              <input className={`speaker-tone ${getSpeakerClassForIdentity(speaker)}`} type="text"
+                value={speakerAliases[speaker] ?? ''} placeholder={label} aria-label={`Anzeigename für ${label}`}
+                onChange={(event) => setSpeakerAliases((prev) => ({ ...prev, [speaker]: event.target.value }))} />
+            </label>
+          })}
         </div>
       )}
     </section>

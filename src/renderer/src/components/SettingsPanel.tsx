@@ -1,5 +1,6 @@
 import type { AudioDeviceSnapshot } from '@shared/transcript-contract'
 import type { UserSettings } from '@shared/config-contract'
+import { Icon } from './Icon'
 
 const languageOptions = [
   { value: 'de-DE', label: 'Deutsch' },
@@ -19,6 +20,7 @@ type SettingsPanelProps = {
   settings: UserSettings
   devices: AudioDeviceSnapshot
   setSettings: React.Dispatch<React.SetStateAction<UserSettings>>
+  audioOnly?: boolean
 }
 
 export function SettingsPanel(props: SettingsPanelProps) {
@@ -26,20 +28,21 @@ export function SettingsPanel(props: SettingsPanelProps) {
     statusRunning,
     settings,
     devices,
-    setSettings
+    setSettings,
+    audioOnly = false
   } = props
 
   return (
     <section className="panel settings">
       <div className="panel-header">
-        <h2>Allgemein</h2>
+        <h2>{audioOnly ? 'Allgemeine Einstellungen' : 'Allgemein'}</h2>
       </div>
 
-      {statusRunning && <div className="settings-inline-hint">Stop first to change settings.</div>}
+      {statusRunning && <div className="settings-inline-hint">Aufnahme stoppen, um Einstellungen zu ändern.</div>}
 
-      <div className="settings-block">
+      <div className="settings-block audio-settings-grid">
         <label>
-          Sprache
+          <span className="field-caption"><Icon name="flag" />Sprache</span>
           <select
             value={settings.language}
             onChange={(event) => setSettings((prev) => ({ ...prev, language: event.target.value }))}
@@ -53,9 +56,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
             ))}
           </select>
         </label>
+        <div className="settings-placeholder" aria-hidden="true" />
 
         <label>
-          Mikrofon
+          <span className="field-caption"><Icon name="mic" />Mikrofon</span>
           <select
             value={settings.devices.micId ?? ''}
             onChange={(event) =>
@@ -89,7 +93,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         </label>
 
         <label>
-          Speaker Loopback
+          <span className="field-caption"><Icon name="speaker" />Speaker Loopback</span>
           <select
             value={settings.devices.speakerLoopbackId ?? ''}
             onChange={(event) =>
@@ -121,7 +125,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
           />
           <span>Sprechererkennung für Speaker</span>
         </label>
-        <label className="checkbox-field">
+        {!audioOnly && <>
+        <label className="checkbox-field full-field">
           <input
             type="checkbox"
             checked={settings.transcript.markdownExport.enabled}
@@ -139,7 +144,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
           <span>Transkript automatisch als Markdown speichern</span>
         </label>
 
-        <label>
+        <label className="full-field">
           Speicherpfad (optional)
           <input
             type="text"
@@ -160,7 +165,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
             disabled={statusRunning || !settings.transcript.markdownExport.enabled}
           />
         </label>
-        <p className="meta">Änderungen gelten nach dem Speichern für die nächste Aufnahme.</p>
+        </>}
+        {audioOnly && <p className="meta full-field">Änderungen gelten nach dem Speichern für die nächste Aufnahme.</p>}
       </div>
     </section>
   )

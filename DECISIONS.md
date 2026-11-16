@@ -79,6 +79,8 @@ Architekturentscheidungen für die Windows-Variante (Tauri-Container). Wird fort
 
 **Fortschreibung 2026-11-09:** Auf Nutzerwunsch bewusst keine strikte 1:1-Portierung der Settings-/Diagnose-UX: drei responsive Bereiche Allgemein/Azure-Konfiguration/Proxy, Test- und Ergebnisaktionen im Azure-Bereich, der Config-Pfad unterhalb aller Bereiche, Startup-Settings bei fehlender/ungültiger Konfiguration mit Bottom-Toast und separater wiederöffnbarer Diagnose-Dialog. Keine Live-Einzelstep-Events; Ergebnis nach Abschluss über Command-Return. Übrige UI bleibt auf bestehendem Verhalten aufgebaut. Siehe [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md).
 
+**Fortschreibung 2026-11-16:** Auf Nutzerwunsch ersetzt das gemeinsam verfeinerte Mockup **03 Console** die bisherige Darstellung. Kompakte dunkle Vollhöhen-Oberfläche, eine Kopfzeile, Inline-Sprecheraliase, geschlossene Sprecherzuordnung, schwebendes Folgen und zunächst unsichtbarer Debug-Dock. Einstellungen wechseln als Tabs in einem größenstabilen Dialog; leere/gestoppte Transkripte zeigen Sprache und Audioeinstellungen direkt. Löschen ist ausschließlich gestoppt möglich; manueller Markdown-Export verwendet den vorhandenen Backend-Speicherpfad. IPC, Aufnahme, Konfigurationsformat und Diagnose bleiben unverändert. Die Produktionsoberfläche hängt nicht von Dateien im temporären Mockup-Ordner ab.
+
 ---
 
 ## AD-005 · Kein Mobile-Build (2026-06-25)

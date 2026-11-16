@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ConfigPanel } from './components/ConfigPanel'
 import { ConnectivityDialog } from './components/ConnectivityDialog'
 import { DebugLogPanel } from './components/DebugLogPanel'
@@ -10,6 +11,9 @@ import { TranscriptPanel } from './components/TranscriptPanel'
 import { useAppState } from './use-app-state'
 
 export function App() {
+  const [speakersOpen, setSpeakersOpen] = useState(false)
+  const [debugVisible, setDebugVisible] = useState(false)
+  const [debugShownBefore, setDebugShownBefore] = useState(false)
   const {
     configDraft,
     configState,
@@ -22,8 +26,10 @@ export function App() {
     isConfigReady,
     isStarting,
     knownSpeakers,
-    latestSegment,
     onCopyTranscript,
+    onExportTranscript,
+    autoScrollEnabled,
+    onFollowTranscript,
     onClearDebugLog,
     onOpenSettingsDialog,
     onPause,
@@ -61,15 +67,7 @@ export function App() {
 
   return (
     <main className="container">
-      <div className="layout-grid">
-        <TranscriptPanel
-          segments={segments}
-          transcriptListRef={transcriptListRef}
-          getSpeakerLabel={getSpeakerLabel}
-          canCopyTranscript={finalCount > 0}
-          onCopyTranscript={onCopyTranscript}
-        />
-
+      <div className="console-shell" inert={settingsDialogOpen || connectivityDialogOpen} aria-hidden={settingsDialogOpen || connectivityDialogOpen}>
         <HeroStatusCard
           status={status}
           statusLabel={statusLabel}
@@ -77,40 +75,68 @@ export function App() {
           runtimeIssue={runtimeIssue}
           isStarting={isStarting}
           startDisabled={!isConfigReady}
-          finalCount={finalCount}
-          latestSegment={latestSegment}
+          canCopyTranscript={finalCount > 0}
+          canResetTranscript={!status.running && !isStarting && segments.length > 0}
           durationLabel={durationLabel}
           startedAtLabel={startedAtLabel}
-          getSpeakerLabel={getSpeakerLabel}
+          speakersOpen={speakersOpen}
+          debugVisible={debugVisible}
+          onToggleSpeakers={() => setSpeakersOpen((open) => !open)}
+          onToggleDebug={() => {
+            if (!debugShownBefore) { openDebugPanel(); setDebugShownBefore(true) }
+            setDebugVisible((visible) => !visible)
+          }}
+          onCopyTranscript={onCopyTranscript}
+          onExportTranscript={onExportTranscript}
           onOpenSettingsDialog={onOpenSettingsDialog}
           onToggleRecording={onToggleRecording}
           onPause={onPause}
           onResume={onResume}
           onResetTranscript={onResetTranscript}
         />
+        <div className={`layout-grid console-grid ${speakersOpen ? '' : 'inspector-hidden'}`}>
+          <TranscriptPanel
+            segments={segments}
+            transcriptListRef={transcriptListRef}
+            getSpeakerLabel={getSpeakerLabel}
+            speakerAliases={speakerAliases}
+            setSpeakerAliases={setSpeakerAliases}
+            following={autoScrollEnabled}
+            onFollow={onFollowTranscript}
+            emptyContent={!status.running && !isStarting && <div className="idle-audio-panel">
+              <SettingsPanel audioOnly statusRunning={false} settings={settings} devices={devices} setSettings={setSettings} />
+              <button className="primary-button" type="button" onClick={() => void onSaveAll()}>Speichern</button>
+            </div>}
+          />
+          <aside className="console-inspector" id="console-speakers" hidden={!speakersOpen} aria-labelledby="console-speakers-title">
+            <SpeakerMappingPanel
+              knownSpeakers={knownSpeakers}
+              speakerLabels={speakerLabels}
+              speakerAliases={speakerAliases}
+              setSpeakerAliases={setSpeakerAliases}
+            />
+          </aside>
+        </div>
 
-        <SpeakerMappingPanel
-          knownSpeakers={knownSpeakers}
-          speakerLabels={speakerLabels}
-          speakerAliases={speakerAliases}
-          setSpeakerAliases={setSpeakerAliases}
-        />
+        {debugVisible && <DebugLogPanel
+          debugOpen={debugOpen}
+          debugLog={debugLog}
+          onOpenDebug={openDebugPanel}
+          onCloseDebug={closeDebugPanel}
+          onClearDebug={onClearDebugLog}
+        />}
       </div>
-
-      <DebugLogPanel
-        debugOpen={debugOpen}
-        debugLog={debugLog}
-        onOpenDebug={openDebugPanel}
-        onCloseDebug={closeDebugPanel}
-        onClearDebug={onClearDebugLog}
-      />
 
       <SettingsDialog
         isOpen={settingsDialogOpen}
         onClose={closeSettingsDialog}
-        columns={3}
+        tabs={['Allgemein', 'Azure-Konfiguration', 'Proxy']}
         footer={
           <div className="settings-dialog-footer-content">
+            <div className="settings-dialog-footer-copy">
+              <p className="meta">Änderungen gelten nach dem Speichern für die nächste Aufnahme.</p>
+              {configState && <p className="meta-path">Konfiguration: {configState.path}</p>}
+            </div>
             <button
               className="primary-button settings-save-button"
               type="button"
@@ -120,7 +146,6 @@ export function App() {
               Speichern
             </button>
             {settingsHint && <div className="hint">{settingsHint}</div>}
-            {configState && <p className="meta-path">Konfiguration: {configState.path}</p>}
           </div>
         }
       >

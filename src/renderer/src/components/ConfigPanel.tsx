@@ -88,7 +88,6 @@ export function ConfigPanel(props: ConfigPanelProps) {
           type="button"
           onClick={() => void onTestConnectivity()}
           disabled={isTestingConnectivity || !configDraft.endpoint || !configDraft.speechKey || !configDraft.region}
-          title="HTTPS und native Speech/WSS-Sitzungen getrennt über den konfigurierten Proxy testen; TLS-Zertifikate werden geprüft (ohne Audioaufnahme)"
         >
           {isTestingConnectivity ? 'Teste …' : 'Verbindung testen'}
         </button>
