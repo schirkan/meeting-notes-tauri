@@ -54,10 +54,14 @@ Push in den Azure-`PushAudioInputStream` bleiben semantisch identisch.
 2. **Format.** `WithFormat(new WaveFormat(16000, 16, 1))` — im Shared Mode
    konvertiert die WASAPI-Engine selbst. Damit entfallen `BufferedWaveProvider`,
    `MediaFoundationResampler` und `DrainResampled` komplett.
-   **Fallback:** Shared Mode konvertiert nur 16-Bit-PCM. Liefert das Mic
-   Float-Samples, muss `WithFormat` entfallen und der Resampler-Pfad erhalten
-   bleiben (Aufwand dann ≈ 1,5 Tage). Diese Variante ist **vor** dem Umbau
-   an echter Hardware zu klaeren.
+   **Fallback (bleibt sinnvoll):** Quellcode der installierten NAudio-3.3.0 zeigt
+   `waveFormat = requestedFormat ?? Client.MixFormat` und fuer den
+   Standard-Shared-Pfad "GetMixFormat and AutoConvertPcm work"; die NAudio-Doku
+   sagt zusaetzlich: "In shared mode the engine converts to the format you request
+   via WithFormat." Ein Float-Mic wird damit sehr wahrscheinlich von der
+   WASAPI-Engine auf 16-Bit-PCM konvertiert. **Ohne Hardware ist das nicht
+   beweisbar**, deshalb bleibt `MediaFoundationResampler` als Ruecksfallpfad
+   im Code — kostet beim Wegfall aber ≈ 1,5 statt ≈ 1 Tag.
 3. **Datenweg.** Der `DataAvailable`-Handler bekommt einen
    `ReadOnlySpan<byte>`, der **nur waehrend des Callbacks** gueltig ist. Die
    Daten muessen deshalb kopiert werden, bevor sie weiterlaufen.
@@ -87,8 +91,13 @@ hier nicht nachweisbar. Ablauf auf einem Rechner mit Mic und Ausgabe:
    `WithProcessLoopback`).
 
 ## Offene Punkte
-- **Float-Mic-Frage:** Konvertiert die WASAPI-Engine im Shared Mode in
-  16-Bit-PCM? Wenn nein, bleibt der Resampler und der Aufwand steigt.
+- **Float-Mic-Frage: quellenklaert, weiterhin hardwarebelegt.** NAudio-3.3.0
+  uebernimmt im Shared Mode das angeforderte Format (`requestedFormat ??
+  Client.MixFormat`) und der Standard-Pfad unterstuetzt `AutoConvertPcm`; laut
+  NAudio-Doku konvertiert die Engine im Shared Mode auf das per `WithFormat`
+  angeforderte Format. Ein Float-Mic sollte damit ohne eigenen Resampler
+  funktionieren — **der Nachweis erfolgt auf echter Hardware** (T-509
+  Verifikation). Der Resampler bleibt bis dahin als Ruecksfallpfad im Code.
 - **Latenzentscheidung:** `WithLowLatency()` ja oder nein — abhaengig vom
   Ziel in T-502 und davon, ob Mic und Loopback unterschiedlich behandelt
   werden duerfen.
@@ -99,6 +108,11 @@ hier nicht nachweisbar. Ablauf auf einem Rechner mit Mic und Ausgabe:
 - 2026-11-13: Spec angelegt. Aufwand am Code und an der installierten
   NAudio-Wasapi-3.3.0-DLL gemessen: rund ein Tag Code plus ein
   Verifikationsfenster mit Audio-Hardware. API-Fakten per Reflection und
-  NAudio-Doku belegt, nicht geschaetzt. Die in T-508 dokumentierte
+  NAudio-Doku belegt, nicht geschaetzt.
+- 2026-11-16: Float-Mic-Frage an der NAudio-Quelle geklaert: `WasapiRecorder`
+  setzt `waveFormat = requestedFormat ?? Client.MixFormat`, der Standard-Shared-Pfad
+  unterstuetzt `AutoConvertPcm`. Der Aufwand bleibt bei ≈ 1 Tag; der
+  Resampler bleibt als Ruecksfallpfad, bis die Hardware-Verifikation den
+  Engine-Weg bestaetigt. Die in T-508 dokumentierte
   Falschangabe (Modellwechsel `DataAvailable` -> `IAsyncEnumerable`) wurde
   korrigiert — `DataAvailable` besteht in NAudio 3.x fort.
