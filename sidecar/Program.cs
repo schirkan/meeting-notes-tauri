@@ -12,9 +12,10 @@ using NAudio.Wave;
 // Responsibilities:
 //   1. Parse CLI args (ArgsParser).
 //   2. Resolve + enumerate audio devices (DeviceResolver).
-//   3. Open two NAudio captures: mic (WasapiCapture) and speaker loopback
-//      (WasapiLoopbackCapture). Each feeds a BufferedWaveProvider, which is
-//      drained by a MediaFoundationResampler to 16 kHz / 16-bit / mono.
+//   3. Open two NAudio 3.x recorders (T-509): mic (WasapiRecorder) and
+//      speaker loopback (WasapiRecorder with loopback). Each delivers
+//      16 kHz / 16-bit / mono; if the WASAPI engine cannot convert, the
+//      source falls back to a MediaFoundationResampler internally.
 //   4. Forward the resampled PCM frames into AzureSpeechService, which owns
 //      one recognizer per source, selected independently by diarization
 //      settings, and surfaces transcripts + errors via Logger.
@@ -128,37 +129,12 @@ try
         return 22;
     }
 
-    // NAudio 3.x: MMDevice.AudioClient ist obsolet, weil der Getter bei
-    // jedem Zugriff einen neuen Client erzeugt. CreateAudioClient() erzeugt
-    // den Client bewusst einmal; er bleibt fuer die Laufzeit der Aufnahme
-    // aktiv, damit das Mix-Format gueltig bleibt.
-    using var micMixClient = micDevice.CreateAudioClient();
-    using var speakerMixClient = speakerDevice.CreateAudioClient();
-    var micBuffered = new BufferedWaveProvider(micMixClient.MixFormat)
-    {
-        DiscardOnBufferOverflow = true,
-        ReadFully = false
-    };
-    var speakerBuffered = new BufferedWaveProvider(speakerMixClient.MixFormat)
-    {
-        DiscardOnBufferOverflow = true,
-        ReadFully = false
-    };
-    // NAudio 3.x markiert WasapiCapture/WasapiLoopbackCapture als obsolet
-    // (Empfehlung: WasapiRecorderBuilder, siehe T-509). Die Umstellung ist ein
-    // eigener Schritt und nicht Teil dieser Paket-Aktualisierung (T-508).
-    // Korrektur zur ersten Fassung dieses Kommentars: WasapiRecorder BEHAELT das
-    // DataAvailable-Event (jetzt mit ReadOnlySpan<byte>) - es ist KEIN
-    // IAsyncEnumerable-Modellwechsel.
-#pragma warning disable CS0618
-    using var micCapture = new WasapiCapture(micDevice);
-    using var speakerCapture = new WasapiLoopbackCapture(speakerDevice);
-#pragma warning restore CS0618
-    using var micResampler = new MediaFoundationResampler(micBuffered, targetWaveFormat);
-    using var speakerResampler = new MediaFoundationResampler(speakerBuffered, targetWaveFormat);
-    micResampler.ResamplerQuality = 60;
-    speakerResampler.ResamplerQuality = 60;
-
+    // NAudio 3.x (T-509): Die Aufnahme laeuft jetzt ueber WasapiRecorder.
+    // Die WASAPI-Engine konvertiert im Shared Mode selbst auf das Zielformat
+    // (16 kHz / 16-bit / mono). Kann sie das nicht - etwa bei einem
+    // Float-Mic, fuer das die Engine nicht auf 16-Bit-PCM konvertieren kann -
+    // faellt AudioRecorderSource automatisch auf den MediaFoundation-Resampler
+    // zurueck. Beide Wege liefern exakt 16 kHz / 16-bit / mono.
     AzureSpeechService? azure = null;
     if (azureEnabled)
     {
@@ -174,59 +150,61 @@ try
         await azure.StartAsync(new AzureAudioFormat(sampleRate, 16, 1));
     }
 
-    long micSeq = 0;
-    long speakerSeq = 0;
     var azurePushLock = new object();
 
-    micCapture.DataAvailable += (_, e) =>
-    {
-        try
+    using var micSource = AudioRecorderSource.Create(
+        micDevice,
+        loopback: false,
+        targetWaveFormat,
+        "Mic",
+        pcm =>
         {
-            micBuffered.AddSamples(e.Buffer, 0, e.BytesRecorded);
-            var pcm = DrainResampled(micResampler);
-            if (pcm.Length == 0) return;
-            lock (azurePushLock)
+            try
             {
-                azure?.PushFrame(new AudioFrame(
-                    AzureSpeechService.SourceMic,
-                    sampleRate, 16, 1,
-                    pcm));
+                if (pcm.Length == 0) return;
+                lock (azurePushLock)
+                {
+                    azure?.PushFrame(new AudioFrame(
+                        AzureSpeechService.SourceMic,
+                        sampleRate, 16, 1,
+                        pcm));
+                }
             }
-            _ = micSeq;
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("SIDECAR_UNAVAILABLE", $"Mic-Frame Fehler: {ex.Message}");
-        }
-    };
-
-    speakerCapture.DataAvailable += (_, e) =>
-    {
-        try
-        {
-            speakerBuffered.AddSamples(e.Buffer, 0, e.BytesRecorded);
-            var pcm = DrainResampled(speakerResampler);
-            if (pcm.Length == 0) return;
-            lock (azurePushLock)
+            catch (Exception ex)
             {
-                azure?.PushFrame(new AudioFrame(
-                    AzureSpeechService.SourceSpeaker,
-                    sampleRate, 16, 1,
-                    pcm));
+                Logger.Error("SIDECAR_UNAVAILABLE", $"Mic-Frame Fehler: {ex.Message}");
             }
-            _ = speakerSeq;
-        }
-        catch (Exception ex)
+        });
+
+    using var speakerSource = AudioRecorderSource.Create(
+        speakerDevice,
+        loopback: true,
+        targetWaveFormat,
+        "Speaker-Loopback",
+        pcm =>
         {
-            Logger.Error("LOOPBACK_INIT_FAILED", $"Loopback-Frame Fehler: {ex.Message}");
-        }
-    };
+            try
+            {
+                if (pcm.Length == 0) return;
+                lock (azurePushLock)
+                {
+                    azure?.PushFrame(new AudioFrame(
+                        AzureSpeechService.SourceSpeaker,
+                        sampleRate, 16, 1,
+                        pcm));
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("LOOPBACK_INIT_FAILED", $"Loopback-Frame Fehler: {ex.Message}");
+            }
+        });
 
-    micCapture.StartRecording();
-    speakerCapture.StartRecording();
+    micSource.Start();
+    speakerSource.Start();
 
-    Logger.Info("format", "mic_format", $"Mic Capture Format: {micCapture.WaveFormat}");
-    Logger.Info("format", "speaker_format", $"Speaker Capture Format: {speakerCapture.WaveFormat}");
+    Logger.Info("format", "mic_format", $"Mic Capture Format: {micSource.Format} (Modus: {micSource.ModeLabel})");
+    Logger.Info("format", "speaker_format", $"Speaker Capture Format: {speakerSource.Format} (Modus: {speakerSource.ModeLabel})");
     Logger.Info("format", "azure_target", $"Azure Target Format: {targetWaveFormat}");
     Logger.Info("status", "capturing", "Mic + Speaker Loopback aktiv.");
     Logger.Event("status", new { phase = "started", running = true });
@@ -318,8 +296,8 @@ try
         }
     }
 
-    micCapture.StopRecording();
-    speakerCapture.StopRecording();
+    micSource.Stop();
+    speakerSource.Stop();
     if (azure is not null) await azure.StopAsync();
     Logger.Info("status", "stopped", "Graceful shutdown abgeschlossen.");
     Logger.Event("status", new { phase = "stopped", running = false });
@@ -340,19 +318,3 @@ finally
     cts.Dispose();
 }
 
-static byte[] DrainResampled(IWaveProvider provider)
-{
-    var buffer = new byte[8192];
-    using var output = new MemoryStream();
-    while (true)
-    {
-        // NAudio 3.x: IWaveProvider.Read ist span-basiert
-        // (Read(Span<byte>)); die byte[]-Ueberladung mit Offset und
-        // Count existiert nicht mehr.
-        var read = provider.Read(buffer.AsSpan());
-        if (read <= 0) break;
-        output.Write(buffer, 0, read);
-        if (read < buffer.Length) break;
-    }
-    return output.ToArray();
-}

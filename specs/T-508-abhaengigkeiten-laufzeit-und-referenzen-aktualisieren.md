@@ -44,11 +44,13 @@ die Aufnahme- und Transkriptionslogik bleibt unveraendert.
   `MediaFoundationTransform.Read(Span<byte>)` und `MMDevice.CreateAudioClient()`.
 - **Rust `reqwest` 0.13** hat das TLS-Feature umbenannt (`rustls-tls` -> `rustls`).
   Die Diagnose zeigte `unrecognized feature for crate reqwest: rustls-tls`.
-- Die beiden in NAudio 3.x als obsolet markierten Capture-Klassen
-  (`WasapiCapture`, `WasapiLoopbackCapture`) bleiben mit `#pragma warning disable`
-  im Einsatz. Die empfohlene Alternative `WasapiRecorderBuilder` ist ein eigener
-  Schritt — **kein Teil dieser Aktualisierung**. Per Reflection gegen die
-  installierte NAudio-Wasapi-3.3.0-DLL verifiziert: `WasapiRecorder` bietet
+  - Die beiden in NAudio 3.x als obsolet markierten Capture-Klassen
+    (`WasapiCapture`, `WasapiLoopbackCapture`) blieben zum Zeitpunkt dieser
+    Aktualisierung mit `#pragma warning disable` im Einsatz. Die empfohlene
+    Alternative `WasapiRecorderBuilder` war ein eigener Schritt — **kein Teil
+    dieser Aktualisierung**; sie ist in T-509 umgesetzt (2026-11-16) und die
+    Pragma entfaellt.
+    Per Reflection gegen die installierte NAudio-Wasapi-3.3.0-DLL verifiziert:
   **beide** Wege weiter — das `DataAvailable`-Event (jetzt `ReadOnlySpan<byte>`,
   Zero-Copy) **und** `CaptureAsync` (`IAsyncEnumerable`). Der Umstieg ist damit
   kein Modellwechsel, sondern eine API-Ersetzung; Aufwand siehe unten.
@@ -61,9 +63,9 @@ NAudio-Doku — nicht geschaetzt, sondern am Code und an der API gemessen.*
 - **Betroffen:** die aktive Capture-Pipeline in `sidecar/Program.cs`
   (≈ 95 Zeilen: 2× Capture, 2× `DataAvailable`, `BufferedWaveProvider`,
   `MediaFoundationResampler`, `DrainResampled`) plus `AudioResampler.cs`.
-- **Kostenlos mit erledigt:** `MicCaptureClient` und `LoopbackCaptureClient` haben
-  **0 externe Verwendungen** — die Pipeline liegt komplett inline in
-  `Program.cs`. Deren Entfernung ist reine Aufräumarbeit.
+  - **Kostenlos mit erledigt:** `MicCaptureClient` und `LoopbackCaptureClient` hatten
+    **0 externe Verwendungen** — die Pipeline lag komplett inline in
+    `Program.cs`. Ihre Entfernung ist reine Aufräumarbeit (in T-509 erfolgt).
 - **`WithLoopbackCapture()`** ersetzt `WasapiLoopbackCapture` 1:1 mit gleicher
   Semantik (Events nur während tatsächlicher Audioausgabe).
 - **`WithFormat(new WaveFormat(16000, 16, 1))`** lässt die WASAPI-Engine im

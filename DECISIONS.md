@@ -381,6 +381,43 @@ TypeScript-Build und Portable-Smoke erfolgreich.
 Siehe [T-304](./specs/T-304-connectivity-diagnose-in-rust.md) und
 [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md).
 
+## AD-015 · Aufnahme ueber `WasapiRecorderBuilder` mit messbarem Rueckfall (2026-11-16)
+
+**Kontext:** NAudio 3.3.0 markiert `WasapiCapture` und `WasapiLoopbackCapture`
+als obsolet; der Ersatz ist `WasapiRecorderBuilder`. Der Sidecar fuhr bis
+2026-11-16 mit `#pragma warning disable CS0618` auf beiden Klassen.
+
+**Entscheidung:** Die Aufnahme laeuft ueber `WasapiRecorder`
+(`sidecar/AudioRecorderSource.cs`). Mic und Speaker-Loopback werden ueber
+`WasapiRecorderBuilder` geoeffnet; der Loopback bleibt systemweit ueber den
+Render-Endpoint (`WithLoopbackCapture()`), **ohne** `WithProcessLoopback` —
+sonst gingen fremde Audioquellen verloren.
+
+Der Konvertierungsweg ist zweistufig:
+1. **Engine-Modus:** `WithFormat(16 kHz / 16-bit / mono)`; die WASAPI-Engine
+   konvertiert im Shared Mode selbst (`AutoConvertPcm | SrcDefaultQuality`,
+   identisch zu `WasapiCapture`).
+2. **Resampler-Modus:** Kann die Engine nicht auf 16-Bit-PCM konvertieren
+   (Float-Mixformat), uebernimmt `MediaFoundationResampler` wie bisher.
+
+Der Uebergang wird **gemessen**, nicht angenommen: `WasapiRecorder.WaveFormat`
+liefert das *angeforderte* Format, ein Vergleich waere damit tautologisch.
+Stattdessen misst die Quelle die Byte-Rate der gelieferten Frames; weicht sie
+mehr als 50 % von der Ziel-Bitrate ab, wird auf den Resampler umgeschaltet.
+
+**Konsequenzen:**
+- `WithLowLatency()` bleibt aussen vor: es schliesst `WithFormat()` und
+  `WithLoopbackCapture()` aus (Architekturentscheidung, siehe T-502).
+- `WithMmcssThreadPriority()` wird **nicht** gesetzt: der Capture-Thread
+  schiebt die Frames blockierend in den Azure-PushStream; eine
+  Audio-Scheduling-Prioritaet wuerde waehrend dieser Netzwerkwartezeit einen
+  MMCSS-Reservierungs-Platz halten. `WasapiCapture` setzte ebenfalls kein
+  MMCSS — die Aufnahme bleibt in der Scheduler-Klasse unveraendert.
+- `AudioResampler.cs` bleibt bewusst bestehen (Rueckfallpfad), die drei
+  ungenutzten Capture-Klassen wurden geloescht.
+
+Siehe [T-509](./specs/T-509-audio-capture-auf-wasapirecorderbuilder-umstellen.md).
+
 ## Offene Fragen
 
 **Build-Fortschreibung 2026-11-15 (AD-009):** Der direkte `dotnet publish`-Aufruf

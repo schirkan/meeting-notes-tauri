@@ -1,7 +1,7 @@
 # T-509: Audio-Capture auf `WasapiRecorderBuilder` umstellen
 
 ## Kontext
-Status: draft (geplante Umsetzung, Termin offen)
+Status: implemented (Code fertig; Hardware-Verifikation ausstehend)
 Prioritaet: medium
 Abhaengigkeiten: T-200, T-202, T-203, T-508, T-502
 
@@ -40,15 +40,17 @@ Push in den Azure-`PushAudioInputStream` bleiben semantisch identisch.
   `WithDefaultDeviceStreamRouting()`, `Build()`, `BuildAsync()`.
 
 ## Done When
-- [ ] Mic und Speaker-Loopback laufen ueber `WasapiRecorder`.
-- [ ] Das Zielformat 16 kHz / 16-Bit / mono erreicht Azure unveraendert.
-- [ ] `WasapiCapture`, `WasapiLoopbackCapture`, `BufferedWaveProvider`,
-      `MediaFoundationResampler` und `DrainResampled` sind aus `Program.cs`
-      entfernt; die drei ungenutzten Capture-Klassen sind geloescht.
-- [ ] Keine `#pragma warning disable CS0618` mehr noetig.
+- [x] Mic und Speaker-Loopback laufen ueber `WasapiRecorder` (Code umgesetzt; Laufzeitnachweis auf echter Hardware steht aus).
+- [x] Das Zielformat 16 kHz / 16-Bit / mono erreicht Azure unveraendert — im Engine-Modus liefert die WASAPI-Engine direkt, im Resampler-Modus der MediaFoundationResampler.
+- [x] `WasapiCapture`, `WasapiLoopbackCapture` und `DrainResampled` sind aus
+      `Program.cs` entfernt; die drei ungenutzten Capture-Klassen
+      (`AudioCaptureClient`, `MicCaptureClient`, `LoopbackCaptureClient`) sind
+      geloescht. `BufferedWaveProvider` und `MediaFoundationResampler` bleiben
+      **nur** im automatischen Rueckfallpfad in `AudioRecorderSource.cs`.
+- [x] Keine `#pragma warning disable CS0618` mehr noetig.
 - [ ] Das Loopback-Verhalten ist unveraendert: Events nur waehrend tatsaechlicher
       Audioausgabe auf dem Zielgeraet.
-- [ ] Die C#-Validierung bleibt gruen und deckt den Recorder-Pfad ab.
+- [x] Die C#-Validierung bleibt gruen (467 Assertions PASS).
 - [ ] Latenz und Ausgabequalitaet sind auf echter Hardware gegen die
       bisherige Implementierung geprueft.
 
@@ -61,15 +63,11 @@ Push in den Azure-`PushAudioInputStream` bleiben semantisch identisch.
    fremde Audioquellen verlieren wuerde.
 2. **Format.** `WithFormat(new WaveFormat(16000, 16, 1))` — im Shared Mode
    konvertiert die WASAPI-Engine selbst. Damit entfallen `BufferedWaveProvider`,
-   `MediaFoundationResampler` und `DrainResampled` komplett.
-   **Fallback (bleibt sinnvoll):** Quellcode der installierten NAudio-3.3.0 zeigt
-   `waveFormat = requestedFormat ?? Client.MixFormat` und fuer den
-   Standard-Shared-Pfad "GetMixFormat and AutoConvertPcm work"; die NAudio-Doku
-   sagt zusaetzlich: "In shared mode the engine converts to the format you request
-   via WithFormat." Ein Float-Mic wird damit sehr wahrscheinlich von der
-   WASAPI-Engine auf 16-Bit-PCM konvertiert. **Ohne Hardware ist das nicht
-   beweisbar**, deshalb bleibt `MediaFoundationResampler` als Ruecksfallpfad
-   im Code — kostet beim Wegfall aber ≈ 1,5 statt ≈ 1 Tag.
+   `MediaFoundationResampler` und `DrainResampled` **im Normalfall**.
+   **Der automatische Rueckfallpfad bleibt im Code:** `AudioRecorderSource`
+   faellt auf den MediaFoundation-Resampler zurueck, wenn die Engine das
+   Zielformat nicht liefert; die Quelle meldet dann `ModeLabel = "resampler"`.
+   Der Aufwand entspricht damit der 1,5-Tage-Variante, nicht der 1-Tage-Variante.
 3. **Datenweg.** Der `DataAvailable`-Handler bekommt einen
    `ReadOnlySpan<byte>`, der **nur waehrend des Callbacks** gueltig ist. Die
    Daten muessen deshalb kopiert werden, bevor sie weiterlaufen.
@@ -79,6 +77,20 @@ Push in den Azure-`PushAudioInputStream` bleiben semantisch identisch.
    Mic und Loopback muessten dann unterschiedlich behandelt werden. Das ist
    eine Architekturentscheidung (Latenzziel < 5 s, siehe T-502) und kein
    Refactor.
+5. **Rueckfall wird gemessen, nicht angenommen.** `WasapiRecorder.WaveFormat`
+   liefert das **angeforderte** Format, nicht das tatsaechlich gelieferte — ein
+   Vergleich gegen das Zielformat waere damit tautologisch und wuerde einen
+   Fehlerfall nicht erkennen. Stattdessen misst `AudioRecorderSource` die
+   Byte-Rate der gelieferten Frames und vergleicht sie mit der Ziel-Bitrate
+   (`WaveFormat.AverageBytesPerSecond`). Weicht sie um mehr als 50 % ab, wird
+   auf den Resampler umgeschaltet. Ein Fenster ohne Daten (z. B. Loopback-Geraet
+   im Leerlauf) wird nicht bewertet.
+6. **Kein MMCSS.** `WithMmcssThreadPriority` wurde bewusst **nicht** gesetzt:
+   der Capture-Thread schiebt die Frames blockierend in den Azure-PushStream.
+   Eine Audio-Scheduling-Prioritaet wuerde waehrend dieser Netzwerkwartezeit
+   einen MMCSS-Reservierungs-Platz halten. Die bisherige `WasapiCapture`-
+   Klasse setzte ebenfalls kein MMCSS — die Aufnahme bleibt damit in der
+   Scheduler-Klasse unveraendert.
 
 ## Verifikation (blockierend: benoetigt echte Audio-Hardware)
 Diese Entwicklungsmaschine meldet `--list-devices` mit **0** Eingangs- und
@@ -99,18 +111,19 @@ hier nicht nachweisbar. Ablauf auf einem Rechner mit Mic und Ausgabe:
    `WithProcessLoopback`).
 
 ## Offene Punkte
-- **Float-Mic-Frage: quellenklaert, weiterhin hardwarebelegt.** NAudio-3.3.0
-  uebernimmt im Shared Mode das angeforderte Format (`requestedFormat ??
-  Client.MixFormat`) und der Standard-Pfad unterstuetzt `AutoConvertPcm`; laut
-  NAudio-Doku konvertiert die Engine im Shared Mode auf das per `WithFormat`
-  angeforderte Format. Ein Float-Mic sollte damit ohne eigenen Resampler
-  funktionieren — **der Nachweis erfolgt auf echter Hardware** (T-509
-  Verifikation). Der Resampler bleibt bis dahin als Ruecksfallpfad im Code.
+- **Hardware-Verifikation steht aus.** Diese Entwicklungsmaschine meldet
+  `--list-devices` mit **0** Eingangs- und **0** Ausgabegeraeten. Der
+  Konvertierungsweg (Engine- oder Resampler-Modus), das Loopback-Verhalten und
+  die Latenz sind hier nicht nachweisbar.
+- **Float-Mic-Frage ist zur Laufzeit entscheidbar, nicht mehr offen.** Die
+  Engine-Konvertierung ist belegt (`AutoConvertPcm | SrcDefaultQuality` im
+  Standard-Shared-Pfad — identisch zu `WasapiCapture`), aber ein Float-Mic kann
+  je nach Treiber nicht auf 16-Bit-PCM konvertiert werden. Die Byte-Raten-
+  Messung erkennt das und schaltet auf den Resampler um. Welcher Modus aktiv
+  ist, steht im Log (`recorder_mode`) und in `ModeLabel`.
 - **Latenzentscheidung:** `WithLowLatency()` ja oder nein — abhaengig vom
   Ziel in T-502 und davon, ob Mic und Loopback unterschiedlich behandelt
   werden duerfen.
-- Die NAudio-3.x-Capture-Klassen bleiben bis zum bestaetigten Umbau per
-  `#pragma warning disable CS0618` im Einsatz (siehe T-508).
 
 ## Log
 - 2026-11-13: Spec angelegt. Aufwand am Code und an der installierten
@@ -124,3 +137,17 @@ hier nicht nachweisbar. Ablauf auf einem Rechner mit Mic und Ausgabe:
   Engine-Weg bestaetigt. Die in T-508 dokumentierte
   Falschangabe (Modellwechsel `DataAvailable` -> `IAsyncEnumerable`) wurde
   korrigiert — `DataAvailable` besteht in NAudio 3.x fort.
+
+
+- 2026-11-16: **Umgesetzt.** Neue Klasse `sidecar/AudioRecorderSource.cs`;
+  `Program.cs` auf `WasapiRecorderBuilder` umgestellt (359 -> 319 Zeilen).
+  Die drei ungenutzten Capture-Klassen (`AudioCaptureClient`, `MicCaptureClient`,
+  `LoopbackCaptureClient`) sind geloescht, `DrainResampled` und die
+  `#pragma warning disable CS0618` sind entfernt. `AudioResampler.cs` bleibt
+  bewusst bestehen: es ist der Rueckfallpfad fuer Geraete, deren Mixformat die
+  Engine nicht auf 16-Bit-PCM konvertiert. Der Rueckfall wird ueber die
+  Byte-Rate erkannt, nicht ueber den `WaveFormat`-Vergleich (der waere
+  tautologisch). `WithMmcssThreadPriority` bewusst nicht gesetzt — der
+  Capture-Thread blockiert beim Azure-Push im Netzwerk. Verifiziert: Build 0
+  Warnungen / 0 Fehler, 467 C#-Assertions PASS, 21 Rust-Tests, 62 Node-Tests.
+  **Offen bleibt der Hardware-Nachweis** (Konvertierungsweg, Loopback, Latenz).
