@@ -1,7 +1,7 @@
 # T-508: Abhaengigkeiten, Laufzeit und Referenzen aktualisieren
 
 ## Kontext
-Status: implemented
+Status: umgesetzt
 Prioritaet: medium
 Abhaengigkeiten: T-101, T-200, T-202, T-204, T-207, T-301, T-503
 

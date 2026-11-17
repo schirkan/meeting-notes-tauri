@@ -1,7 +1,7 @@
 # T-301: Sidecar-Spawn via tauri-plugin-shell
 
 ## Kontext
-Status: implemented
+Status: umgesetzt
 Priorität: high
 Abhängigkeiten: T-300
 

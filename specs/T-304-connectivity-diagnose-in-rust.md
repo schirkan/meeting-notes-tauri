@@ -1,7 +1,7 @@
 # T-304: Connectivity-Diagnose in Rust (Pendant zu azure-connectivity.ts)
 
 ## Kontext
-Status: implemented
+Status: umgesetzt
 Priorität: high
 Abhängigkeiten: T-302
 

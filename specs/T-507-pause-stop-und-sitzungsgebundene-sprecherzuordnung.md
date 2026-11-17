@@ -1,7 +1,7 @@
 # T-507: Pause, Stop und sessionsichere Sprecherzuordnung
 
 ## Kontext
-Status: implemented
+Status: umgesetzt
 Priorität: high
 Abhängigkeiten: T-205, T-306, T-404, T-406
 

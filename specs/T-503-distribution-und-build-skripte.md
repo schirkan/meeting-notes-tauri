@@ -1,7 +1,7 @@
 # T-503: Distribution und Build-Skripte
 
 ## Kontext
-Status: implemented
+Status: teils umgesetzt (1 Punkt offen)
 Priorität: high
 Abhängigkeiten: T-207
 

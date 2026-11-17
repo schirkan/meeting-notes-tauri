@@ -7,7 +7,7 @@
 > Pruefung waere ein solches Artefakt als Lieferung durchgerutscht.
 
 ## Kontext
-Status: partial
+Status: teils umgesetzt (1 Punkt offen)
 Priorität: high
 Abhängigkeiten: T-301, T-302, T-303
 

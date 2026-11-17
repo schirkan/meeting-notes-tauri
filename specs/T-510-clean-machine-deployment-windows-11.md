@@ -1,7 +1,7 @@
 # T-510: Clean-Machine-Deployment (Windows 11, .NET 10 Runtime, WebView2)
 
 ## Kontext
-Status: vorbereitet (Pruefskript vorhanden und erprobt; Ausfuehrung auf dem Zielsystem steht aus)
+Status: vorbereitet (2 Punkte offen; Pruefskript vorhanden und erprobt, Ausfuehrung auf dem Zielsystem steht aus)
 Prioritaet: medium
 Abhaengigkeiten: T-504, T-505, T-507, T-508
 

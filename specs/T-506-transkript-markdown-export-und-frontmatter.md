@@ -1,7 +1,7 @@
 # T-506: Transkript-Markdown-Export mit Frontmatter
 
 ## Kontext
-Status: implemented
+Status: umgesetzt
 Priorität: medium
 Abhängigkeiten: T-305, T-403
 

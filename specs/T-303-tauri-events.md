@@ -1,7 +1,7 @@
 # T-303: Tauri-Events definieren
 
 ## Kontext
-Status: implemented
+Status: umgesetzt
 Priorität: high
 Abhängigkeiten: T-102
 

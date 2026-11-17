@@ -1,7 +1,7 @@
 # T-403: Settings-Dialog und separater Verbindungstest
 
 ## Kontext
-Status: implemented
+Status: umgesetzt
 Priorität: high
 Abhängigkeiten: T-402, T-304
 

@@ -1,7 +1,7 @@
 # T-306: Proxy-aware Azure-Transport (C#-Variante)
 
 ## Kontext
-Status: implemented
+Status: umgesetzt
 Priorität: high
 Abhängigkeiten: T-204, T-205
 

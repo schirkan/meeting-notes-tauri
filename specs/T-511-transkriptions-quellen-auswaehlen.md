@@ -1,7 +1,7 @@
 # T-511: Transkriptions-Quellen auswählbar (Mic, Speaker oder beides)
 
 ## Kontext
-Status: implemented
+Status: umgesetzt
 Priorität: medium
 Abhängigkeiten: T-305, T-403, T-507, T-509
 

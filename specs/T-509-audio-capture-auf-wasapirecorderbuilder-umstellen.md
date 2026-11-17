@@ -1,7 +1,7 @@
 # T-509: Audio-Capture auf `WasapiRecorderBuilder` umstellen
 
 ## Kontext
-Status: implemented (Code fertig; Hardware-Verifikation ausstehend)
+Status: teils umgesetzt (2 Punkte offen; Code fertig, Hardware-Verifikation ausstehend)
 Prioritaet: medium
 Abhaengigkeiten: T-200, T-202, T-203, T-508, T-502
 

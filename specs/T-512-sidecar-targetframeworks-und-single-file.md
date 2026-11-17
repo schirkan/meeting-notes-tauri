@@ -1,7 +1,7 @@
 # T-512: Target-Frameworks des Sidecars und Single-File-Variante
 
 ## Kontext
-Status: implemented
+Status: umgesetzt
 Priorität: medium
 Abhängigkeiten: T-508, T-509
 

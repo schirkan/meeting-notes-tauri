@@ -1,7 +1,7 @@
 # T-502: Latency-Messung
 
 ## Kontext
-Status: umgesetzt (Werkzeug fertig; Live-Messung steht aus)
+Status: teils umgesetzt (2 Punkte offen; Werkzeug fertig, die Live-Messung steht aus)
 Priorität: medium
 Abhängigkeiten: T-501
 

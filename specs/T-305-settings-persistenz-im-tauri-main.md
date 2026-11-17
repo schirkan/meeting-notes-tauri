@@ -1,7 +1,7 @@
 # T-305: Settings-Persistenz im Tauri-Main
 
 ## Kontext
-Status: implemented
+Status: umgesetzt
 Priorität: high
 Abhängigkeiten: T-103
 

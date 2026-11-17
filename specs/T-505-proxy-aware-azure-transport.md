@@ -1,7 +1,7 @@
 # T-505: Proxy-aware Azure-Transport (C#-Variante)
 
 ## Kontext
-Status: implemented
+Status: umgesetzt
 Priorität: high
 Abhängigkeiten: T-306, T-303
 

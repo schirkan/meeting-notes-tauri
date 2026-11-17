@@ -1,7 +1,7 @@
 # T-504: Portable Build (Windows, unsigniert)
 
 ## Kontext
-Status: implemented
+Status: teils umgesetzt (1 Punkt offen)
 Priorität: high
 Abhängigkeiten: T-503
 
