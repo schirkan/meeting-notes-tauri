@@ -11,13 +11,15 @@ Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1
 
 ## Stand der Specs (Abgleich 2026-11-17)
 
-Die Checkboxen wurden gegen den **Code** geprüft, nicht gegen den Spec-Status:
-jeder abgehakte Punkt trägt den Beleg im Klartext (`Beleg: …`), jeder offene
+Die Checkboxen wurden gegen den **Code** geprueft, nicht gegen den Spec-Status:
+jeder abgehakte Punkt traegt den Beleg im Klartext (`Beleg: …`), jeder offene
 Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **37 Specs** als
-`umgesetzt` bzw. `teils umgesetzt` markiert, **20 offene Punkte in 13 Specs**.
-Vorher waren über 70 Checkboxen offen, obwohl die Funktion überwiegend fertig
-und verifiziert war – die Specs sind jetzt mit dem Stand der Implementierung
+`umgesetzt` bzw. `teils umgesetzt` markiert, **18 offene Punkte in 13 Specs**.
+Vorher waren ueber 70 Checkboxen offen, obwohl die Funktion ueberwiegend fertig
+und verifiziert war - die Specs sind jetzt mit dem Stand der Implementierung
 deckungsgleich.
+
+_Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 
 ### Offen und braucht deinen Rechner (11 Punkte)
 
@@ -35,13 +37,11 @@ deckungsgleich.
 | T-510 | Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch |
 | T-510 | Befunde sind in `T-504`, `T-500`, `SPEC.md` und `AGENTS.md` nachgezogen. |
 
-### Offen als bewusste Entscheidung (9 Punkte)
+### Offen als bewusste Entscheidung (7 Punkte)
 
 | Spec | Punkt | Warum offen |
 |---|---|---|
 | T-101 | `npm run tauri build` produziert eine MSI- oder NSIS-Installer-Datei. | Installer (MSI/NSIS) wurden bewusst nicht gebaut; der Lieferweg ist die Portable-Distribution (siehe README). |
-| T-101 | Eine Stub-Rust-Funktion `start_recording()` ist über `tauri::command`… | Durch die echte Aufnahme-Implementierung ersetzt - bewusst kein Stub mehr. |
-| T-101 | Eine Rust-Funktion `spawn_stub_sidecar()` startet einen Dummy-Prozess… | Durch die echte Sidecar-Anbindung ersetzt - bewusst kein Stub mehr. |
 | T-201 | **Reconnects:** Tauri startet den Sidecar bei Crash automatisch neu (… | bewusst nicht umgesetzt - ein Neustart des Sidecars erzeugt eine **neue Azure-Sitzung**, damit brechen die Sprecher-IDs (T-507).… |
 | T-203 | Smoke-Test: 48-kHz-Stereo-Input führt zu korrektem 16-kHz-Mono-Output… | Der Stichprobentest ist implementiert (`ResamplingValidation`: 48-kHz-Stereo-Ton → 16-kHz-Mono, Länge, Pegel, Übersteuerung, Drop… |
 | T-400 | Visuelles Verhalten ist identisch zur Electron-Variante. | Bewusst nicht 1:1: die Darstellung folgt auf Nutzerwunsch dem Console-Design statt der urspruenglichen Portierung (siehe T-402).… |

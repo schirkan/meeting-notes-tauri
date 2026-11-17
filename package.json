@@ -18,6 +18,7 @@
     "dist:portable": "node scripts/dist-portable.mjs",
     "test:smoke": "node scripts/test-smoke.mjs",
     "measure:latency": "node scripts/measure-latency-tauri.mjs",
+    "docs:specs": "node scripts/update-spec-overview.mjs",
     "verify:deployment": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-deployment.ps1 -PortableDir dist/portable",
     "test:unit": "node --test tests/*.test.mjs"
   },
