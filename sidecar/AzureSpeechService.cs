@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -175,7 +176,16 @@ public sealed class AzureSpeechService : IDisposable
             // verworfen, statt eine Ausnahme in die Capture-Schleife zu
             // tragen.
             if (!_streams.TryGetValue(frame.Source, out var state)) return;
+            var pushTicks = Stopwatch.GetTimestamp();
             state.PushStream.Write(frame.Payload);
+
+            // T-502: Stufen der Latenzkette im Sidecar festhalten. Der
+            // Push-Zeitpunkt ist die Referenz fuer die Azure-Roundtrip.
+            state.LastPushTicks = pushTicks;
+            state.LastCaptureLatencyMs = frame.CaptureLatencyMs;
+            state.LastSidecarToPushMs = frame.CapturedAtTicks > 0
+                ? (pushTicks - frame.CapturedAtTicks) / (double)Stopwatch.Frequency * 1000.0
+                : 0.0;
 
             var counter = _pushCounters.GetValueOrDefault(frame.Source) ?? new FrameCounter();
             counter.Frames += 1;
@@ -411,6 +421,32 @@ public sealed class AzureSpeechService : IDisposable
         var speakerId = diarized
             ? (string.IsNullOrWhiteSpace(speaker) ? "unknown" : speaker)
             : (source == SourceMic ? "self" : "guest");
+        // T-502: Latenzstufen. Die Kette laeuft
+        //   Capture (WASAPI) -> Resampler -> Azure-PushStream -> Azure-Response
+        //   -> Sidecar-Event -> JSON-Lines -> Tauri-Main -> Renderer.
+        // Der Renderer-Teil (Paint) ist von aussen nicht messbar; totalMs
+        // endet deshalb am Tauri-Event.
+        var nowTicks = Stopwatch.GetTimestamp();
+        var captureLatencyMs = 0.0;
+        var sidecarToPushMs = 0.0;
+        var azureToEventMs = 0.0;
+        if (_streams.TryGetValue(source, out var streamState))
+        {
+            captureLatencyMs = streamState.LastCaptureLatencyMs;
+            sidecarToPushMs = streamState.LastSidecarToPushMs;
+            if (streamState.LastPushTicks > 0)
+            {
+                azureToEventMs = (nowTicks - streamState.LastPushTicks) / (double)Stopwatch.Frequency * 1000.0;
+            }
+        }
+        var latency = new
+        {
+            captureLatencyMs = Math.Round(captureLatencyMs, 1),
+            sidecarToPushMs = Math.Round(sidecarToPushMs, 1),
+            azureToEventMs = Math.Round(azureToEventMs, 1),
+            emittedAtUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+        };
+
         Logger.Event("transcript", new
         {
             id = Guid.NewGuid().ToString(),
@@ -424,7 +460,8 @@ public sealed class AzureSpeechService : IDisposable
             timestampIso = DateTime.UtcNow.ToString("O"),
             text,
             state,
-            confidence
+            confidence,
+            latency
         });
     }
 
@@ -505,7 +542,16 @@ public sealed record DeviceIds(string? MicId, string? SpeakerLoopbackId);
 
 public sealed record AzureAudioFormat(int SampleRate, int BitsPerSample, int Channels);
 
-public sealed record AudioFrame(string Source, int SampleRate, int BitsPerSample, int Channels, byte[] Payload);
+public sealed record AudioFrame(
+    string Source,
+    int SampleRate,
+    int BitsPerSample,
+    int Channels,
+    byte[] Payload,
+    /// <summary>T-502: Stopwatch-Zeitpunkt, an dem der Frame im Sidecar ankam.</summary>
+    long CapturedAtTicks = 0,
+    /// <summary>T-502: Alter des WASAPI-Puffers beim Capture (ms, von NAudio).</summary>
+    int CaptureLatencyMs = 0);
 
 internal sealed class StreamState
 {
@@ -514,6 +560,15 @@ internal sealed class StreamState
     public string Mode { get; }
     public string Source { get; }
     public bool Started { get; set; }
+
+    /// <summary>T-502: Zeitpunkt des letzten Pushes in den Azure-Stream.</summary>
+    public long LastPushTicks { get; set; }
+
+    /// <summary>T-502: Alter des WASAPI-Puffers beim letzten Frame (ms).</summary>
+    public int LastCaptureLatencyMs { get; set; }
+
+    /// <summary>T-502: Callback -> Azure-PushStream des letzten Frames (ms).</summary>
+    public double LastSidecarToPushMs { get; set; }
 
     /// <summary>Azure-Session-ID dieser Quelle (T-507).</summary>
     public string? AzureSessionId { get; set; }

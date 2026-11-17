@@ -16,6 +16,25 @@ export interface TranscriptSegment {
   text: string
   state: TranscriptState
   confidence?: number
+  /**
+   * Latenzstufen der Kette Mikrofon -> Transkript (T-502).
+   *
+   * Alle Werte in Millisekunden. Die Stufen 1-3 misst der Sidecar, die
+   * Pipe-Stufe (4) der Tauri-Main; `totalMs` ist die Summe bis zum
+   * Tauri-Event. Die Renderer-Stufe (Paint) ist von aussen nicht messbar.
+   */
+  latency?: {
+    /** Alter des WASAPI-Puffers beim Capture. */
+    captureLatencyMs?: number
+    /** Callback -> Azure-PushStream (Resampler). */
+    sidecarToPushMs?: number
+    /** Azure-Roundtrip -> Sidecar-Event. */
+    azureToEventMs?: number
+    /** Sidecar-Event -> Tauri-Main (JSON-Lines-Pipe). */
+    pipeToEventMs?: number
+    /** Summe bis zum Tauri-Event. */
+    totalMs?: number
+  }
 }
 
 export interface AudioDeviceInfo {

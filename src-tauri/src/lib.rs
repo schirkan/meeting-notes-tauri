@@ -8,6 +8,7 @@
 mod commands;
 mod connectivity;
 mod events;
+mod latency;
 mod settings;
 mod sidecar;
 mod state;

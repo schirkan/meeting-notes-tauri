@@ -745,7 +745,12 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) {
 
     match ty {
         "transcript" | "transcript:segment" => {
-            events::emit_segment(app, &payload);
+            // T-502: Die Pipe-Stufe (Sidecar-Event -> Rust) ergaenzen und
+            // die Gesamtlatenz bis zum Tauri-Event berechnen. Die Messzeile
+            // entsteht nur, wenn MEETING_NOTES_LATENCY_LOG gesetzt ist.
+            let enriched = crate::latency::enrich(&payload);
+            crate::latency::write_sample(&enriched);
+            events::emit_segment(app, &enriched);
         }
         "status" | "transcript:status" => {
             let running = payload.get("running").and_then(|v| v.as_bool()).unwrap_or(false);

@@ -196,7 +196,7 @@ try
         loopback: false,
         targetWaveFormat,
         "Mic",
-        pcm =>
+        (pcm, capturedAtTicks, captureLatencyMs) =>
         {
             try
             {
@@ -206,7 +206,9 @@ try
                     azure?.PushFrame(new AudioFrame(
                         AzureSpeechService.SourceMic,
                         sampleRate, 16, 1,
-                        pcm));
+                        pcm,
+                        capturedAtTicks,
+                        captureLatencyMs));
                 }
             }
             catch (Exception ex)
@@ -222,7 +224,7 @@ try
         loopback: true,
         targetWaveFormat,
         "Speaker-Loopback",
-        pcm =>
+        (pcm, capturedAtTicks, captureLatencyMs) =>
         {
             try
             {
@@ -232,7 +234,9 @@ try
                     azure?.PushFrame(new AudioFrame(
                         AzureSpeechService.SourceSpeaker,
                         sampleRate, 16, 1,
-                        pcm));
+                        pcm,
+                        capturedAtTicks,
+                        captureLatencyMs));
                 }
             }
             catch (Exception ex)

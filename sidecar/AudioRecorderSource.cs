@@ -38,7 +38,7 @@ internal sealed class AudioRecorderSource : IDisposable
     private readonly MMDevice _device;
     private readonly bool _loopback;
     private readonly WaveFormat _targetFormat;
-    private readonly Action<byte[]> _onFrame;
+    private readonly Action<byte[], long, int> _onFrame;
     private readonly string _label;
 
     private readonly object _verifyLock = new();
@@ -58,7 +58,7 @@ internal sealed class AudioRecorderSource : IDisposable
         bool loopback,
         WaveFormat targetFormat,
         string label,
-        Action<byte[]> onFrame,
+        Action<byte[], long, int> onFrame,
         WasapiRecorder recorder)
     {
         _device = device;
@@ -95,7 +95,7 @@ internal sealed class AudioRecorderSource : IDisposable
         bool loopback,
         WaveFormat targetFormat,
         string label,
-        Action<byte[]> onFrame)
+        Action<byte[], long, int> onFrame)
     {
         var recorder = BuildRecorder(device, loopback, targetFormat);
         var source = new AudioRecorderSource(device, loopback, targetFormat, label, onFrame, recorder);
@@ -208,19 +208,26 @@ internal sealed class AudioRecorderSource : IDisposable
     {
         try
         {
+            // T-502: Zeitstempel fuer die Latenzmessung. capturedAtTicks markiert
+            // den Moment, in dem der Buffer im Sidecar ankommt; captureLatencyMs ist
+            // das Alter des WASAPI-Puffers (von NAudio berechnet, also inklusive
+            // Geraete-Latenz) und damit die erste Stufe der Kette.
+            var capturedAtTicks = Stopwatch.GetTimestamp();
+            var captureLatencyMs = _recorder.LatencyMilliseconds;
+
             if (_mixBuffer is not null && _resampler is not null)
             {
                 // Resampler-Modus: Geraete-Mixformat -> Zielformat.
                 _mixBuffer.AddSamples(buffer);
                 var pcm = _resampler.DrainToBuffer();
                 if (pcm.Length == 0) return;
-                _onFrame(pcm);
+                _onFrame(pcm, capturedAtTicks, captureLatencyMs);
                 return;
             }
 
             // Engine-Modus: das Zielformat soll direkt aus der Engine kommen.
             // Der Span gilt nur fuer die Dauer des Callbacks, deshalb kopieren.
-            _onFrame(buffer.ToArray());
+            _onFrame(buffer.ToArray(), capturedAtTicks, captureLatencyMs);
             WatchEngineRate(buffer.Length);
         }
         catch (Exception ex)
