@@ -16,7 +16,7 @@ Smoke-Test, der die gesamte Tauri-Variante inkl. Sidecar-Spawn und Speech-Pipeli
 
 ## Done When
 - [x] Skript `scripts/test-smoke.mjs` existiert. Beleg: scripts/test-smoke.mjs (test-smoke.mjs) (geprueft).
-- [x] Skript prüft (headless, ohne WebDriver): Beleg: scripts/test-smoke.mjs (Stufen 1-5) - am 2026-11-17 bestanden, inklusive Protokoll-Handshake und Asset-Einbettung.
+- [x] Skript prüft (headless, ohne WebDriver): Beleg: scripts/test-smoke.mjs (Stufen 1-5) - am 2026-11-17 bestanden, inklusive Protokoll-Handshake und Asset-Einbettung. Testnachweis: npm run test:smoke - bestanden (23/23 Hashes, Protokoll-Handshake, Asset-Einbettung).
   1. Renderer-Build-Artefakte (`dist/index.html`, `dist/assets/`).
   2. App-EXE (`src-tauri/target/release/meeting-notes.exe`).
   3. Sidecar-EXE + `--list-devices` produziert valides `device_list`-JSON-Lines-Event mit Inputs/Outputs.

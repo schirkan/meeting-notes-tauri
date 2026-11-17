@@ -10,7 +10,7 @@ End-to-End-Latenz messen: Audio-Frame im Sidecar → Azure-Transkript zurück im
 
 ## Done When
 - [x] Skript `scripts/measure-latency-tauri.mjs` existiert (`npm run measure:latency`). Beleg: scripts/measure-latency-tauri.mjs (measure-latency-tauri.mjs), package.json (run) (geprueft).
-- [x] Misst: Beleg: scripts/measure-latency-tauri.mjs (7 Node-Assertions fuer die Statistik; Live-Modus mit App-Start verifiziert).
+- [x] Misst: Beleg: scripts/measure-latency-tauri.mjs (7 Node-Assertions fuer die Statistik; Live-Modus mit App-Start verifiziert). Testnachweis: tests/latency-stats.test.mjs (7 Assertions fuer Percentile und Report); der App-Start mit MEETING_NOTES_LATENCY_LOG wurde am 2026-11-17 gemessen verifiziert.
   - Audio-Capture → Sidecar-interner Resampler → `captureLatencyMs` + `sidecarToPushMs`
   - Azure-PushStream → Azure-Response → Sidecar-Event → `azureToEventMs`
   - Sidecar-Event → JSON-Lines Pipe → Tauri-Main → `pipeToEventMs`

@@ -26,11 +26,11 @@ zusammengeführt.
 - [x] Das Segment-Payload führt die **Session-ID** mit. Der Sidecar meldet die Beleg: sidecar/AzureSpeechService.cs (sessionId im Transcript-Payload) und src/shared/transcript-contract.ts.
   Azure-Session-ID pro Quelle (SessionStarted) im Feld `sessionId`; bis Azure
   sie meldet, wird eine eindeutige Kennung des Streams verwendet.
-- [x] Die Sprecheridentität im UI ist **sessionsicher** Beleg: src/renderer/src/speaker-utils.ts (Identitaet aus sessionId und source) und src/shared/transcript-contract.ts.
+- [x] Die Sprecheridentität im UI ist **sessionsicher** Beleg: src/renderer/src/speaker-utils.ts (Identitaet aus sessionId und source) und src/shared/transcript-contract.ts. Testnachweis: Node-UI-Test "the same SDK id in two sessions stays two separate speakers with separate aliases".
   (`<sessionId>|<source>:<speaker>`, `getSpeakerIdentity`). Alias-Zuordnung und
   Merge-Zuordnung benutzen diese Identität, nie die nackte SDK-ID.
-- [x] Segmente unterschiedlicher Sitzungen werden **nicht** zusammengeführt. Beleg: src/renderer/src/use-app-state.ts (Merge nur innerhalb derselben Identitaet).
-- [x] Eine neue Azure-Sitzung erhält eine neue Identität. Die Beleg: src/renderer/src/speaker-utils.ts (neue Azure-Sitzung ergibt eine neue Identitaet).
+- [x] Segmente unterschiedlicher Sitzungen werden **nicht** zusammengeführt. Beleg: src/renderer/src/use-app-state.ts (Merge nur innerhalb derselben Identitaet). Testnachweis: Node-UI-Test "the same SDK id in two sessions stays two separate speakers with separate aliases".
+- [x] Eine neue Azure-Sitzung erhält eine neue Identität. Die Beleg: src/renderer/src/speaker-utils.ts (neue Azure-Sitzung ergibt eine neue Identitaet). Testnachweis: Node-UI-Test "the same SDK id in two sessions stays two separate speakers with separate aliases".
   Sprecherzuordnung wird dadurch nicht still auf eine fremde Person
   übertragen; das UI nummeriert die Anzeige, wenn dieselbe SDK-ID in zwei
   Sitzungen vorkommt (Speaker · Guest-1 #2).
