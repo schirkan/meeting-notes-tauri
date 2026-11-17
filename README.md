@@ -88,7 +88,8 @@ npm run dev            # Nur Vite/Renderer, kein Tauri-Backend
 npm run typecheck      # TypeScript-Prüfung
 npm run build          # TypeScript + Renderer-Build
 npm run tauri -- build # MSI/NSIS-Installer inklusive Sidecar
-npm run verify                   # Gesamtablauf: Typecheck, Node-Tests, C#-Validierung
+npm run verify                   # Gesamtablauf: Typecheck, Node-Tests, C#-Validierung, Spec-Konsistenz
+npm run check:specs              # nur die Specs pruefen (Beleg, Grund, Statuszahl)
 npm run verify -- --full           # zusätzlich: Release-Build, Portable, Smoke, Deployment
 npm run measure:latency -- --live  # End-to-End-Latenz messen (T-502, braucht Aufnahmegerät)
 npm run docs:specs                # Stand der Specs in SPEC.md neu erzeugen

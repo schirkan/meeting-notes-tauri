@@ -25,7 +25,8 @@ const NPM = 'npm'
 const FAST = [
   { name: 'Typecheck', command: NPM, args: ['run', 'typecheck'] },
   { name: 'Node-Tests', command: NPM, args: ['run', 'test:unit'] },
-  { name: 'C#-Validierung', command: NPM, args: ['run', 'test:sidecar'] }
+  { name: 'C#-Validierung', command: NPM, args: ['run', 'test:sidecar'] },
+  { name: 'Spec-Konsistenz', command: NPM, args: ['run', 'check:specs'] }
 ]
 
 const FULL = [
