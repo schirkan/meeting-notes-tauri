@@ -407,7 +407,7 @@ mehr als 50 % von der Ziel-Bitrate ab, wird auf den Resampler umgeschaltet.
 
 **Konsequenzen:**
 - `WithLowLatency()` bleibt aussen vor: es schliesst `WithFormat()` und
-  `WithLoopbackCapture()` aus (Architekturentscheidung, siehe T-502).
+  `WithLoopbackCapture()` aus (Architekturentscheidung, siehe T-509).
 - `WithMmcssThreadPriority()` wird **nicht** gesetzt: der Capture-Thread
   schiebt die Frames blockierend in den Azure-PushStream; eine
   Audio-Scheduling-Prioritaet wuerde waehrend dieser Netzwerkwartezeit einen
@@ -415,6 +415,12 @@ mehr als 50 % von der Ziel-Bitrate ab, wird auf den Resampler umgeschaltet.
   MMCSS — die Aufnahme bleibt in der Scheduler-Klasse unveraendert.
 - `AudioResampler.cs` bleibt bewusst bestehen (Rueckfallpfad), die drei
   ungenutzten Capture-Klassen wurden geloescht.
+- `MediaFoundation` wird erst im Rueckfallweg gestartet
+  (`MediaFoundationApi.Startup()` unmittelbar vor dem Resampler). Ein blockierendes
+  `MFStartup` im Aufnahmepfad wuerde die App haengen; der Engine-Modus (Normalfall)
+  fasst MediaFoundation gar nicht an. In nicht-interaktiven Sitzungen blockiert
+  die MF-Transform-Erzeugung - Validierungen laufen deshalb mit einem Watchdog und
+  melden `SKIPPED` statt zu haengen (2026-11-17).
 
 Siehe [T-509](./specs/T-509-audio-capture-auf-wasapirecorderbuilder-umstellen.md).
 
@@ -439,7 +445,7 @@ Exit-Code 23 abgewiesen, weil dann nichts transkribiert wuerde.
 
 Siehe [T-511](./specs/T-511-transkriptions-quellen-auswaehlen.md).
 
-## AD-016 · Sidecar: Multi-Target net9/net10 mit RollForward, Single-File als Option (2026-11-17)
+## AD-017 · Sidecar: Multi-Target net9/net10 mit RollForward, Single-File als Option (2026-11-17)
 
 **Kontext:** Martin frage, ob das Sidecar fuer .NET 8 und .NET 10 gebaut werden
 koenne und ob es sich zu einer einzigen Datei mergen lasse.
@@ -475,6 +481,77 @@ verwenden den neuen Pfad. Kein eigener Hash-/Staging-Publisher erforderlich.
 Release: `incremental = true`, `debug = false`, `strip = "debuginfo"`.
 Debug-Informationen waren bereits standardmaessig deaktiviert; diese explizite
 Einstellung ist keine zusaetzliche gemessene Beschleunigung.
+
+## AD-018 · Protokoll-Handshake mit Versionsabgleich (2026-11-17)
+
+**Kontext:** Das JSON-Lines-Protokoll zwischen App und Sidecar (AD-003,
+AD-008) hatte keinen Versionsabgleich. Ein Sidecar, der aelter ist als die App,
+schickt unerkannte Events, die die App stillschweigend verwirft - im
+unguenstigsten Fall werden sie falsch interpretiert. Der Spec T-201 verlangte
+einen Handshake, der nie umgesetzt worden war.
+
+**Entscheidung:** Der Sidecar sendet zu Beginn ein `handshake`-Event mit
+`protocol_version`, `sidecar_version` und `capabilities`. Der Rust-Main prueft
+die Version (`src-tauri/src/protocol.rs`), quittiert mit `handshake-ack` und
+beendet den Sidecar bei Inkompatibilitaet (`PROTOCOL_VERSION_MISMATCH`) oder
+wenn 15 s kein Handshake kommt (`HANDSHAKE_TIMEOUT`).
+
+Die Protokollversion steht in beiden Seiten: `ProtocolVersion.Current` im
+Sidecar, `MIN_PROTOCOL_VERSION` im Rust-Main. Das Zeitfenster ist bewusst
+grosszuegig gewaehlt: gemessen sind 164-221 ms bis zum Handshake, ein kalter
+Start mit Virenscan kann laenger dauern - ein zu knappes Fenster wuerde einen
+korrekt arbeitenden Sidecar grundlos beenden und die Aufnahme abwuergen.
+
+Zusaetzlich werden Malformed-Lines rate-limited geloggt: die erste immer,
+danach nur jede 1000.
+
+**Konsequenzen:**
+- Der Sidecar laeuft nicht mehr mit einer inkompatiblen App. Das ist der
+  Zweck; der Fehlerfall wird aber als Ereignis gemeldet, nicht als Absturz.
+- Die Quittung `handshake-ack` geht ueber stdin. Der Sidecar wartet nicht
+  darauf - die Quittung ist Teil des Protokolls, keine Sperre.
+- Ein automatischer Reconnect bei Sidecar-Crash bleibt bewusst aus: er
+  erzeugt eine neue Azure-Sitzung und damit neue Sprecher-IDs (AD-013). Statt
+  dessen meldet die App den Crash (persistenter Fehler-Toast).
+
+Siehe [T-201](./specs/T-201-json-lines-protokoll-tauri-zu-sidecar.md).
+
+## AD-019 · Latenzmessung als Stufenmessung im Sidecar (2026-11-17)
+
+**Kontext:** Die Abnahme verlangt eine End-to-End-Latenz (< 5 s). Bisher gab es
+weder eine Messung noch einen Nachweis. Die Kette hat fuenf Uebergaenge, und
+nur die Gesamtzahl zu kennen sagt nicht, wo der Engpass liegt.
+
+**Entscheidung:** Die Kette wird an jedem Uebergang gemessen - additiv und ohne
+Eingriff in das Laufzeitverhalten:
+
+| Stufe | Feld | Ort |
+|---|---|---|
+| WASAPI-Puffer -> Callback | `captureLatencyMs` | Sidecar (NAudio) |
+| Callback -> Azure-PushStream | `sidecarToPushMs` | Sidecar (`PushFrame`) |
+| Azure-Roundtrip -> Sidecar-Event | `azureToEventMs` | Sidecar (`EmitTranscript`) |
+| Sidecar-Event -> Tauri-Main | `pipeToEventMs` | Rust (`latency::enrich`) |
+| Summe bis zum Tauri-Event | `totalMs` | Rust |
+
+Der Renderer-Paint ist von aussen nicht messbar; die Kette endet am
+Tauri-Event. Das ist eine dokumentierte Obergrenze, kein Messfehler.
+
+Messzeilen entstehen nur, wenn `MEETING_NOTES_LATENCY_LOG` gesetzt ist - im
+Normalbetrieb also ohne Zusatzkosten. `scripts/measure-latency-tauri.mjs`
+sammelt sie, wertet P50/P95/P99 (Nearest-Rank) aus und schreibt
+`context/latency-report.md` (gitignoriert, weil die Messung maschinenspezifisch
+ist).
+
+**Konsequenzen:**
+- Der Sidecar fuehrt Zeitstempel im Transkript-Payload; der TS-Contract
+  enthaelt das optionale `latency`-Objekt.
+- Jede Aenderung an der Aufnahme- oder Transkriptpipeline kann die Latenz
+  verschieben, ohne dass ein Test anschlaegt. Deshalb ist die Messung ein
+  eigenes Werkzeug und kein Testfall.
+- Der Aufnahmezeitpunkt muss im Renderer sichtbar bleiben, sonst entsteht die
+  Restzeit ohne Signal.
+
+Siehe [T-502](./specs/T-502-latency-messung.md).
 
 | # | Frage | Status |
 |---|---|---|
