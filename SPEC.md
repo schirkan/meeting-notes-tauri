@@ -49,6 +49,57 @@ deckungsgleich.
 | T-501 | Voller End-to-End-Test mit WebDriver + App-Start + `start_recording()… | kein Grund hinterlegt |
 | T-503 | `npm run lint` (sofern konfiguriert) ist grün — **offen**: kein Lint-… | kein Grund hinterlegt |
 
+### Nächste Schritte auf deinem Rechner (die 11 offenen Punkte)
+
+Alles hier ist auf dieser Maschine nicht ausführbar (0 Audioeingänge, 0
+Ausgänge, keine Azure-Credentials, keine interaktive Sitzung). Auf deinem
+Rechner sind es sechs Schritte:
+
+**1. Latenz messen (T-502, T-500)** — das Werkzeug liegt vor:
+
+```powershell
+npm run measure:latency -- --live
+```
+
+Die App startet selbst, du startest die Aufnahme im Fenster, das Skript
+sammelt bis zu 100 Messzeilen und schreibt `context/latency-report.md`
+(P50/P95/P99 je Stufe, Ziel P95 < 5 s). Ohne Messung läuft stattdessen
+`npm run measure:latency -- --selftest` — das prüft nur die Statistik.
+
+**2. Diarization mit zwei Sprechern (T-205)** — App starten, Konfiguration
+eintragen, Aufnahme starten, zwei Personen nacheinander sprechen lassen. Im
+Transkript müssen `Guest-1` und `Guest-2` getrennt auftauchen; die
+Session-ID steht in `SPEC.md` unter T-507 als Grundlage.
+
+**3. Loopback-Verhalten und Ausgabequalität (T-509)** — während einer
+Aufnahme etwas abspielen: Es dürfen **nur** dann Speaker-Events ankommen,
+wenn tatsächlich Audio aus dem Ausgabegerät läuft. Mic und Speaker
+getrennt prüfen (`user.transcription.mic` / `.speaker`).
+
+**4. Resampler-Stichprobe (T-203)** — in einer **interaktiven** Sitzung:
+
+```powershell
+npm run test:sidecar
+```
+
+Der Test läuft nur, wo MediaFoundation antwortet; hier steht `SKIPPED`.
+Auf deinem Rechner prüft er 48-kHz-Stereo → 16-kHz-Mono inklusive Länge,
+Pegel, Übersteuerung und Dropouts.
+
+**5. Deployment auf einem frischen Windows 11 (T-504, T-510)** — Ordner
+`dist/portable` kopieren, .NET 10 Runtime und WebView2 installieren, dann:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify-deployment.ps1 -PortableDir D:\Apps\MeetingNotes -LaunchApp
+```
+
+Das Skript prüft Windows-Build, WebView2, .NET-Runtime, alle SHA256-Summen,
+das Fehlen einer persönlichen Config, den Sidecar und die PE-Subsysteme.
+
+**6. Pause über Azure (T-507)** — Aufnahme starten, sprechen, pausieren,
+weiter sprechen, stoppen. Die Sprecher-IDs müssen **über die Pause hinweg**
+stabil bleiben (das ist der eigentliche Zweck der Pause-Semantik).
+
 ## 1. Ziel
 
 Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Speaker-Output erfasst, per Azure Speech transkribiert und Transkripte in einer React-UI anzeigt — bei deutlich kleinerer Bundle-Größe als die Electron-Variante.
