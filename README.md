@@ -111,8 +111,8 @@ gleichzusetzen. Die erste Kompilierung nach Profilwechsel bleibt teurer.
 
 ```powershell
 npm run build:sidecar  # .NET-Build nach src-tauri/target/sidecar-artifacts
-npm run publish:sidecar:net9    # Alternative: net9.0-Variante (laeuft auf .NET 9/10/11+)
-npm run publish:sidecar:single  # Alternative: Single-File (1 Datei statt 21, 7,61 MB)
+# Alternative TFM- und Layout-Varianten laufen ueber Umgebungsvariablen (siehe unten)
+# und wirken auf den kompletten Bundle-Pfad.
 
 ### Deployment auf einem fremden Rechner pruefen
 

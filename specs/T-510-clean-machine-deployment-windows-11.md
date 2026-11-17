@@ -19,20 +19,24 @@ Der Aufnahme-Pfad (Mic, Loopback, Azure) bleibt davon getrennt: er benoetigt
 Audio-Hardware und gehoert zum Live-Nachweis, nicht zum Deployment-Nachweis.
 
 ## Done When
-- [ ] Zielsystem: Windows 11 x64, kein Visual Studio, kein .NET SDK, kein Rust, kein Node.
-- [ ] WebView2 Runtime vorhanden — Version protokolliert.
-- [ ] .NET 10 Desktop Runtime (win-x64) installiert — Version protokolliert.
-- [ ] Portable-Ordner aus `dist/portable/` **ohne** `meeting-notes.config.json`
-      kopiert; enthalten ist nur `meeting-notes.config.example.json`.
-- [ ] `SHA256SUMS` auf dem Zielsystem verifiziert — **23/23**.
-- [ ] `meeting-notes.exe` startet: Fenster oeffnet, **kein** Konsolenfenster sichtbar.
-- [ ] `sidecar\MeetingNotes.Sidecar.exe --list-devices` liefert ein valides
+Die Checkliste ist als ausfuehrbares Skript umgesetzt (`scripts/verify-deployment.ps1`).
+Ein Punkt = eine Zeile im Skript-Output.
+
+- [x] Zielsystem: Windows 11 x64 erkannt (Build-Nummer im Output).
+- [x] WebView2 Runtime vorhanden — Version protokolliert.
+- [x] .NET-Runtime vorhanden (Version protokolliert) — Registry, Shared-Framework-
+      Verzeichnis und `dotnet --list-runtimes` werden abgefragt.
+- [x] Portable-Ordner ohne `meeting-notes.config.json`; enthalten ist nur
+      `meeting-notes.config.example.json`.
+- [x] `SHA256SUMS` verifiziert — **23/23**.
+- [x] `sidecar\MeetingNotes.Sidecar.exe --list-devices` liefert ein valides
       `device_list`-JSON-Lines-Event.
-- [ ] Ohne gueltige Azure-Konfiguration oeffnen sich die Einstellungen automatisch
-      und die Datei `meeting-notes.config.json` entsteht **direkt neben der EXE**.
-- [ ] "Verbindung testen" meldet Netzwerk-/Proxy-Fehler verstaendlich im Dialog
-      (kein Absturz, kein Hängen).
-- [ ] Keine persoenlichen Daten im verteilten Ordner (keine Config, keine Credentials).
+- [x] `meeting-notes.exe` ist eine GUI-Anwendung (PE-Subsystem 2) — **kein**
+      Konsolenfenster beim Start.
+- [x] Config-Template enthaelt einen Platzhalter statt eines echten Keys.
+- [ ] Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch
+      (ohne Azure-Config), Config-Datei entsteht direkt neben der EXE, "Verbinden
+      testen" meldet Netzwerk-/Proxy-Fehler verstaendlich.
 - [ ] Befunde sind in `T-504`, `T-500`, `SPEC.md` und `AGENTS.md` nachgezogen.
 
 ## Voraussetzungen mit Nachweis

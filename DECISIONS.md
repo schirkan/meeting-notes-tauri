@@ -448,7 +448,7 @@ koenne und ob es sich zu einer einzigen Datei mergen lasse.
 mit `RollForward=Major` gefuehrt. .NET 8 ist mit NAudio 3.3.0 **nicht**
 erreichbar (NU1202); der Downgrade auf NAudio 2.2.1 wuerde T-509 zuruecknehmen
 und ist deshalb bewusst unterblieben. Single-File wird als **Option**
-(`publish:sidecar:single`) vorgehalten, nicht als Standard: das ausgelieferte
+(Umgebungsvariable `MEETING_NOTES_SIDECAR_SINGLE_FILE` im `build.rs`) vorgehalten,
 Artefakt bleibt der 21-Dateien-Build, damit der Bundle-Pfad
 (Tauri-Resource + `dist-portable.mjs` + Smoke-Test) unberuehrt bleibt.
 

@@ -71,8 +71,8 @@ gefunden.
 - `src-tauri/build.rs` und `npm run publish:sidecar`: beim Publish muss das TFM
   explizit mit `-f` benannt werden, sonst bricht der Publish bei Multi-Target
   mit NETSDK1047 ab. Standard ist `net10.0-windows`.
-- Neue Skripte: `npm run publish:sidecar:net9` (net9.0-Variante) und
-  `npm run publish:sidecar:single` (Single-File, 1 Datei).
+- **Keine eigenen Publish-Skripte:** Beide Varianten laufen ueber Umgebungsvariablen
+  im `build.rs` und damit ueber den kompletten Bundle-Pfad (siehe unten).
 
 **Der Standard-Build bleibt unverändert:** net10.0-windows, framework-dependent,
 21 Dateien im `sidecar/`-Ordner. Single-File und net9 sind **Optionen**, kein
@@ -111,8 +111,8 @@ Gemessen (2026-11-17):
 Der zweite Schalter `MEETING_NOTES_SIDECAR_TFM` (zulaessig: `net9.0-windows` und
 `net10.0-windows`, Standard `net10.0-windows`) waehlt das Ziel-Framework des
 Bundle-Builds. Damit ist auch die net9.0-Variante end-to-end erreichbar. Vorher war
-sie nur ueber `npm run publish:sidecar:net9` erreichbar und kam deshalb **nie im
-Artefakt** an — eine Inkonsistenz, die der Schalter behebt.
+sie nur ueber ein eigenes Publish-Skript erreichbar und kam deshalb **nie im
+Artefakt** an — eine Inkonsistenz, die die Umgebungsvariable behebt.
 
 Gemessen: net9.0 durch den Bundle-Pfad ergibt 21 Dateien mit `tfm=net9.0`,
 `rollForward=Major`, Portable 23,09 MB / 24 Dateien / 23 Summen, Smoke-Test bestanden.
@@ -136,8 +136,8 @@ Bundle-Pfad vollständig erreichbar und verifiziert.
 ## Log
 - 2026-11-17: Beide Fragen empirisch beantwortet. Multi-Target
   `net9.0-windows;net10.0-windows` mit `RollForward=Major` eingefuehrt;
-  `-f` beim Publish ergaenzt; Skripte `publish:sidecar:net9` und
-  `publish:sidecar:single` ergaenzt. .NET 8 als nicht moeglich dokumentiert
+  `-f` beim Publish ergaenzt; beide Varianten ueber Umgebungsvariablen im
+  `build.rs` (`MEETING_NOTES_SIDECAR_TFM`, `MEETING_NOTES_SIDECAR_SINGLE_FILE`).
   (NU1202 durch NAudio 3.3.0; NAudio 2.x ohne `WasapiRecorderBuilder`).
   Single-File als Option: 1 Datei / 7,61 MB, Startzeit ohne Nachteil, native
   Speech-DLLs nachweislich korrekt geladen.
