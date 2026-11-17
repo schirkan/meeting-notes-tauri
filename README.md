@@ -223,6 +223,9 @@ MIT — siehe [LICENSE](./LICENSE).
 
 ## Bekannte Einschränkungen
 - Der native Azure-Speech-SDK funktioniert auch in restriktiven Netzwerkumgebungen mit erzwungenem HTTP-Proxy: am 2026-11-12 im Firmennetz erfolgreich validiert. Siehe `specs/T-505-proxy-aware-azure-transport.md`.
+- **Nach einem Absturz des Sidecars gibt es keinen automatischen Neustart.** Die Aufnahme endet, die App meldet den Absturz mit Exit-Code (persistenter Fehler-Toast) und die Aufnahme muss neu gestartet werden. Grund: ein Neustart des Sidecars erzeugt eine neue Azure-Sitzung, damit brechen die Sprecher-IDs einer laufenden Aufnahme. Siehe `specs/T-201-json-lines-protokoll-tauri-zu-sidecar.md`.
+- **Der Resampler-Rückfallweg benötigt MediaFoundation** und steht damit in nicht-interaktiven Windows-Sitzungen (Dienst, some CI-Runner) nicht zur Verfügung. Betroffen ist nur der Fall, dass die WASAPI-Engine nicht selbst auf 16-Bit-PCM konvertieren kann (z. B. Float-Mikrofon). Im normalen Desktop-Betrieb tritt das nicht auf; der Engine-Modus kommt ohne MediaFoundation aus.
+- Die EXE muss über die Tauri-CLI gebaut werden (`npm run tauri -- build`), nicht über ein reines `cargo build --release` - sonst fehlen die Renderer-Assets und die App startet ohne Oberfläche. Der Smoke-Test weist solche Artefakte zurück.
 - Mobile-Build (iOS/Android) ist nicht im Scope.
 
 ## Querverweise
