@@ -88,7 +88,14 @@ npm run dev            # Nur Vite/Renderer, kein Tauri-Backend
 npm run typecheck      # TypeScript-Prüfung
 npm run build          # TypeScript + Renderer-Build
 npm run tauri -- build # MSI/NSIS-Installer inklusive Sidecar
+npm run measure:latency -- --live    # End-to-End-Latenz messen (T-502, braucht Aufnahmegerät)
+npm run docs:specs                  # Stand der Specs in SPEC.md neu erzeugen
 ```
+>
+> Die Latenzmessung startet die App selbst und sammelt bis zu 100 Messzeilen;
+> der Report landet in `context/latency-report.md` (P50/P95/P99 je Stufe).
+> `--selftest` prüft Statistik und Report-Erzeugung ohne Hardware - siehe
+> [T-502](./specs/T-502-latency-messung.md).
 
 > Das C#-Sidecar wird seit `src-tauri/build.rs` automatisch per
 > `dotnet publish` erzeugt, bevor Cargo kompiliert. Der frühere
