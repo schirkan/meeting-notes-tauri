@@ -25,6 +25,10 @@ struct AppStateInner {
     paused: bool,
     started_at: Option<String>,
     debug_log: Vec<DebugLogEntry>,
+    /// T-201: Zahl der fehlerhaften JSON-Zeilen aus dem Sidecar.
+    malformed_lines: u64,
+    /// T-201: Protokollversion aus dem Handshake des Sidecars.
+    handshake_version: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -55,6 +59,34 @@ pub struct DebugLogEntry {
 }
 
 impl AppState {
+    /// T-201: Rate-Limit fuer Malformed-Lines.
+    ///
+    /// Die erste fehlerhafte Zeile wird immer geloggt, danach nur jede
+    /// 1000. (Spec: max. 1/1000). Gibt die Gesamtzahl zurueck, wenn
+    /// geloggt werden soll, sonst None.
+    pub fn note_malformed_line(&self) -> Option<u64> {
+        let mut inner = self.inner.lock().expect("AppState mutex poisoned");
+        inner.malformed_lines += 1;
+        let count = inner.malformed_lines;
+        if count == 1 || count % 1000 == 0 {
+            Some(count)
+        } else {
+            None
+        }
+    }
+
+    /// T-201: Protokollversion des Sidecars aus dem Handshake merken.
+    pub fn mark_handshake(&self, version: &str) {
+        let mut inner = self.inner.lock().expect("AppState mutex poisoned");
+        inner.handshake_version = Some(version.to_string());
+    }
+
+    /// T-201: Gemeldete Protokollversion, falls ein Handshake kam.
+    pub fn handshake_version(&self) -> Option<String> {
+        let inner = self.inner.lock().expect("AppState mutex poisoned");
+        inner.handshake_version.clone()
+    }
+
     pub fn snapshot_status(&self) -> TranscriptStatus {
         let inner = self.inner.lock().expect("AppState mutex poisoned");
         TranscriptStatus {

@@ -162,6 +162,45 @@ if (existsSync(SIDECAR_EXE)) {
   fail('src-tauri/target/sidecar-publish/MeetingNotes.Sidecar.exe', 'missing — run `npm run tauri build`')
 }
 
+// --- 3b. Protokoll-Handshake (T-201) --------------------------------------
+
+header('3b. Protokoll-Handshake')
+
+// Der Sidecar sendet zu Beginn ein handshake-Event. Ohne dieses Event
+// beendet die App den Sidecar nach 5 s (Timeout) - der Smoke-Test prueft
+// deshalb end-to-end, dass die Zeile wirklich kommt.
+if (existsSync(SIDECAR_EXE)) {
+  const handshake = spawnSync(SIDECAR_EXE, [], {
+    encoding: 'utf8',
+    timeout: 10000,
+    windowsHide: true
+  })
+  const firstLine = (handshake.stdout || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .find(Boolean)
+
+  if (!firstLine) {
+    fail('sidecar handshake', 'no output on stdout')
+  } else {
+    try {
+      const parsed = JSON.parse(firstLine)
+      const payload = parsed?.payload ?? {}
+      if (parsed?.type !== 'handshake') {
+        fail('sidecar handshake', `first event is "${parsed?.type}", expected "handshake"`)
+      } else if (payload?.protocol_version !== '1.0.0') {
+        fail('sidecar handshake', `unexpected protocol_version "${payload?.protocol_version}"`)
+      } else {
+        pass('sidecar handshake', `protocol_version=${payload.protocol_version}, capabilities=${(payload.capabilities || []).length}`)
+      }
+    } catch (e) {
+      fail('sidecar handshake', `first line is not JSON: ${e.message}`)
+    }
+  }
+} else {
+  fail('sidecar handshake', 'sidecar executable missing')
+}
+
 // --- 4. Portable-Distribution + SHA256SUMS -------------------------------
 
 header('4. Portable-Distribution')

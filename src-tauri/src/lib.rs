@@ -9,6 +9,7 @@ mod commands;
 mod connectivity;
 mod events;
 mod latency;
+mod protocol;
 mod settings;
 mod sidecar;
 mod state;

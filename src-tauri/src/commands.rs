@@ -98,9 +98,11 @@ pub async fn start_recording(
     };
 
     let handle = sidecar::start(&app, options).await.map_err(|e| e.to_string())?;
-    spawn_event_forwarder(app.clone(), handle.events_rx);
 
-    // Cache the live handle so stop_recording can reach it.
+    // Cache the live handle so stop_recording can reach it. Das passiert vor
+    // dem Start des Forwarders: der Handshake (T-201) wird ueber den Cache
+    // quittiert, und der Forwarder laeuft bereits, bevor die erste Zeile
+    // des Sidecars eintrifft.
     let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
     {
         let mut guard = cache.lock().await;
@@ -113,6 +115,12 @@ pub async fn start_recording(
             events_rx: tokio::sync::mpsc::channel(1).1,
         });
     }
+
+    spawn_event_forwarder(app.clone(), handle.events_rx);
+
+    // T-201: Ohne gueltiges Handshake wird der Sidecar beendet - ein
+    // Sidecar, der nicht antwortet, wuerde sonst stumm bleiben.
+    spawn_handshake_timeout(app.clone());
 
     let status = state.mark_started();
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status geändert: running.");
@@ -682,6 +690,8 @@ fn spawn_event_forwarder(
                     let text = String::from_utf8_lossy(&bytes);
                     for line in text.lines() {
                         if line.is_empty() { continue; }
+                        // T-201: Das Handshake wird separat behandelt.
+                        if handle_handshake_line(&app_handle, line).await { continue; }
                         forward_sidecar_line(&app_handle, line);
                     }
                 }
@@ -726,17 +736,151 @@ fn spawn_event_forwarder(
     });
 }
 
+/// T-201: Wertet eine Sidecar-Zeile auf ein Handshake-Event aus.
+///
+/// Gibt true zurueck, wenn die Zeile ein Handshake war - sie wird dann
+/// nicht normal weitergeleitet.
+async fn handle_handshake_line(app: &AppHandle, line: &str) -> bool {
+    let parsed: serde_json::Value = match serde_json::from_str(line) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let ty = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
+    if ty != "handshake" {
+        return false;
+    }
+    let payload = parsed.get("payload").cloned().unwrap_or(serde_json::Value::Null);
+    let version = payload
+        .get("protocol_version")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let compatible =
+        crate::protocol::version_at_least(&version, crate::protocol::MIN_PROTOCOL_VERSION);
+
+    {
+        let state = app.state::<AppState>();
+        state.mark_handshake(&version);
+        let entry = state.push_debug(
+            DebugLogEntrySource::Sidecar,
+            if compatible { DebugLogEntryLevel::Info } else { DebugLogEntryLevel::Error },
+            format!("handshake: protocol_version={version} (kompatibel={compatible})"),
+        );
+        events::emit_debug(app, &entry);
+    }
+
+    let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
+    if compatible {
+        // Quittung an den Sidecar.
+        let handle = {
+            cache.lock().await.as_ref().map(|h| SidecarHandle {
+                child: Arc::clone(&h.child),
+                events_rx: tokio::sync::mpsc::channel(1).1,
+            })
+        };
+        if let Some(handle) = handle {
+            let _ = sidecar::send_command(&handle, r#"{"type":"handshake-ack"}"#).await;
+        }
+    } else {
+        // Inkompatible Version: den Sidecar beenden, statt ihn mit
+        // unverstaendlichen Events weiterlaufen zu lassen.
+        let handle = { cache.lock().await.take() };
+        if let Some(handle) = handle {
+            let _ = sidecar::stop(handle).await;
+        }
+        let entry = app.state::<AppState>().push_debug(
+            DebugLogEntrySource::Sidecar,
+            DebugLogEntryLevel::Error,
+            format!(
+                "handshake abgelehnt: Protokollversion {version} wird nicht unterstuetzt (Minimum {}).",
+                crate::protocol::MIN_PROTOCOL_VERSION
+            ),
+        );
+        events::emit_debug(app, &entry);
+        events::emit_error(
+            app,
+            &serde_json::json!({
+                "code": "PROTOCOL_VERSION_MISMATCH",
+                "message": format!(
+                    "Der Sidecar meldet Protokollversion {version}, erwartet wird mindestens {}.",
+                    crate::protocol::MIN_PROTOCOL_VERSION
+                ),
+            }),
+        );
+    }
+    true
+}
+
+/// T-201: Beendet den Sidecar, wenn er innerhalb des Zeitfensters kein
+/// Handshake sendet.
+fn spawn_handshake_timeout(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(
+            crate::protocol::HANDSHAKE_TIMEOUT_SECS,
+        ))
+        .await;
+        let (has_handshake, running) = {
+            let state = app.state::<AppState>();
+            (
+                state.handshake_version().is_some(),
+                state.snapshot_status().running,
+            )
+        };
+        if has_handshake || !running {
+            // Handshake kam, oder die Aufnahme wurde inzwischen gestoppt.
+            return;
+        }
+        let entry = app.state::<AppState>().push_debug(
+            DebugLogEntrySource::Sidecar,
+            DebugLogEntryLevel::Error,
+            format!(
+                "Kein Handshake vom Sidecar innerhalb von {} s - Sidecar wird beendet.",
+                crate::protocol::HANDSHAKE_TIMEOUT_SECS
+            ),
+        );
+        events::emit_debug(&app, &entry);
+        events::emit_error(
+            &app,
+            &serde_json::json!({
+                "code": "HANDSHAKE_TIMEOUT",
+                "message": format!(
+                    "Der Sidecar hat innerhalb von {} s nicht auf das Handshake geantwortet.",
+                    crate::protocol::HANDSHAKE_TIMEOUT_SECS
+                ),
+            }),
+        );
+        let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
+        let handle = { cache.lock().await.take() };
+        if let Some(handle) = handle {
+            let _ = sidecar::stop(handle).await;
+        }
+    });
+}
+
 fn forward_sidecar_line(app: &AppHandle, line: &str) {
     let parsed: serde_json::Value = match serde_json::from_str(line) {
         Ok(v) => v,
         Err(_) => {
-            // Surface raw non-JSON output as debug so we don't lose it.
-            let entry = app.state::<AppState>().push_debug(
-                DebugLogEntrySource::Sidecar,
-                DebugLogEntryLevel::Info,
-                format!("sidecar raw: {line}"),
-            );
-            events::emit_debug(app, &entry);
+            // T-201: Rate-Limit. Die erste fehlerhafte Zeile wird immer
+            // geloggt, danach nur jede 1000. - sonst flutet ein kaputter
+            // Sidecar das Debug-Log.
+            let state = app.state::<AppState>();
+            if let Some(count) = state.note_malformed_line() {
+                let entry = state.push_debug(
+                    DebugLogEntrySource::Sidecar,
+                    DebugLogEntryLevel::Info,
+                    format!("sidecar raw: {line}"),
+                );
+                events::emit_debug(app, &entry);
+                if count > 1 {
+                    let entry = state.push_debug(
+                        DebugLogEntrySource::Sidecar,
+                        DebugLogEntryLevel::Warn,
+                        format!("{count} fehlerhafte Sidecar-Zeilen (Rate-Limit 1/1000)."),
+                    );
+                    events::emit_debug(app, &entry);
+                }
+            }
             return;
         }
     };

@@ -1,7 +1,7 @@
 # T-201: JSON-Lines-Protokoll zwischen Tauri-Main und C#-Sidecar (via stdin/stdout)
 
 ## Kontext
-Status: teils umgesetzt (3 Punkte offen)
+Status: teils umgesetzt (1 Punkt offen)
 Priorität: high
 Abhängigkeiten: T-200
 
@@ -13,12 +13,12 @@ Das bestehende Binär-Frame-Protokoll (36-B-Header + PCM-Payload + CRC) aus `../
 - [x] **Sidecar → App (`stdout`):** Events vom Typ `status` (`started`/`stopped`/`error`), `transcript` (`partial`/`final`), `debug` (Log-Zeile), `speaker-mapping`, `handshake` (initial). Beleg: sidecar/Logger.cs und Rust-Seite in commands.rs.
 - [x] **App → Sidecar (`stdin`):** Commands vom Typ `start`, `stop`, `update-settings`, `shutdown`, sowie `handshake-ack` (initial). Beleg: sidecar/Program.cs, Rust-Seite commands.rs.
 - [x] **Sidecar-intern (`stderr`):** Diagnose-Logs, getrennt von stdout (Tauri erfasst stderr separat). Beleg: Logger schreibt Diagnose ueber stderr.
-- [ ] Erstes Handshake-Objekt (`stdout`) enthält `protocol_version`, `sidecar_version`, `capabilities`. Tauri-Main validiert `protocol_version >= 1.0.0` und antwortet mit `handshake-ack` auf `stdin`. Ohne gültiges Handshake wird der Sidecar beendet. - **offen**: Ein erstes Handshake-Objekt existiert nicht - das Protokoll hat keinen Versionsabgleich.
+- [x] Erstes Handshake-Objekt (`stdout`) enthält `protocol_version`, `sidecar_version`, `capabilities`. Tauri-Main validiert `protocol_version >= 1.0.0` und antwortet mit `handshake-ack` auf `stdin`. Ohne gültiges Handshake wird der Sidecar beendet. Beleg: umgesetzt - Sidecar sendet das Handshake als erstes Event (ProtocolVersion.Current = 1.0.0), der Rust-Main validiert es, quittiert und beendet den Sidecar bei Inkompatibilität (PROTOCOL_VERSION_MISMATCH) oder nach 5 s ohne Handshake (HANDSHAKE_TIMEOUT). End-to-end belegt im Smoke-Test: `sidecar handshake: protocol_version=1.0.0, capabilities=5`; 5 Rust-Tests für den Versionsvergleich.
 - [x] **C#-Seite:** nutzt `System.Text.Json` + `Console.Out` / `Console.In` (async mit `StreamWriter`/`StreamReader` über `Console.OpenStandardOutput()` / `Console.OpenStandardInput()`). **Keine** `NamedPipeServerStream`-Aufrufe mehr. Beleg: System.Text.Json, Console.Out mit Flush (Logger.cs) und Console.In.ReadLineAsync (Program.cs). Abweichung vom Wortlaut: nicht ueber Console.OpenStandardOutput/Input, sondern direkt ueber Console.Out/Console.In.
 - [x] **Rust-Seite:** nutzt `tauri-plugin-shell` (`Command::new_sidecar`) + `serde_json` zum Parsen der stdout-Zeilen + `CommandChild::write()` für stdin. Beleg: tauri-plugin-shell und serde_json in der Rust-Seite.
 - [x] **Newline-Flushing:** C#-Sidecar flusht stdout nach jeder JSON-Zeile (verhindert Stdio-Buffering). Tauri liest Zeile für Zeile. Beleg: Console.Out.Flush() nach jeder Zeile.
-- [ ] **Reconnects:** Tauri startet den Sidecar bei Crash automatisch neu (max. 3 Versuche, siehe `T-301`); C#-Sidecar führt nach jedem Start ein neues Handshake durch. - **offen**: Ein automatischer Neustart ist nicht implementiert - der Crash wird als Event gemeldet (sidecar:crashed).
-- [ ] Fehlertoleranz: JSON-Parser ignoriert Malformed-Lines und loggt sie im Debug-Stream (Rate-limited, max. 1/1000). - **offen**: Malformed-Lines werden im Debug-Stream geloggt, aber ohne Rate-Limit (max 1/1000).
+- [ ] **Reconnects:** Tauri startet den Sidecar bei Crash automatisch neu (max. 3 Versuche, siehe `T-301`); C#-Sidecar führt nach jedem Start ein neues Handshake durch. - **offen**: bewusst nicht umgesetzt - ein Neustart des Sidecars erzeugt eine **neue Azure-Sitzung**, damit brechen die Sprecher-IDs (T-507). Ein automatischer Reconnect würde die Sprecherzuordnung einer laufenden Aufnahme still zerstören. Stattdessen wird der Crash klar gemeldet (T-300: persistenter Fehler-Toast mit Exit-Code) und die Aufnahme neu gestartet.
+- [x] Fehlertoleranz: JSON-Parser ignoriert Malformed-Lines und loggt sie im Debug-Stream (Rate-limited, max. 1/1000). Beleg: umgesetzt - der Rust-Main zählt fehlerhafte Zeilen (`AppState::note_malformed_line`); die erste wird immer geloggt, danach nur jede 1000.
 
 ## Approach
 

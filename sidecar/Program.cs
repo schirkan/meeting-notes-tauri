@@ -48,6 +48,16 @@ if (argsMap.ContainsKey("--list-devices"))
     return 0;
 }
 
+// T-201: Handshake als erstes Event im Aufnahmemodus. Der Tauri-Main
+// prueft die Protokollversion, quittiert mit handshake-ack und beendet den
+// Sidecar, wenn die Version nicht kompatibel ist.
+Logger.Event("handshake", new
+{
+    protocol_version = ProtocolVersion.Current,
+    sidecar_version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0",
+    capabilities = new[] { "transcription", "diarization", "pause", "resume", "markdown_export" }
+});
+
 DiarizationSettings diarization;
 try
 {

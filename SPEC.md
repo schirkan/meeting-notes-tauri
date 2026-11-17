@@ -3,7 +3,7 @@
 Stand: 17.11.2026
 Status: Implementierungsstand fortgeschrieben; Corporate-Netz-/Proxy-Akzeptanz am 2026-11-12 erfolgreich. Offen bleiben Latenz- und Clean-Machine-Akzeptanz.
 
-Lokaler Stand: Portable-Build 23.12 MB (24 Dateien, 23 geprüfte Hashes; Rebuild nach T-502 vom 2026-11-17, README nennt für die früheren Builds 23,09 MB nach T-509, 23,02 MB für den Console-Design-Stand und 23,10 MB nach T-511 — vier verifizierte Messungen derselben Quelle) mit der EXE `meeting-notes.exe`, dem gemeinsamen Config-Template, der unabhängigen Mic-/Speaker-Diarization und der auswählbaren Transkriptions-Quelle (`user.transcription`, Mic/Speaker/beides); Build-Smoke inklusive Sidecar-Geräteabfrage erfolgreich. Dafür sind TypeScript, 74 Node-Tests, 26 Rust-Tests und 508 C#-Assertions erfolgreich; die Node-/UI-Tests laufen im CLI-Browserlauf grün. Nicht jede ursprüngliche Audio-/Protokoll-Anforderung ist als abgenommen bestätigt; Einzelstatus siehe [Specs](./specs/).
+Lokaler Stand: Portable-Build 23.19 MB (24 Dateien, 23 geprüfte Hashes; Rebuild nach T-201 vom 2026-11-17, README nennt für die früheren Builds 23,09 MB nach T-509, 23,02 MB für den Console-Design-Stand, 23,10 MB nach T-511 und 23,12 MB nach T-502 — fünf verifizierte Messungen derselben Quelle) mit der EXE `meeting-notes.exe`, dem gemeinsamen Config-Template, der unabhängigen Mic-/Speaker-Diarization und der auswählbaren Transkriptions-Quelle (`user.transcription`, Mic/Speaker/beides); Build-Smoke inklusive Sidecar-Geräteabfrage erfolgreich. Dafür sind TypeScript, 75 Node-Tests, 31 Rust-Tests und 508 C#-Assertions erfolgreich; die Node-/UI-Tests laufen im CLI-Browserlauf grün. Nicht jede ursprüngliche Audio-/Protokoll-Anforderung ist als abgenommen bestätigt; Einzelstatus siehe [Specs](./specs/).
 
 Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1.md` (Electron-Projekt, unveränderte Referenz). Architekturziel: Tauri 2 + React + C#-Sidecar (mit Azure Speech SDK in NuGet-Form). Die Anwendung selbst heißt *Meeting Notes*; „Tauri" ist die Container-Technik, nicht Teil des Produktnamens.
 
@@ -11,37 +11,43 @@ Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1
 
 ## Stand der Specs (Abgleich 2026-11-17)
 
-Die Checkboxen wurden gegen den **Code** geprueft, nicht gegen den Spec-Status:
-jeder abgehakte Punkt traegt den Beleg im Klartext (`Beleg: ...`), jeder offene
-Punkt nennt den konkreten Grund (`- **offen**: ...`). Ergebnis: 17 Specs als
-`umgesetzt` bzw. `teils umgesetzt` markiert, **23 offene Punkte in 14 Specs**.
-Vorher waren ueber 70 Checkboxen offen, obwohl die Funktion ueberwiegend fertig
-und verifiziert war - die Specs sind jetzt mit dem Stand der Implementierung
+Die Checkboxen wurden gegen den **Code** geprüft, nicht gegen den Spec-Status:
+jeder abgehakte Punkt trägt den Beleg im Klartext (`Beleg: …`), jeder offene
+Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **37 Specs** als
+`umgesetzt` bzw. `teils umgesetzt` markiert, **20 offene Punkte in 13 Specs**.
+Vorher waren über 70 Checkboxen offen, obwohl die Funktion überwiegend fertig
+und verifiziert war – die Specs sind jetzt mit dem Stand der Implementierung
 deckungsgleich.
 
 ### Offen und braucht deinen Rechner (11 Punkte)
 
 | Spec | Punkt |
 |---|---|
-| T-205 | Diarization mit mindestens zwei Sprechern je Quelle (Live-Azure-Test) |
-| T-500 | Latenz-Messung, Live-Aufnahme mit echten Zugangsdaten, Clean-Machine-Build |
-| T-502 | Latenz-Report und P95 < 5 s (Werkzeug liegt vor, die Live-Messung fehlt) |
-| T-504 | Portable auf einem frischen Windows-11-System |
-| T-509 | Loopback-Verhalten und Latenz auf echter Hardware |
-| T-510 | Deployment-Pruefung auf dem Zielsystem |
+| T-205 | Diarization funktioniert für mindestens 2 Sprecher je aktivierter Quelle (manueller Live-Azure… |
+| T-500 | Latency-Messung dokumentiert < 5 s End-to-End (T-502) — **offen**: erfordert Live-Azure-Creden… |
+| T-500 | Erfolgreiche Aufnahme und End-to-End-Latenz (< 5 s) mit echten Zugangsdaten — weiterhin offen… |
+| T-500 | Aktueller Portable-Build auf sauberem Windows-11-Zielsystem geprüft. |
+| T-502 | Report `context/latency-report.md` mit P50/P95/P99 über 100 Audio-Chunks - **offen**: |
+| T-502 | Ziel: P95 < 5 s End-to-End |
+| T-504 | Portable Build auf einem **frischen** Windows-11-System mit .NET 10 Runtime und WebView2 valid… |
+| T-509 | Das Loopback-Verhalten ist unveraendert: Events nur waehrend tatsaechlicher |
+| T-509 | Latenz und Ausgabequalitaet sind auf echter Hardware gegen die |
+| T-510 | Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch |
+| T-510 | Befunde sind in `T-504`, `T-500`, `SPEC.md` und `AGENTS.md` nachgezogen. |
 
-### Offen als bewusste Entscheidung (12 Punkte)
+### Offen als bewusste Entscheidung (9 Punkte)
 
 | Spec | Punkt | Warum offen |
 |---|---|---|
-| T-101 | MSI/NSIS-Installer, zwei Stub-Funktionen | Portable ist der Lieferweg; die Stubs sind durch die echte Implementierung ersetzt |
-| T-102 | Contract-Versionsabgleich im Handshake | Es gibt kein Handshake-Objekt - das Protokoll startet ohne Versionsabgleich |
-| T-201 | Handshake-Objekt, Reconnect bei Crash, Rate-Limit fuer Malformed-Lines | Nicht implementiert: der Crash wird als Ereignis gemeldet, Malformed-Lines werden geloggt |
-| T-203 | Stichprobentest 48-kHz-Stereo zu 16-kHz-Mono | Test ist implementiert, läuft aber nur, wo MediaFoundation antwortet - in nicht-interaktiven Sitzungen wird er übersprungen |
-| T-400 | Visuelles Verhalten identisch zur Electron-Variante | Bewusst nicht 1:1 - die Darstellung folgt dem Console-Design (T-402) |
-| T-401 | Mock-Implementierung fuer Unit-Tests | Die Unit-Tests laufen gegen die echte App |
-| T-501 | Voller End-to-End-Test mit WebDriver | WebDriver-Setup fuer Tauri 2 ist aufwendig |
-| T-503 | `npm run lint` | Kein Lint-Setup im Projekt |
+| T-101 | `npm run tauri build` produziert eine MSI- oder NSIS-Installer-Datei. | Installer (MSI/NSIS) wurden bewusst nicht gebaut; der Lieferweg ist die Portable-Distribution (siehe README). |
+| T-101 | Eine Stub-Rust-Funktion `start_recording()` ist über `tauri::command`… | Durch die echte Aufnahme-Implementierung ersetzt - bewusst kein Stub mehr. |
+| T-101 | Eine Rust-Funktion `spawn_stub_sidecar()` startet einen Dummy-Prozess… | Durch die echte Sidecar-Anbindung ersetzt - bewusst kein Stub mehr. |
+| T-201 | **Reconnects:** Tauri startet den Sidecar bei Crash automatisch neu (… | bewusst nicht umgesetzt - ein Neustart des Sidecars erzeugt eine **neue Azure-Sitzung**, damit brechen die Sprecher-IDs (T-507).… |
+| T-203 | Smoke-Test: 48-kHz-Stereo-Input führt zu korrektem 16-kHz-Mono-Output… | Der Stichprobentest ist implementiert (`ResamplingValidation`: 48-kHz-Stereo-Ton → 16-kHz-Mono, Länge, Pegel, Übersteuerung, Drop… |
+| T-400 | Visuelles Verhalten ist identisch zur Electron-Variante. | Bewusst nicht 1:1: die Darstellung folgt auf Nutzerwunsch dem Console-Design statt der urspruenglichen Portierung (siehe T-402).… |
+| T-401 | Mock-Implementierung für Unit-Tests (siehe T-500) — **offen**. | Die Unit-Tests laufen gegen die echte App (Playwright-CLI-Browserlauf), nicht gegen einen Mock. |
+| T-501 | Voller End-to-End-Test mit WebDriver + App-Start + `start_recording()… | kein Grund hinterlegt |
+| T-503 | `npm run lint` (sofern konfiguriert) ist grün — **offen**: kein Lint-… | kein Grund hinterlegt |
 
 ## 1. Ziel
 

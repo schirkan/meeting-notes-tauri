@@ -154,7 +154,7 @@ npm run tauri -- build --no-bundle
 npm run dist:portable
 ```
 
-Ohne die Variable bleibt der Standard: 21 Sidecar-Dateien, 23,12 MB ueber 24 Dateien. Der Schalter wirkt auf den kompletten Bundle-Pfad, Smoke-Test inklusive.
+Ohne die Variable bleibt der Standard: 21 Sidecar-Dateien, 23,19 MB ueber 24 Dateien. Der Schalter wirkt auf den kompletten Bundle-Pfad, Smoke-Test inklusive.
 
 Fuer einen Sidecar, der auch auf .NET-9-Runtimes startet (statt zwingend .NET 10):
 
@@ -201,7 +201,7 @@ npm run test:smoke
 
 **Den gesamten Portable-Ordner verteilen.** Sidecar-EXE und alle verwalteten/nativen DLLs liegen extern in `sidecar/`, nicht eingebettet in `meeting-notes.exe`. .NET 10 Runtime (win-x64) und WebView2 müssen auf dem Zielsystem vorhanden sein.
 
-Letzter verifizierter Portable-Build (2026-11-17, **T-502**): **23.12 MB gesamt**, davon Haupt-EXE `meeting-notes.exe` 15.50 MB und Sidecar 7.62 MB (21 Dateien); 24 Dateien einschließlich Config-Template und SHA256SUMS. Release-/Renderer-Build und `npm run test:smoke` erfolgreich: **23/23 Hashes**, native Sidecar-Geräteabfrage (0 Eingänge, 0 Ausgänge). Gegenüber dem T-511-Stand (23.10 MB, Haupt-EXE 15.48 MB) ist die EXE um 20 KB gewachsen - das neue Modul `src-tauri/src/latency.rs` (Latenzmessung, T-502). Frühere verifizierte Messungen derselben Quelle: 23.09 MB nach T-509 (Aufnahme über `WasapiRecorderBuilder`), 23.02 MB für den Console-Design-Build und 23.10 MB nach T-511. Der T-502-Stand umfasst zusätzlich die Latenzinstrumentierung. Keine persönliche Konfiguration enthalten; .NET 10 Runtime und WebView2 bleiben Voraussetzung. Kein neuer Live-Azure- oder Clean-Machine-Nachweis; MSI/NSIS wurden nicht gebaut.
+Letzter verifizierter Portable-Build (2026-11-17, **T-201**): **23.19 MB gesamt**, davon Haupt-EXE `meeting-notes.exe` 15.56 MB und Sidecar 7.62 MB (21 Dateien); 24 Dateien einschließlich Config-Template und SHA256SUMS. Release-/Renderer-Build und `npm run test:smoke` erfolgreich: **23/23 Hashes**, native Sidecar-Geräteabfrage (0 Eingänge, 0 Ausgänge), Protokoll-Handshake des Sidecars geprüft (`protocol_version=1.0.0`). Gegenüber dem T-502-Stand (23.12 MB, Haupt-EXE 15.50 MB) ist die EXE um 60 KB gewachsen - das Protokollmodul `src-tauri/src/protocol.rs` und der Handshake-Pfad (T-201). Frühere verifizierte Messungen derselben Quelle: 23.09 MB nach T-509 (Aufnahme über `WasapiRecorderBuilder`), 23.02 MB für den Console-Design-Build, 23.10 MB nach T-511 und 23.12 MB nach T-502. Der T-201-Stand umfasst zusätzlich das Protokoll-Handshake mit Versionsabgleich. Keine persönliche Konfiguration enthalten; .NET 10 Runtime und WebView2 bleiben Voraussetzung. Kein neuer Live-Azure- oder Clean-Machine-Nachweis; MSI/NSIS wurden nicht gebaut.
 
 ## Lizenz
 
