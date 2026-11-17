@@ -452,6 +452,11 @@ und ist deshalb bewusst unterblieben. Single-File wird als **Option**
 Artefakt bleibt der 21-Dateien-Build, damit der Bundle-Pfad
 (Tauri-Resource + `dist-portable.mjs` + Smoke-Test) unberuehrt bleibt.
 
+Der Schalter `MEETING_NOTES_SIDECAR_SINGLE_FILE=1` wirkt im `build.rs` auf den
+kompletten Tauri-Bundle-Pfad (verifiziert: Portable 23,09 MB ueber 4 Dateien, Smoke
+bestanden). `build.rs` leert den Publish-Ordner vorher, damit die Dateien zweier
+Varianten nicht gemischt werden.
+
 Siehe [T-512](./specs/T-512-sidecar-targetframeworks-und-single-file.md).
 
 ## Offene Fragen

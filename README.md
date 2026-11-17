@@ -113,6 +113,16 @@ gleichzusetzen. Die erste Kompilierung nach Profilwechsel bleibt teurer.
 npm run build:sidecar  # .NET-Build nach src-tauri/target/sidecar-artifacts
 npm run publish:sidecar:net9    # Alternative: net9.0-Variante (laeuft auf .NET 9/10/11+)
 npm run publish:sidecar:single  # Alternative: Single-File (1 Datei statt 21, 7,61 MB)
+
+Fuer eine Portable-Ausgabe mit Single-File-Sidecar (1 Datei statt 21, 23,09 MB gesamt ueber 4 Dateien):
+
+```powershell
+$env:MEETING_NOTES_SIDECAR_SINGLE_FILE = '1'
+npm run tauri -- build --no-bundle
+npm run dist:portable
+```
+
+Ohne die Variable bleibt der Standard: 21 Sidecar-Dateien, 23,10 MB ueber 24 Dateien. Der Schalter wirkt auf den kompletten Bundle-Pfad, Smoke-Test inklusive.
 npm run test:sidecar   # C#-Validierung nach src-tauri/target/sidecar-validation-artifacts
 npm run clean:sidecar -- --dry-run  # Cleanup nur anzeigen
 ```

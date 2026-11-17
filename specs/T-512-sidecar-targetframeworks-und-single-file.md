@@ -87,6 +87,33 @@ Verifikation bleiben damit unberührt.
 - Single-File: 1 Datei / 7,61 MB, `--list-devices` Exit 0, identische
   Diagnose-Schritte wie die 21-Dateien-Variante.
 
+## Bundle-Pfad (Single-File end-to-end)
+Der Schalter `MEETING_NOTES_SIDECAR_SINGLE_FILE=1` in `src-tauri/build.rs` schaltet
+den Single-File-Publish für den **kompletten Tauri-Bundle-Pfad** zu, nicht nur für
+das Publish-Skript. Damit ist die Variante end-to-end testbar:
+
+```powershell
+$env:MEETING_NOTES_SIDECAR_SINGLE_FILE = '1'
+npm run tauri -- build --no-bundle
+npm run dist:portable
+npm run test:smoke
+```
+
+Gemessen (2026-11-17):
+
+| | Standard | Single-File |
+|---|---|---|
+| `src-tauri/target/sidecar-publish/` | 21 Dateien | **1 Datei** (`MeetingNotes.Sidecar.exe`, 7,61 MB) |
+| Portable gesamt | 23,10 MB / 24 Dateien / 23 Summen | **23,09 MB / 4 Dateien / 3 Summen** |
+| Smoke-Test | bestanden (23/23) | **bestanden (3/3)** |
+
+Der `dist-portable.mjs`-Pfad und der Tauri-Resource-Glob
+(`target/sidecar-publish/*` → `sidecar/`) arbeiten mit beiden Layouts, ohne Änderung.
+
+Damit ist die offene Frage aus der ersten Fassung dieser Spec erledigt: Die
+Single-File-Variante war nicht nur technisch möglich, sondern ist über den
+Bundle-Pfad vollständig erreichbar und verifiziert.
+
 ## Offene Punkte
 - Die Single-File-Variante ist als **Option** umgesetzt, nicht als Standard:
   Das Tauri-Sidecar wird als externe Datei aus dem Resource-Ordner gestartet, und
