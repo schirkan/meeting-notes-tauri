@@ -88,9 +88,16 @@ npm run dev            # Nur Vite/Renderer, kein Tauri-Backend
 npm run typecheck      # TypeScript-Prüfung
 npm run build          # TypeScript + Renderer-Build
 npm run tauri -- build # MSI/NSIS-Installer inklusive Sidecar
-npm run measure:latency -- --live    # End-to-End-Latenz messen (T-502, braucht Aufnahmegerät)
-npm run docs:specs                  # Stand der Specs in SPEC.md neu erzeugen
+npm run verify                   # Gesamtablauf: Typecheck, Node-Tests, C#-Validierung
+npm run verify -- --full           # zusätzlich: Release-Build, Portable, Smoke, Deployment
+npm run measure:latency -- --live  # End-to-End-Latenz messen (T-502, braucht Aufnahmegerät)
+npm run docs:specs                # Stand der Specs in SPEC.md neu erzeugen
 ```
+>
+> `npm run verify` bricht beim ersten Fehlschlag ab und gibt am Ende eine
+> Zusammenfassung mit Dauer je Schritt aus. `--full` baut die Artefakte vorher
+> neu und prüft sie mit - die Reihenfolge ist bewusst fest verdrahtet, damit
+> niemand die Reihenfolge der Prüfungen erraten muss.
 >
 > Die Latenzmessung startet die App selbst und sammelt bis zu 100 Messzeilen;
 > der Report landet in `context/latency-report.md` (P50/P95/P99 je Stufe).
