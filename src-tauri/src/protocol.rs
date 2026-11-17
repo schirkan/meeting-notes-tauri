@@ -10,7 +10,14 @@
 pub const MIN_PROTOCOL_VERSION: &str = "1.0.0";
 
 /// Zeitfenster, in dem der Sidecar nach dem Start antworten muss.
-pub const HANDSHAKE_TIMEOUT_SECS: u64 = 5;
+///
+/// Gemessen (2026-11-17, 5 Laeufe, warm): 164-221 ms bis zum Handshake.
+/// Der Wert ist bewusst grosszuegig gewaehlt: ein kalter Start auf einem
+/// fremden Rechner kann durch einen Virenscan deutlich laenger dauern, und
+/// ein zu kurzes Zeitfenster wuerde den Sidecar grundlos beenden, obwohl
+/// er korrekt arbeitet. Der Timeout feuert nur im Fehlerfall - längeres
+/// Warten kostet im Normalbetrieb nichts.
+pub const HANDSHAKE_TIMEOUT_SECS: u64 = 15;
 
 /// Zerlegt eine Version in ihre numerischen Teile.
 ///
