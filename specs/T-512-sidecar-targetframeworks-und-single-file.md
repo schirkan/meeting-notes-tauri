@@ -151,6 +151,20 @@ sondern im echten Start.
 Beide Ziel-Frameworks sind damit nach dem Rust-Refactoring end-to-end belegt -
 nicht nur der Standard.
 
+**Vollstaendige Matrix (alle vier Kombinationen, jeweils mit laufender App):**
+
+| TFM | Layout | Sidecar | Portable | Smoke | Deployment |
+|---|---|---|---|---|---|
+| net10.0-windows | 21 Dateien (Standard) | 0,16 MB + 20 DLLs | 23,10 MB / 24 Dateien / 23 Summen | bestanden | PASS 10 / FAIL 0 |
+| net9.0-windows | 21 Dateien | 0,16 MB + 20 DLLs | 23,09 MB / 24 Dateien / 23 Summen | bestanden | PASS 10 / FAIL 0 |
+| net10.0-windows | Single-File | 1 Datei (7,61 MB) | 23,09 MB / 4 Dateien / 3 Summen | bestanden | PASS 10 / FAIL 0 |
+| **net9.0-windows** | **Single-File** | **1 Datei (7,61 MB)** | **23,08 MB / 4 Dateien / 3 Summen** | **bestanden** | **PASS 10 / FAIL 0** |
+
+Die letzte Zeile war die einzige ungeprueft gebliebene Kombination: beide Schalter
+gleichzeitig gesetzt (`MEETING_NOTES_SIDECAR_TFM=net9.0-windows` **und**
+`MEETING_NOTES_SIDECAR_SINGLE_FILE=1`). Sie funktioniert - die Schalter in
+`build.rs` beeinflussen sich nicht gegenseitig.
+
 ### Findet der Rust-Main den Single-File-Sidecar?
 
 Der Sidecar wird als externe Datei gestartet, und `resolve_sidecar_path` sucht sie

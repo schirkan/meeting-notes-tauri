@@ -141,7 +141,12 @@ ausgegeben (App-Start, Settings-Dialog, Entstehung der Config neben der EXE).
 Fuer eine Portable-Ausgabe mit Single-File-Sidecar (1 Datei statt 21, 23,09 MB gesamt ueber 4 Dateien).
 Die Variante wurde am 2026-11-17 end-to-end nachgefahren: `sidecar-publish/` mit genau
 1 Datei, Portable 23,09 MB / 4 Dateien / 3 Summen, Smoke bestanden, Deployment-Nachweis
-mit App-Start PASS 10 / FAIL 0 - der Sidecar wird im Single-File-Portable gefunden:
+mit App-Start PASS 10 / FAIL 0 - der Sidecar wird im Single-File-Portable gefunden.
+
+Beide Schalter duerfen auch **gleichzeitig** gesetzt sein (`net9.0-windows` **und**
+Single-File). Diese Kombination ist ebenfalls end-to-end geprueft: Portable
+23,08 MB / 4 Dateien / 3 Summen, Deployment-Nachweis PASS 10 / FAIL 0. Alle vier
+Kombinationen aus Ziel-Framework und Layout sind damit belegt.
 
 ```powershell
 $env:MEETING_NOTES_SIDECAR_SINGLE_FILE = '1'
