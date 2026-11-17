@@ -1,7 +1,7 @@
 # T-404: Speaker-Mapping, Auto-Scroll, Focus-Trap (Port + Validierung)
 
 ## Kontext
-Status: draft
+Status: umgesetzt
 Priorität: high
 Abhängigkeiten: T-402
 
@@ -13,10 +13,10 @@ Verhaltensfeinheiten aus `../meeting-notes` 1:1 portieren und gegen Validierungs
 - [x] **Quellentrennung:** Sprecheridentität und Alias-Schlüssel enthalten die Audioquelle, z. B. `mic:Guest-1` und `speaker:Guest-1`. Badges und Zuordnung zeigen ohne Alias `Mic · Guest-1` bzw. `Speaker · Guest-1`; identische SDK-IDs der Quellen teilen keinen Alias.
 - [x] **Mic-Parität:** Bei Mic-Diarization werden verschiedene erkannte Sprecher wie beim Loopback einzeln dargestellt und zugeordnet. Aliase gelten in Badges, letzter-Sprecher-Anzeige und Clipboard-Export; Rohsegmente behalten Quelle und SDK-ID.
 - [x] **Interim-Korrektur:** Neue Interim-/Final-Events entfernen ältere Interims nur derselben Quelle, auch wenn das SDK die Sprecher-ID korrigiert. Andere Quellen und finale Sprechersegmente bleiben erhalten.
-- [ ] **Auto-Scroll:** pausiert, sobald Nutzer ≥32 px vom Listenende hochgescrollt hat, reaktiviert beim Zurückscrollen.
-- [ ] **Focus-Trap im Settings-Dialog:** Tab/Shift+Tab zyklisch innerhalb der Dialog-Elemente; Escape schließt den Dialog.
-- [ ] **Initial-Fokus:** beim Öffnen des Settings-Dialogs wird das erste Eingabefeld fokussiert (nicht der Schließen-Button).
-- [ ] **Re-Render-Fokus-Schutz:** Tastendrücke in Eingabefeldern reißen den Fokus nicht mehr weg (zwei separate `useEffect`-Blöcke mit `[isOpen]`-Dependency).
+- [x] **Auto-Scroll:** pausiert, sobald Nutzer ≥32 px vom Listenende hochgescrollt hat, reaktiviert beim Zurückscrollen. Beleg: Node-UI-Test zum Follow-Verhalten.
+- [x] **Focus-Trap im Settings-Dialog:** Tab/Shift+Tab zyklisch innerhalb der Dialog-Elemente; Escape schließt den Dialog. Beleg: Node-UI-Test zum Fokus- und Trap-Verhalten.
+- [x] **Initial-Fokus:** beim Öffnen des Settings-Dialogs wird das erste Eingabefeld fokussiert (nicht der Schließen-Button). Beleg: Node-UI-Test zum Fokus beim Oeffnen.
+- [x] **Re-Render-Fokus-Schutz:** Tastendrücke in Eingabefeldern reißen den Fokus nicht mehr weg (zwei separate `useEffect`-Blöcke mit `[isOpen]`-Dependency). Beleg: Node-UI-Tests zu Fokus und Eingabefeldern.
 
 ## Approach
 - Bestehenden Renderer portieren; quellenspezifisches Mapping in [speaker-utils.ts](../src/renderer/src/speaker-utils.ts), Event-/Alias-Verarbeitung in [use-app-state.ts](../src/renderer/src/use-app-state.ts).

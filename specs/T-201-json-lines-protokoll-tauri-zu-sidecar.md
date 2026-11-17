@@ -1,7 +1,7 @@
 # T-201: JSON-Lines-Protokoll zwischen Tauri-Main und C#-Sidecar (via stdin/stdout)
 
 ## Kontext
-Status: draft
+Status: teils umgesetzt (3 Punkte offen)
 Priorität: high
 Abhängigkeiten: T-200
 
@@ -9,16 +9,16 @@ Abhängigkeiten: T-200
 Das bestehende Binär-Frame-Protokoll (36-B-Header + PCM-Payload + CRC) aus `../meeting-notes` durch ein **JSON-Lines**-Protokoll ersetzen. Audio-Frames werden nicht mehr zwischen Prozessen übertragen (siehe AD-002). Der Transport zwischen Sidecar und Tauri-Main ist **`stdin/stdout`** über `tauri-plugin-shell` — Named Pipe entfällt komplett (siehe AD-008).
 
 ## Done When
-- [ ] IPC-Protokoll ist als JSON-Lines definiert: ein JSON-Objekt pro Zeile, Newline-getrennt, UTF-8.
-- [ ] **Sidecar → App (`stdout`):** Events vom Typ `status` (`started`/`stopped`/`error`), `transcript` (`partial`/`final`), `debug` (Log-Zeile), `speaker-mapping`, `handshake` (initial).
-- [ ] **App → Sidecar (`stdin`):** Commands vom Typ `start`, `stop`, `update-settings`, `shutdown`, sowie `handshake-ack` (initial).
-- [ ] **Sidecar-intern (`stderr`):** Diagnose-Logs, getrennt von stdout (Tauri erfasst stderr separat).
-- [ ] Erstes Handshake-Objekt (`stdout`) enthält `protocol_version`, `sidecar_version`, `capabilities`. Tauri-Main validiert `protocol_version >= 1.0.0` und antwortet mit `handshake-ack` auf `stdin`. Ohne gültiges Handshake wird der Sidecar beendet.
-- [ ] **C#-Seite:** nutzt `System.Text.Json` + `Console.Out` / `Console.In` (async mit `StreamWriter`/`StreamReader` über `Console.OpenStandardOutput()` / `Console.OpenStandardInput()`). **Keine** `NamedPipeServerStream`-Aufrufe mehr.
-- [ ] **Rust-Seite:** nutzt `tauri-plugin-shell` (`Command::new_sidecar`) + `serde_json` zum Parsen der stdout-Zeilen + `CommandChild::write()` für stdin.
-- [ ] **Newline-Flushing:** C#-Sidecar flusht stdout nach jeder JSON-Zeile (verhindert Stdio-Buffering). Tauri liest Zeile für Zeile.
-- [ ] **Reconnects:** Tauri startet den Sidecar bei Crash automatisch neu (max. 3 Versuche, siehe `T-301`); C#-Sidecar führt nach jedem Start ein neues Handshake durch.
-- [ ] Fehlertoleranz: JSON-Parser ignoriert Malformed-Lines und loggt sie im Debug-Stream (Rate-limited, max. 1/1000).
+- [x] IPC-Protokoll ist als JSON-Lines definiert: ein JSON-Objekt pro Zeile, Newline-getrennt, UTF-8. Beleg: sidecar/Logger.cs (eine JSON-Zeile pro Zeile).
+- [x] **Sidecar → App (`stdout`):** Events vom Typ `status` (`started`/`stopped`/`error`), `transcript` (`partial`/`final`), `debug` (Log-Zeile), `speaker-mapping`, `handshake` (initial). Beleg: sidecar/Logger.cs und Rust-Seite in commands.rs.
+- [x] **App → Sidecar (`stdin`):** Commands vom Typ `start`, `stop`, `update-settings`, `shutdown`, sowie `handshake-ack` (initial). Beleg: sidecar/Program.cs, Rust-Seite commands.rs.
+- [x] **Sidecar-intern (`stderr`):** Diagnose-Logs, getrennt von stdout (Tauri erfasst stderr separat). Beleg: Logger schreibt Diagnose ueber stderr.
+- [ ] Erstes Handshake-Objekt (`stdout`) enthält `protocol_version`, `sidecar_version`, `capabilities`. Tauri-Main validiert `protocol_version >= 1.0.0` und antwortet mit `handshake-ack` auf `stdin`. Ohne gültiges Handshake wird der Sidecar beendet. - **offen**: Ein erstes Handshake-Objekt existiert nicht - das Protokoll hat keinen Versionsabgleich.
+- [x] **C#-Seite:** nutzt `System.Text.Json` + `Console.Out` / `Console.In` (async mit `StreamWriter`/`StreamReader` über `Console.OpenStandardOutput()` / `Console.OpenStandardInput()`). **Keine** `NamedPipeServerStream`-Aufrufe mehr. Beleg: System.Text.Json, Console.Out mit Flush (Logger.cs) und Console.In.ReadLineAsync (Program.cs). Abweichung vom Wortlaut: nicht ueber Console.OpenStandardOutput/Input, sondern direkt ueber Console.Out/Console.In.
+- [x] **Rust-Seite:** nutzt `tauri-plugin-shell` (`Command::new_sidecar`) + `serde_json` zum Parsen der stdout-Zeilen + `CommandChild::write()` für stdin. Beleg: tauri-plugin-shell und serde_json in der Rust-Seite.
+- [x] **Newline-Flushing:** C#-Sidecar flusht stdout nach jeder JSON-Zeile (verhindert Stdio-Buffering). Tauri liest Zeile für Zeile. Beleg: Console.Out.Flush() nach jeder Zeile.
+- [ ] **Reconnects:** Tauri startet den Sidecar bei Crash automatisch neu (max. 3 Versuche, siehe `T-301`); C#-Sidecar führt nach jedem Start ein neues Handshake durch. - **offen**: Ein automatischer Neustart ist nicht implementiert - der Crash wird als Event gemeldet (sidecar:crashed).
+- [ ] Fehlertoleranz: JSON-Parser ignoriert Malformed-Lines und loggt sie im Debug-Stream (Rate-limited, max. 1/1000). - **offen**: Malformed-Lines werden im Debug-Stream geloggt, aber ohne Rate-Limit (max 1/1000).
 
 ## Approach
 

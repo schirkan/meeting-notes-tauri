@@ -1,7 +1,7 @@
 # T-207: Sidecar-Deployment (framework-dependent EXE + Tauri-Resource)
 
 ## Kontext
-Status: draft
+Status: umgesetzt
 Priorität: high
 Abhängigkeiten: T-200 bis T-206
 
@@ -13,7 +13,7 @@ C#-Sidecar als framework-dependent EXE bauen und über Tauri-Ressourcenmechanism
 - [x] Tauri-`tauri.conf.json` deklariert `bundle.resources` für `target/sidecar-publish/*` (Mapping auf `sidecar/`).
 - [x] Tauri-Main findet die Sidecar-EXE in Development (`dev`) und in Production (`production`) zuverlässig (`sidecar.rs::resolve_sidecar_path` mit CWD-/Resource-/EXE-Fallback).
 - [x] Auf Zielsystem ist nur .NET 10 Runtime erforderlich (kein SDK).
-- [ ] EXE-Größe nach Publish: dokumentiert (Erwartung: ~25–35 MB inkl. Speech-Native-Binaries).
+- [x] EXE-Größe nach Publish: dokumentiert (Erwartung: ~25–35 MB inkl. Speech-Native-Binaries). Gemessen: Sidecar-EXE 0,16 MB (framework-dependent), 7,62 MB mit DLLs, Portable gesamt 23,12 MB.
 
 ## Approach
 - Sidecar-Publish wird in `src-tauri/build.rs` orchestriert (vor `cargo build`). `cargo:rerun-if-changed=../sidecar` triggert nur bei Sidecar-Quelländerungen neu.

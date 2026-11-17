@@ -1,7 +1,7 @@
 # T-206: Azure-Start-Pfad mit Promise-basiertem Lifecycle und Rollback
 
 ## Kontext
-Status: draft
+Status: umgesetzt
 Priorität: high
 Abhängigkeiten: T-204
 
@@ -9,12 +9,12 @@ Abhängigkeiten: T-204
 Robusten Start-/Stop-Pfad für beide Recognizer implementieren. Bei Fehlschlag wird sauber zurückgerollt (`status.running=false`).
 
 ## Done When
-- [ ] `StartAsync()` startet beide Recognizer in definierter Reihenfolge und gibt ein `Task<bool>` zurück.
-- [ ] Bei Fehler in einem Recognizer wird der andere ebenfalls gestoppt und der gesamte Start als fehlgeschlagen gemeldet.
-- [ ] `StopAsync()` stoppt beide Recognizer korrekt (typ-spezifisch) und wartet auf Beendigung.
-- [ ] Bei Azure-Authentifizierungsfehler wird `AZURE_AUTH_FAILED` als Event emittiert.
-- [ ] Bei Recognizer-Startfehler wird `AZURE_RECOGNIZER_FAILED` als Event emittiert.
-- [ ] `interimResults` aus der Config wird tatsächlich wirksam (`SpeechServiceResponse_InterimResults=true`).
+- [x] `StartAsync()` startet beide Recognizer in definierter Reihenfolge und gibt ein `Task<bool>` zurück. Beleg: StartStreamAsync in AzureSpeechService.cs.
+- [x] Bei Fehler in einem Recognizer wird der andere ebenfalls gestoppt und der gesamte Start als fehlgeschlagen gemeldet. Beleg: Rollback beim Startfehler.
+- [x] `StopAsync()` stoppt beide Recognizer korrekt (typ-spezifisch) und wartet auf Beendigung. Beleg: StopAsync.
+- [x] Bei Azure-Authentifizierungsfehler wird `AZURE_AUTH_FAILED` als Event emittiert. Beleg: AZURE_AUTH_FAILED in AzureSpeechService.cs.
+- [x] Bei Recognizer-Startfehler wird `AZURE_RECOGNIZER_FAILED` als Event emittiert. Beleg: AZURE_RECOGNIZER_FAILED in AzureSpeechService.cs.
+- [x] `interimResults` aus der Config wird tatsächlich wirksam (`SpeechServiceResponse_InterimResults=true`). Beleg: SpeechServiceResponse_InterimResults in SpeechConfiguration.cs.
 
 ## Approach
 - C#-Pattern: `TaskCompletionSource<bool>` für jeden Recognizer-Start, mit Timeout (z. B. 10 s).

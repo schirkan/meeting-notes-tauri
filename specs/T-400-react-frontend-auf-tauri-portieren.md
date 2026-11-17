@@ -1,7 +1,7 @@
 # T-400: React-Frontend auf Tauri portieren
 
 ## Kontext
-Status: draft
+Status: teils umgesetzt (1 Punkt offen)
 Priorität: high
 Subtasks: T-401, T-402, T-403, T-404
 Abhängigkeiten: T-102
@@ -10,11 +10,11 @@ Abhängigkeiten: T-102
 React-Frontend 1:1 aus `../meeting-notes/src/renderer/` portieren, hinter einer Tauri-Preload-Bridge versteckt.
 
 ## Done When
-- [ ] Alle Komponenten sind portiert: `HeroStatusCard`, `TranscriptPanel`, `SettingsDialog`, `ConfigPanel`, `DebugLogPanel`, `SpeakerMappingPanel`.
-- [ ] Tauri-Preload-Bridge (`src/preload/index.ts`) ersetzt die Electron-Preload-Bridge.
-- [ ] State-Management (`use-app-state.ts`) ist unverändert, nur die IPC-Aufrufe sind Tauri-konform.
-- [ ] Visuelles Verhalten ist identisch zur Electron-Variante.
-- [ ] `npm run typecheck` ist grün.
+- [x] Alle Komponenten sind portiert: `HeroStatusCard`, `TranscriptPanel`, `SettingsDialog`, `ConfigPanel`, `DebugLogPanel`, `SpeakerMappingPanel`. Beleg: HeroStatusCard, TranscriptPanel, SettingsDialog, ConfigPanel, DebugLogPanel, SpeakerMappingPanel.
+- [x] Tauri-Preload-Bridge (`src/preload/index.ts`) ersetzt die Electron-Preload-Bridge. Beleg: src/preload/index.ts.
+- [x] State-Management (`use-app-state.ts`) ist unverändert, nur die IPC-Aufrufe sind Tauri-konform. Beleg: use-app-state.ts, IPC-Aufrufe Tauri-konform.
+- [ ] Visuelles Verhalten ist identisch zur Electron-Variante. - **offen**: Bewusst nicht 1:1: die Darstellung folgt auf Nutzerwunsch dem Console-Design statt der urspruenglichen Portierung (siehe T-402). Das funktionale Verhalten bleibt erhalten und ist durch die Node-UI-Tests abgedeckt.
+- [x] `npm run typecheck` ist grün. Beleg: npm run typecheck laeuft gruen.
 
 ## Approach
 - 1:1-Port-Strategie (siehe `DECISIONS.md → AD-004`).

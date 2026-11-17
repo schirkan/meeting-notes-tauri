@@ -1,7 +1,7 @@
 # T-104: Migrationsplan — welcher Code wandert wohin
 
 ## Kontext
-Status: draft
+Status: umgesetzt
 Priorität: high
 Abhängigkeiten: -
 
@@ -9,11 +9,11 @@ Abhängigkeiten: -
 Vollständige Inventur: Welche Module aus `../meeting-notes` werden **portiert**, welche **umgeschrieben**, welche **entfernt**.
 
 ## Done When
-- [ ] Mapping-Tabelle pro Modul mit Spalten `Quelle` / `Zielpfad (Tauri)` / `Aktion` (1:1 / Refactor / Neu / Entfällt) liegt vor.
-- [ ] Sidecar-Code wird zu 100 % übernommen (siehe `T-200`).
-- [ ] React-Komponenten werden zu 100 % portiert (siehe `T-400`).
-- [ ] Tauri-spezifische Neuerungen sind identifiziert (`connectivity.rs`, `tauri.conf.json`, `src-tauri/Cargo.toml`).
-- [ ] Entfallene Module sind begründet (z. B. Node-`azure-transcription-service.ts` entfällt komplett).
+- [x] Mapping-Tabelle pro Modul mit Spalten `Quelle` / `Zielpfad (Tauri)` / `Aktion` (1:1 / Refactor / Neu / Entfällt) liegt vor. Beleg: Mapping-Skizze im Abschnitt Approach dieser Spec.
+- [x] Sidecar-Code wird zu 100 % übernommen (siehe `T-200`). Beleg: sidecar/ ist vollstaendig uebernommen.
+- [x] React-Komponenten werden zu 100 % portiert (siehe `T-400`). Beleg: src/renderer/src/components/ enthaelt alle sechs Komponenten.
+- [x] Tauri-spezifische Neuerungen sind identifiziert (`connectivity.rs`, `tauri.conf.json`, `src-tauri/Cargo.toml`). Beleg: connectivity.rs, tauri.conf.json, src-tauri/Cargo.toml.
+- [x] Entfallene Module sind begründet (z. B. Node-`azure-transcription-service.ts` entfällt komplett). Beleg: in dieser Spec dokumentiert.
 
 ## Approach — Mapping-Skizze
 

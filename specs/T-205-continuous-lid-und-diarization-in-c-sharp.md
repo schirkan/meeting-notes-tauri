@@ -1,7 +1,7 @@
 # T-205: Continuous Language Identification (LID) und Diarization in C#
 
 ## Kontext
-Status: draft
+Status: teils umgesetzt (1 Punkt offen)
 Priorität: high
 Abhängigkeiten: T-204
 
@@ -9,13 +9,13 @@ Abhängigkeiten: T-204
 Continuous LID und Speaker-Diarization in der C#-Recognizer-Konfiguration aktivieren und in Segment-Events weiterreichen.
 
 ## Done When
-- [ ] `SpeechRecognizer` und `ConversationTranscriber` nutzen `LanguageIdMode = Continuous` und konfigurieren AutoDetect-Kandidaten; reales Continuous-LID-Verhalten bleibt zu validieren.
-- [ ] Erkannte Sprache wird im optionalen Segmentfeld `language` mitgeführt und im Live-Test geprüft (nicht `detectedLanguage`).
+- [x] `SpeechRecognizer` und `ConversationTranscriber` nutzen `LanguageIdMode = Continuous` und konfigurieren AutoDetect-Kandidaten; reales Continuous-LID-Verhalten bleibt zu validieren. Beleg: AzureSpeechService.cs (Continuous, AutoDetectSourceLanguageConfig). Das reale Continuous-LID-Verhalten bleibt live zu validieren.
+- [x] Erkannte Sprache wird im optionalen Segmentfeld `language` mitgeführt und im Live-Test geprüft (nicht `detectedLanguage`). Beleg: language-Feld in src/shared/transcript-contract.ts und im Sidecar-Payload.
 - [x] Je Quelle wählt `diarization.mic` bzw. `diarization.speaker` unabhängig `ConversationTranscriber` (aktiviert) oder `SpeechRecognizer` (deaktiviert). Beide Optionen sind standardmäßig aktiviert, auch bei fehlenden Feldern in bestehenden Konfigurationen.
 - [x] Bei aktivierter Sprechererkennung werden SDK-Speaker-IDs für Mic und Speaker unverändert im Segmentfeld `speaker` weitergegeben, für Interim und Final; fehlende IDs werden `unknown`. Bei deaktivierter Sprechererkennung heißen die IDs `self` (Mic) bzw. `guest` (Speaker).
 - [x] Das SDK-Property für Intermediate-Diarization ist mit Speech SDK 1.53 verifiziert und im Transcriber-Pfad konfiguriert.
 - [x] Die UI verwendet quellenspezifische Identitäten und 30 zyklische Farbslots; nummerierte Mic-IDs erhalten einen Offset von 15. Siehe [T-404](./T-404-speaker-mapping-auto-scroll-focus-trap.md).
-- [ ] Diarization funktioniert für mindestens 2 Sprecher je aktivierter Quelle (manueller Live-Azure-Test).
+- [ ] Diarization funktioniert für mindestens 2 Sprecher je aktivierter Quelle (manueller Live-Azure-Test). - **offen**: Erfordert einen manuellen Live-Azure-Test mit mindestens zwei Sprechern je Quelle.
 
 ## Approach
 - Persistenz: `diarization: { "mic": true, "speaker": true }` in User-Settings. Speichern wirkt beim nächsten Aufnahmestart, nicht auf eine laufende Sitzung.

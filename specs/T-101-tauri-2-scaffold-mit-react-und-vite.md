@@ -1,7 +1,7 @@
 # T-101: Tauri-2-Scaffold mit React und Vite anlegen
 
 ## Kontext
-Status: draft
+Status: teils umgesetzt (3 Punkte offen)
 Priorität: high
 Abhängigkeiten: -
 
@@ -9,12 +9,12 @@ Abhängigkeiten: -
 Lauffähiges Tauri-2-Projekt mit React-Frontend, das ein leeres Fenster öffnet und einen Stub-Sidecar-Prozess startet.
 
 ## Done When
-- [ ] `npm create tauri-app@latest` mit Template `react-ts` ausgeführt (oder manuell äquivalent).
-- [ ] `src/` (React + Vite) und `src-tauri/` (Rust) sind nebeneinander angelegt.
-- [ ] `npm run tauri dev` startet das Fenster.
-- [ ] `npm run tauri build` produziert eine MSI- oder NSIS-Installer-Datei.
-- [ ] Eine Stub-Rust-Funktion `start_recording()` ist über `tauri::command` aus dem React-Renderer aufrufbar und loggt in die Rust-Konsole.
-- [ ] Eine Rust-Funktion `spawn_stub_sidecar()` startet einen Dummy-Prozess (z. B. `cmd /c echo hello`) über das offizielle `tauri-plugin-shell`-Crate.
+- [x] `npm create tauri-app@latest` mit Template `react-ts` ausgeführt (oder manuell äquivalent). Manuell aequivalent ausgefuehrt.
+- [x] `src/` (React + Vite) und `src-tauri/` (Rust) sind nebeneinander angelegt. Beleg: src/ und src-tauri/ liegen nebeneinander.
+- [x] `npm run tauri dev` startet das Fenster. Beleg: npm run tauri dev startet das Fenster.
+- [ ] `npm run tauri build` produziert eine MSI- oder NSIS-Installer-Datei. - **offen**: Installer (MSI/NSIS) wurden bewusst nicht gebaut; der Lieferweg ist die Portable-Distribution (siehe README).
+- [ ] Eine Stub-Rust-Funktion `start_recording()` ist über `tauri::command` aus dem React-Renderer aufrufbar und loggt in die Rust-Konsole. - **offen**: Durch die echte Aufnahme-Implementierung ersetzt - bewusst kein Stub mehr.
+- [ ] Eine Rust-Funktion `spawn_stub_sidecar()` startet einen Dummy-Prozess (z. B. `cmd /c echo hello`) über das offizielle `tauri-plugin-shell`-Crate. - **offen**: Durch die echte Sidecar-Anbindung ersetzt - bewusst kein Stub mehr.
 
 ## Release-DevTools (Fortschreibung 2026-11-09)
 - [x] F12 öffnet/schließt WebView2-DevTools auch im Release-/Portable-Build: Tauri-Feature `devtools`, registrierter `toggle_devtools`-Command und Frontend-Key-Handler.
