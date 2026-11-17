@@ -20,7 +20,7 @@
  * Usage:  node scripts/test-smoke.mjs
  */
 
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
@@ -56,6 +56,34 @@ function header(text) {
   console.log(`== ${text} ==`)
 }
 
+// Die Renderer-Assets muessen in der Tauri-EXE eingebettet sein. Das passiert
+// nur ueber die Tauri-CLI ('npm run tauri build' bzw. 'tauri build --no-bundle').
+// Ein reines 'cargo build --release' erzeugt dagegen eine EXE ohne UI-Assets -
+// der Smoke-Test faengt genau das ab.
+function rendererAssetNames() {
+  if (!existsSync(assetsDir)) return []
+  return readdirSync(assetsDir).filter((f) => statSync(join(assetsDir, f)).isFile())
+}
+
+function checkEmbeddedAssets(exePath, label) {
+  if (!existsSync(exePath)) {
+    fail(label, 'missing')
+    return
+  }
+  const names = ['index.html', ...rendererAssetNames()]
+  if (names.length < 2) {
+    fail(label, 'dist/assets/ empty - run \'npm run build\' first')
+    return
+  }
+  const buf = readFileSync(exePath)
+  const missing = names.filter((n) => !buf.includes(Buffer.from(n, 'utf8')))
+  if (missing.length === 0) {
+    pass(label, `${names.length} assets embedded`)
+  } else {
+    fail(label, `not embedded: ${missing.join(', ')} - rebuild with 'npm run tauri build'`)
+  }
+}
+
 // --- 1. Renderer-Build-Artefakte -----------------------------------------
 
 header('1. Renderer-Build-Artefakte')
@@ -86,6 +114,7 @@ header('2. Tauri-EXE')
 if (existsSync(TAURI_EXE)) {
   const sizeMb = (statSync(TAURI_EXE).size / 1024 / 1024).toFixed(2)
   pass('src-tauri/target/release/meeting-notes.exe', `${sizeMb} MB`)
+  checkEmbeddedAssets(TAURI_EXE, 'release EXE renderer assets')
 } else {
   fail('src-tauri/target/release/meeting-notes.exe', 'missing — run `npm run tauri build`')
 }
@@ -139,6 +168,7 @@ header('4. Portable-Distribution')
 
 if (existsSync(PORTABLE_TAURI)) {
   pass('dist/portable/meeting-notes.exe', `${(statSync(PORTABLE_TAURI).size / 1024 / 1024).toFixed(2)} MB`)
+  checkEmbeddedAssets(PORTABLE_TAURI, 'portable EXE renderer assets')
 } else {
   fail('dist/portable/meeting-notes.exe', 'missing — run `npm run dist:portable`')
 }

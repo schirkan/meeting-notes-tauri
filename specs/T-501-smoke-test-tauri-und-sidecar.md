@@ -1,5 +1,11 @@
 # T-501: Smoke-Test (Tauri-Start + Sidecar-Spawn + Speech-Pipeline)
 
+> **Ergaenzung 2026-11-17 (T-512-Nachlauf):** Der Smoke-Test prueft zusaetzlich, dass die
+> Renderer-Assets in der Tauri-EXE eingebettet sind (Release-EXE und Portable-EXE).
+> Grund: ein mit `cargo build --release` statt der Tauri-CLI gebautes Binary
+> enthaelt keine Assets und startet ohne UI (15,40 MB statt 15,48 MB). Ohne diese
+> Pruefung waere ein solches Artefakt als Lieferung durchgerutscht.
+
 ## Kontext
 Status: partial
 Priorität: high

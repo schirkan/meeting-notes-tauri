@@ -109,6 +109,13 @@ ca. 0,8 s; komplette warme `tauri build --no-bundle`-Aufrufe 17,5 s und
 Ausgabe in die EXE ein; er ist deshalb nicht mit dem reinen Cargo-Cache-Test
 gleichzusetzen. Die erste Kompilierung nach Profilwechsel bleibt teurer.
 
+> **Wichtig fuer die Auslieferung:** die EXE muss ueber die Tauri-CLI gebaut
+> werden (`npm run tauri build` bzw. `tauri build --no-bundle`). Ein reines
+> `cargo build --release` kompiliert dieselbe Rust-Codebasis, bettet aber
+> **keine** Renderer-Assets ein - das Ergebnis startet ohne UI (gemessen:
+> 15,40 MB statt 15,48 MB, der Asset-Dateiname fehlt im Binary). Der
+> Smoke-Test prueft das inzwischen und weist solche EXE zurueck.
+
 ```powershell
 npm run build:sidecar  # .NET-Build nach src-tauri/target/sidecar-artifacts
 # Alternative TFM- und Layout-Varianten laufen ueber Umgebungsvariablen (siehe unten)
