@@ -6,7 +6,7 @@ Priorität: high
 Abhängigkeiten: T-200
 
 ## Goal
-Das bestehende Binär-Frame-Protokoll (36-B-Header + PCM-Payload + CRC) aus `../meeting-notes` durch ein **JSON-Lines**-Protokoll ersetzen. Audio-Frames werden nicht mehr zwischen Prozessen übertragen (siehe AD-002). Der Transport zwischen Sidecar und Tauri-Main ist **`stdin/stdout`** über `tauri-plugin-shell` — Named Pipe entfällt komplett (siehe AD-008).
+Das bestehende Binär-Frame-Protokoll (36-B-Header + PCM-Payload + CRC) aus `../meeting-notes` durch ein **JSON-Lines**-Protokoll ersetzen. Audio-Frames werden nicht mehr zwischen Prozessen übertragen (siehe AD-002). Der Transport zwischen Sidecar und Tauri-Main ist **`stdin/stdout`** über `tauri-plugin-shell` — Named Pipe entfällt komplett (siehe AD-008). Der Versionsabgleich per Handshake ist in `DECISIONS.md` → AD-018 festgehalten.
 
 ## Done When
 - [x] IPC-Protokoll ist als JSON-Lines definiert: ein JSON-Objekt pro Zeile, Newline-getrennt, UTF-8. Beleg: sidecar/Logger.cs (eine JSON-Zeile pro Zeile).

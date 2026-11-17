@@ -6,7 +6,7 @@ Priorität: medium
 Abhängigkeiten: T-501
 
 ## Goal
-End-to-End-Latenz messen: Audio-Frame im Sidecar → Azure-Transkript zurück im Renderer.
+End-to-End-Latenz messen: Audio-Frame im Sidecar → Azure-Transkript zurück im Renderer. Die Messmethode (Stufenmessung im Sidecar, dokumentierte Grenze am Tauri-Event) ist in `DECISIONS.md` → AD-019 festgehalten.
 
 ## Done When
 - [x] Skript `scripts/measure-latency-tauri.mjs` existiert (`npm run measure:latency`).
