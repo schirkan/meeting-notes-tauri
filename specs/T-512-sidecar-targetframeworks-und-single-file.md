@@ -21,6 +21,13 @@ Baupfad verfügbar machen:
 | `net9.0-windows` | **ja** — Build 0 Warnungen / 0 Fehler, Publish 21 Dateien / 7,61 MB, `--list-devices` Exit 0 |
 | `net8.0-windows` | **nein** — `error NU1202`: NAudio 3.3.0 ist nicht mit net8.0-windows kompatibel, das Paket unterstützt nur `net9.0` |
 
+**Versionsunabhaengig geprueft (2026-11-17):** die Antwort haengt nicht an der
+gepinnten NAudio-Version. Aus dem NuGet-Index (71 Versionen) wurden die
+`lib/`-Ordner und die `dependencyGroups` aus den NUSPECs geprueft:
+NAudio **3.3.0** -> `lib/net9.0`, und die neueste Veroeffentlichung
+**3.4.0-preview.1** -> ebenfalls `lib/net9.0`. Es gibt keine NAudio-3.x-Version
+mit `net8.0`-Unterstuetzung.
+
 **Warum .NET 8 nicht möglich ist:** NAudio 3.3.0 liefert ausschließlich eine
 `net9.0`-Bibliothek. Die Alternative wäre ein Downgrade auf NAudio 2.2.1 —
 das bringt zwar eine `net6.0`-Bibliothek mit (und damit .NET-8-Tauglichkeit),
