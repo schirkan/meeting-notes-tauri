@@ -8,7 +8,8 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)))
 const paths = [
   join(root, 'src-tauri', 'target', 'sidecar-artifacts'),
   join(root, 'src-tauri', 'target', 'sidecar-publish'),
-  // T-512: Alternative Publish-Ausgaben (net9-Variante, Single-File).
+    // T-512: Reste der frueheren skriptbasierten Publish-Varianten (net9,
+    // Single-File). Die aktuellen Varianten laufen ueber build.rs in sidecar-publish.
   join(root, 'src-tauri', 'target', 'sidecar-publish-net9'),
   join(root, 'src-tauri', 'target', 'sidecar-publish-single'),
   join(root, 'src-tauri', 'target', 'sidecar-validation-artifacts'),

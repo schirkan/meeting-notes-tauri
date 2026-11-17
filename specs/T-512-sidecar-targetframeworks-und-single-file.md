@@ -119,6 +119,25 @@ Gemessen: net9.0 durch den Bundle-Pfad ergibt 21 Dateien mit `tfm=net9.0`,
 Ungueltige Werte werden mit klarer Meldung abgewiesen, statt still zu einem
 anderen TFM zu fuehren.
 
+### Findet der Rust-Main den Single-File-Sidecar?
+
+Der Sidecar wird als externe Datei gestartet, und `resolve_sidecar_path` sucht sie
+unter anderem unter `EXE-Ordner/sidecar/<exe>` (portable Layout) und
+`EXE-Ordner/<exe>` (Fallback). Beiderlei Pfade sind im Single-File-Portable
+vorhanden, weil die Datei `MeetingNotes.Sidecar.exe` **denselben Namen** behält —
+nur ihr Inhalt ist gebündelt. Gemessen am 2026-11-17:
+
+| | Ergebnis |
+|---|---|
+| `EXE-Ordner/sidecar/MeetingNotes.Sidecar.exe` | **existiert** (Rust-Pfad 3) |
+| `EXE-Ordner/MeetingNotes.Sidecar.exe` | existiert nicht (Rust-Pfad 4, nicht nötig) |
+| App-Start mit Single-File-Sidecar | **PASS** (Prozess läuft nach 6 s) |
+| Deployment-Prüfung | PASS 10 / FAIL 0 (3/3 SHA256-Summen) |
+| Smoke-Test | bestanden (3/3) |
+
+Die Dateiname-Kompatibilität war damit der entscheidende Punkt: `PublishSingleFile`
+ändert den Inhalt der EXE, nicht ihren Namen.
+
 Der `dist-portable.mjs`-Pfad und der Tauri-Resource-Glob
 (`target/sidecar-publish/*` → `sidecar/`) arbeiten mit beiden Layouts, ohne Änderung.
 
