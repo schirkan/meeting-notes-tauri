@@ -1,7 +1,7 @@
 # T-510: Clean-Machine-Deployment (Windows 11, .NET 10 Runtime, WebView2)
 
 ## Kontext
-Status: draft (Vorbereitung; Ausfuehrung erst nach Freigabe)
+Status: vorbereitet (Pruefskript vorhanden und erprobt; Ausfuehrung auf dem Zielsystem steht aus)
 Prioritaet: medium
 Abhaengigkeiten: T-504, T-505, T-507, T-508
 
@@ -47,6 +47,30 @@ Kein .NET **SDK** noetig — der Sidecar ist framework-dependent publiziert
 unterstuetzten MSVC-Build statisch gelinkt; eine separate
 `WebView2Loader.dll` wird nicht verteilt.
 
+## Ausfuehrbarer Nachweis
+`scripts/verify-deployment.ps1` setzt die Checkliste dieses Specs als ausfuehrbaren
+Nachweis um. Das Skript ist **selbststaendig** — es braucht weder Node noch Rust
+noch das Repository, nur den Portable-Ordner. Auf dem Zielsystem:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify-deployment.ps1 -PortableDir D:\Apps\MeetingNotes
+```
+
+Geprueft werden: Windows-11-Build, WebView2-Runtime (Registry), vorhandene .NET-Runtime
+(Registry **und** Shared-Framework-Verzeichnis **und** `dotnet --list-runtimes` —
+script-installierte Runtimes schreiben keinen Registry-Schlüssel), Integritaet aller Dateien
+gegen `SHA256SUMS`, Abwesenheit einer persoenlichen Config, Platzhalter statt Credentials im
+Template, `sidecar\\MeetingNotes.Sidecar.exe --list-devices` mit gueltigem `device_list`-Event
+sowie die PE-Subsysteme (Haupt-EXE = GUI, also **kein** Konsolenfenster; Sidecar = Konsole).
+
+Rueckgabecode 0 = keine FAIL-Pruefung. Offen bleibende Punkte werden als `MANUELL`
+ausgegeben (App-Start, Settings-Dialog, Entstehung der Config neben der EXE).
+Mit `-LaunchApp` startet das Skript zusaetzlich die App und prueft, ob der Prozess lebt.
+
+Probelauf am 2026-11-17 gegen die lokale Distribution: **PASS 9 / FAIL 0** (Windows 11
+Build 26300, WebView2 157.0.4341.46, .NET 10.0.13, SHA256SUMS 23/23, `device_list` mit
+0 Eingängen/0 Ausgängen, Haupt-EXE PE-Subsystem 2 = GUI).
+
 ## Approach
 1. **Vorbereitung (Entwicklerrechner):** `npm run dist:portable` erzeugt
    `dist/portable/`. Persoenliche `meeting-notes.config.json` vor dem
@@ -71,11 +95,22 @@ unterstuetzten MSVC-Build statisch gelinkt; eine separate
   kopiert werden, nicht nur die Haupt-EXE.
 
 ## Offene Punkte
-- Zielsystem noch nicht verfuegbar — kein Clean-Machine-Nachweis vorhanden.
-- Reihenfolge gegen Variante A (T-509) ist offen: die beiden Wege pruefen
-  unterschiedliche Seiten (Deployment-Seite vs. Aufnahme-Seite).
+- Zielsystem noch nicht verfuegbar — kein Clean-Machine-Nachweis vorhanden. Der Nachweis
+  ist aber als ausfuehrbares Skript vorbereitet (`scripts/verify-deployment.ps1`, siehe
+  oben) und lokal erprobt: PASS 9 / FAIL 0.
+- Die Reihenfolge ist geklaert: T-509 (Variante A, Aufnahme-Umstellung) und dieser Spec
+  pruefen unterschiedliche Seiten — T-509 den Aufnahme-Pfad, T-510 die
+  Installationsseite. Beide sind umgesetzt und unabhaengig voneinander.
 
 ## Log
+- 2026-11-17: Checkliste in `scripts/verify-deployment.ps1` als ausfuehrbaren Nachweis
+  umgesetzt und gegen die lokale Distribution erprobt (PASS 9 / FAIL 0). Zwei Befunde dabei
+  korrigiert, die ausschliesslich das Skript betrafen: die Runtime-Erkennung lief nur
+  ueber die Registry (script-installierte Runtimes schreiben dort nichts — jetzt auch
+  Shared-Framework-Verzeichnis und `dotnet --list-runtimes`), und der Platzhalter-Regex
+  liess 'DEINEN' im `<HIER-DEINEN-AZURE-SPEECH-KEY-EINTRAGEN>` aus. Am Produkt
+  aenderte sich nichts.
+
 - 2026-11-16: Spec als Vorbereitung der Alternative "b" (Clean-Machine-Deployment)
   neben T-509 (Variante A, `WasapiRecorderBuilder`) angelegt. Noch **nicht**
   ausgefuehrt; die Voraussetzungen .NET 10 Runtime und WebView2 Runtime sind

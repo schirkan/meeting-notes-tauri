@@ -127,11 +127,10 @@ Single-File-Variante war nicht nur technisch möglich, sondern ist über den
 Bundle-Pfad vollständig erreichbar und verifiziert.
 
 ## Offene Punkte
-- Die Single-File-Variante ist als **Option** umgesetzt, nicht als Standard:
-  Das Tauri-Sidecar wird als externe Datei aus dem Resource-Ordner gestartet, und
-  ein umgestellter Bundle-Pfad (Tauri-Resource + `dist-portable.mjs` +
-  Smoke-Test) wäre ein eigener Umbau mit zusätzlichem Risiko. Die Messung
-  zeigt aber, dass es technisch trägt.
+- Die Single-File-Variante ist als **Option** umgesetzt, nicht als Standard: der
+  ausgelieferte Portable-Build bleibt der 21-Dateien-Build. Sie ist aber ueber
+  `MEETING_NOTES_SIDECAR_SINGLE_FILE=1` im `build.rs` durch den kompletten
+  Tauri-Bundle-Pfad erreichbar und verifiziert (siehe Bundle-Abschnitt).
 - .NET 8 bleibt unerreichbar (siehe oben) — NAudio 3.x ist die harte Grenze.
 
 ## Log

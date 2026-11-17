@@ -114,6 +114,23 @@ npm run build:sidecar  # .NET-Build nach src-tauri/target/sidecar-artifacts
 npm run publish:sidecar:net9    # Alternative: net9.0-Variante (laeuft auf .NET 9/10/11+)
 npm run publish:sidecar:single  # Alternative: Single-File (1 Datei statt 21, 7,61 MB)
 
+### Deployment auf einem fremden Rechner pruefen
+
+`scripts/verify-deployment.ps1` setzt die Checkliste aus
+[T-510](./specs/T-510-clean-machine-deployment-windows-11.md) als ausfuehrbaren Nachweis um:
+Windows-Build, WebView2-Runtime, .NET-Runtime, Integritaet aller Dateien gegen
+`SHA256SUMS`, keine persoenliche Config, Platzhalter statt Credentials, `device_list`-Event
+des Sidecars und die PE-Subsysteme (Haupt-EXE ohne Konsolenfenster).
+
+```powershell
+npm run verify:deployment
+# oder auf dem Zielsystem direkt:
+powershell -ExecutionPolicy Bypass -File .\verify-deployment.ps1 -PortableDir D:\Apps\MeetingNotes
+```
+
+Rueckgabecode 0 = keine FAIL-Pruefung. Offen bleibende Punkte werden als `MANUELL`
+ausgegeben (App-Start, Settings-Dialog, Entstehung der Config neben der EXE).
+
 Fuer eine Portable-Ausgabe mit Single-File-Sidecar (1 Datei statt 21, 23,09 MB gesamt ueber 4 Dateien):
 
 ```powershell
