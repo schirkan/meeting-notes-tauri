@@ -14,7 +14,7 @@ Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1
 Die Checkboxen wurden gegen den **Code** geprueft, nicht gegen den Spec-Status:
 jeder abgehakte Punkt traegt den Beleg im Klartext (`Beleg: ...`), jeder offene
 Punkt nennt den konkreten Grund (`- **offen**: ...`). Ergebnis: 17 Specs als
-`umgesetzt` bzw. `teils umgesetzt` markiert, **24 offene Punkte in 15 Specs**.
+`umgesetzt` bzw. `teils umgesetzt` markiert, **23 offene Punkte in 14 Specs**.
 Vorher waren ueber 70 Checkboxen offen, obwohl die Funktion ueberwiegend fertig
 und verifiziert war - die Specs sind jetzt mit dem Stand der Implementierung
 deckungsgleich.
@@ -30,15 +30,14 @@ deckungsgleich.
 | T-509 | Loopback-Verhalten und Latenz auf echter Hardware |
 | T-510 | Deployment-Pruefung auf dem Zielsystem |
 
-### Offen als bewusste Entscheidung (13 Punkte)
+### Offen als bewusste Entscheidung (12 Punkte)
 
 | Spec | Punkt | Warum offen |
 |---|---|---|
 | T-101 | MSI/NSIS-Installer, zwei Stub-Funktionen | Portable ist der Lieferweg; die Stubs sind durch die echte Implementierung ersetzt |
 | T-102 | Contract-Versionsabgleich im Handshake | Es gibt kein Handshake-Objekt - das Protokoll startet ohne Versionsabgleich |
 | T-201 | Handshake-Objekt, Reconnect bei Crash, Rate-Limit fuer Malformed-Lines | Nicht implementiert: der Crash wird als Ereignis gemeldet, Malformed-Lines werden geloggt |
-| T-203 | Stichprobentest 48-kHz-Stereo zu 16-kHz-Mono | Kein Test vorhanden |
-| T-300 | Klare UI-Fehlermeldung bei Sidecar-Crash | Das Ereignis erreicht den Preload, der Renderer abonniert es nicht |
+| T-203 | Stichprobentest 48-kHz-Stereo zu 16-kHz-Mono | Test ist implementiert, läuft aber nur, wo MediaFoundation antwortet - in nicht-interaktiven Sitzungen wird er übersprungen |
 | T-400 | Visuelles Verhalten identisch zur Electron-Variante | Bewusst nicht 1:1 - die Darstellung folgt dem Console-Design (T-402) |
 | T-401 | Mock-Implementierung fuer Unit-Tests | Die Unit-Tests laufen gegen die echte App |
 | T-501 | Voller End-to-End-Test mit WebDriver | WebDriver-Setup fuer Tauri 2 ist aufwendig |

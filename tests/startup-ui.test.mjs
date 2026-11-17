@@ -95,6 +95,9 @@ async function openApp(options) {
       onStatus: (callback) => { window.emitStatus = (value) => { currentStatus = value; callback(value) }; return () => { delete window.emitStatus } },
       onDebugLog: (callback) => { window.emitDebugLog = callback; return () => { delete window.emitDebugLog } }
     }
+    window.transcriptSidecar = {
+      onCrashed: (callback) => { window.emitCrashed = callback; return () => { delete window.emitCrashed } }
+    }
   }, options)
   await page.goto(baseUrl)
   await page.locator('.layout-grid').waitFor()
@@ -821,4 +824,27 @@ test('failed Stop surfaces details and leaves recording and reset protection int
     assert.equal(await page.getByRole('button', { name: 'Transkript löschen', exact: true }).isDisabled(), true)
     assert.equal(await page.locator('.segment').count(), 2)
   } finally { await page.close() }
+})
+
+test('a crashed sidecar surfaces a persistent error toast', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.locator('.hero-controls .primary-button:not(:disabled)').waitFor()
+    assert.equal(await page.locator('.toast').count(), 0)
+
+    await page.evaluate(() => window.emitCrashed({ exitCode: 1, lastError: 'Azure-Start fehlgeschlagen' }))
+    const toast = page.locator('.toast')
+    await toast.waitFor()
+    assert.match(await toast.innerText(), /Sidecar abgestuerzt/)
+    assert.match(await toast.innerText(), /Exit-Code 1/)
+    // Persistent: ein Fehler bleibt als alert sichtbar und wird nicht von
+    // einem weiteren Status-Event verdraengt.
+    assert.equal(await toast.getAttribute('role'), 'alert')
+    await page.evaluate(() => window.emitStatus({ running: false, paused: false }))
+    await page.waitForTimeout(150)
+    assert.equal(await page.locator('.toast').count(), 1)
+    assert.match(await toast.innerText(), /Sidecar abgestuerzt/)
+  } finally {
+    await page.close()
+  }
 })

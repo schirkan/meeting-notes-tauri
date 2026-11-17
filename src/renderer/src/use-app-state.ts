@@ -188,12 +188,27 @@ export function useAppState() {
       setDebugLog((prev) => [entry, ...prev].slice(0, 300))
     })
 
+    // T-300: Ein abgestuerzter Sidecar muss fuer den Nutzer sichtbar sein.
+    // Das Ereignis kam bisher bis zum Preload, wurde aber von niemandem
+    // abonniert - die Oberflaeche blieb bei einem Crash stumm.
+    const unsubCrashed = window.transcriptSidecar?.onCrashed((payload) => {
+      setRuntimeIssue('Der Aufnahmedienst ist abgestuerzt.')
+      setToast({
+        message:
+          `Sidecar abgestuerzt (Exit-Code ${payload.exitCode ?? 'unbekannt'}). ` +
+          'Die Aufnahme muss neu gestartet werden.',
+        variant: 'error',
+        persistent: true
+      })
+    })
+
     return () => {
       disposed = true
       unsubSegment()
       unsubError()
       unsubStatus()
       unsubDebugLog()
+      unsubCrashed?.()
     }
   }, [])
 

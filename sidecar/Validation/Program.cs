@@ -16,6 +16,7 @@ void Check(bool condition, string description)
 Dictionary<string, string?> Parse(params string[] args) => ArgsParser.Parse(args);
 DiarizationValidation.Run(Check);
 TranscriptionValidation.Run(Check);
+ResamplingValidation.Run(Check);
 if (args.Contains("--diarization-only"))
 {
     Console.WriteLine($"Diarization validation passed ({assertions} assertions).");

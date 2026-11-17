@@ -184,6 +184,12 @@ internal sealed class AudioRecorderSource : IDisposable
             DiscardOnBufferOverflow = true,
             ReadFully = false
         };
+        // T-203: MediaFoundation explizit starten, bevor der Resampler
+        // erzeugt wird. Ohne MF-Startup blockiert die Transform-Erzeugung in
+        // nicht-interaktiven Sitzungen (Dienst, CI). Der Aufruf steht
+        // bewusst nur hier: der Engine-Modus (Normalfall) fasst
+        // MediaFoundation gar nicht an.
+        NAudio.MediaFoundation.MediaFoundationApi.Startup();
         _resampler = new AudioResampler(_mixBuffer, _targetFormat);
         _engineMode = false;
         Attach(_recorder);

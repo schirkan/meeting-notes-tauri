@@ -1,7 +1,7 @@
 # T-300: Tauri-Main als Orchestrator
 
 ## Kontext
-Status: teils umgesetzt (1 Punkt offen)
+Status: umgesetzt
 Priorität: high
 Subtasks: T-301, T-302, T-303, T-304, T-305, T-306
 Abhängigkeiten: T-101
@@ -14,7 +14,7 @@ Rust-Main-Prozess orchestriert Sidecar-Lifecycle, IPC-Bridge zum Renderer und Se
 - [x] Tauri-Commands und Tauri-Events sind vollständig typisiert. Beleg: src-tauri/src/commands.rs und src/shared/tauri-contract.ts.
 - [x] Connectivity-Diagnose ist als Tauri-Command verfügbar. Beleg: test_azure_connectivity in commands.rs.
 - [x] Settings werden persistent gespeichert. Beleg: src-tauri/src/settings.rs.
-- [ ] App-Crashes oder Sidecar-Crashes führen zu klarer UI-Fehlermeldung. - **offen**: Beleg fehlt: Das Ereignis sidecar:crashed wird bis zum Preload durchgereicht, der Renderer abonniert es aber nicht - im UI erscheint keine Fehlermeldung.
+- [x] App-Crashes oder Sidecar-Crashes führen zu klarer UI-Fehlermeldung. Beleg: umgesetzt - der Renderer abonniert jetzt `sidecar:crashed` (use-app-state.ts) und zeigt einen persistenten Fehler-Toast mit Exit-Code; Node-UI-Test `a crashed sidecar surfaces a persistent error toast`.
 
 ## Approach
 - Subtasks T-301 bis T-306 als sequenzielle Kernimplementierung.
