@@ -119,6 +119,24 @@ Gemessen: net9.0 durch den Bundle-Pfad ergibt 21 Dateien mit `tfm=net9.0`,
 Ungueltige Werte werden mit klarer Meldung abgewiesen, statt still zu einem
 anderen TFM zu fuehren.
 
+### Re-Verifikation nach dem Rust-Refactoring
+
+Die Pfadaufloesung wurde anschliessend in `sidecar_candidates(exe_dir, exe)`
+herausgezogen und durch den Test
+`sidecar_candidates_cover_portable_and_single_file_layouts` abgesichert
+(24 Rust-Tests statt 23). Damit stand der Single-File-Nachweis zunaechst nur
+auf dem Unit-Test. **End-to-end nachgefahren** (2026-11-17, HEAD `6af00ff`):
+
+| Pruefung | Ergebnis |
+|---|---|
+| `sidecar-publish/` | 1 Datei (`MeetingNotes.Sidecar.exe`, 7,61 MB) |
+| Portable gesamt | 23,09 MB / 4 Dateien / 3 Summen |
+| Smoke-Test | bestanden (3/3) |
+| Deployment-Nachweis mit `-LaunchApp` | **PASS 10 / FAIL 0** - App startet, Sidecar wird gefunden |
+
+Der Rust-Main findet den Single-File-Sidecar damit nicht nur per Unit-Test,
+sondern im echten Start.
+
 ### Findet der Rust-Main den Single-File-Sidecar?
 
 Der Sidecar wird als externe Datei gestartet, und `resolve_sidecar_path` sucht sie

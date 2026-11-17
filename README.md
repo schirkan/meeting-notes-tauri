@@ -138,7 +138,10 @@ powershell -ExecutionPolicy Bypass -File .\verify-deployment.ps1 -PortableDir D:
 Rueckgabecode 0 = keine FAIL-Pruefung. Offen bleibende Punkte werden als `MANUELL`
 ausgegeben (App-Start, Settings-Dialog, Entstehung der Config neben der EXE).
 
-Fuer eine Portable-Ausgabe mit Single-File-Sidecar (1 Datei statt 21, 23,09 MB gesamt ueber 4 Dateien):
+Fuer eine Portable-Ausgabe mit Single-File-Sidecar (1 Datei statt 21, 23,09 MB gesamt ueber 4 Dateien).
+Die Variante wurde am 2026-11-17 end-to-end nachgefahren: `sidecar-publish/` mit genau
+1 Datei, Portable 23,09 MB / 4 Dateien / 3 Summen, Smoke bestanden, Deployment-Nachweis
+mit App-Start PASS 10 / FAIL 0 - der Sidecar wird im Single-File-Portable gefunden:
 
 ```powershell
 $env:MEETING_NOTES_SIDECAR_SINGLE_FILE = '1'
