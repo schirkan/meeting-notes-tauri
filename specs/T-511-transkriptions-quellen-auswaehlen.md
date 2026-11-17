@@ -49,8 +49,7 @@ Config-Datei `MeetingNotes.config.json`:
 - [x] Zwei Checkboxen im Settings-Dialog; die Geräteauswahl und die Beleg: src/renderer/src/components/SettingsPanel.tsx (Checkboxen; die Geraeteauswahl wird deaktiviert). Testnachweis: Node-UI-Test "transcription sources default on, persist independently and keep the last source enabled".
       Diarization-Checkboxen der jeweiligen Quelle werden deaktiviert, wenn
       die Quelle nicht transkribiert wird.
-- [x] Die letzte aktive Quelle lässt sich nicht abschalten (Mindestens eine Beleg: src/renderer/src/components/SettingsPanel.tsx (die letzte aktive Quelle laesst sich nicht abschalten). Testnachweis: Node-UI-Test "transcription sources default on, persist independently and keep the last source enabled".
-      Quelle muss transkribiert werden).
+- [x] Beim Abwaehlen der letzten aktiven Quelle wird die andere automatisch aktiviert; beide Checkboxen bleiben ausserhalb einer Aufnahme bedienbar. Beleg: src/renderer/src/components/SettingsPanel.tsx (atomare Quellenauswahl). Testnachweis: Node-UI-Test "transcription sources default on, persist independently and keep the last source enabled".
 - [x] Verifikation: Node-Tests, Rust-Tests und C#-Validierung grün. Beleg: npm run verify (75 Node-Tests, 31 Rust-Tests, 508 C#-Assertions) - gruen. Testnachweis: npm run verify - 75 Node-Tests, 31 Rust-Tests, 508 C#-Assertions, alle gruen.
 
 ## Umsetzung

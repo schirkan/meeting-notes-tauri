@@ -8,14 +8,17 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeBuildCommand": "npm run build",
+    "windows": {
+      "staticVCRuntime": true
+    }
   },
   "app": {
     "windows": [
       {
         "title": "Meeting Notes",
-        "width": 1280,
-        "height": 860,
+        "width": 900,
+        "height": 600,
         "resizable": true,
         "label": "main"
       }

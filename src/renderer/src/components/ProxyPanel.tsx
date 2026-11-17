@@ -19,12 +19,15 @@ export function ProxyPanel(props: ProxyPanelProps) {
         <h2>Proxy</h2>
       </div>
 
-      <div className="settings-block">
-        <label className="checkbox-field">
+      <div className="settings-block proxy-settings-grid">
+        <label className="checkbox-field full-field">
           <input
             type="checkbox"
             checked={configDraft.useProxy}
-            onChange={(event) => setConfigDraft((prev) => ({ ...prev, useProxy: event.target.checked }))}
+            onChange={(event) => {
+              const useProxy = event.currentTarget.checked
+              setConfigDraft((prev) => ({ ...prev, useProxy }))
+            }}
             disabled={statusRunning}
           />
           <span>Proxy verwenden</span>

@@ -58,83 +58,71 @@ export function SettingsPanel(props: SettingsPanelProps) {
         </label>
         <div className="settings-placeholder" aria-hidden="true" />
 
-        <label>
+        <div className="audio-source-field">
           <span className="field-caption"><Icon name="mic" />Mikrofon</span>
-          <select
-            value={settings.devices.micId ?? ''}
-            onChange={(event) =>
-              setSettings((prev) => ({
-                ...prev,
-                devices: { ...prev.devices, micId: event.target.value || null }
-              }))
-            }
-            disabled={statusRunning || !settings.transcription.mic}
-          >
-            <option value="">System-Default</option>
-            {devices.inputs.map((device) => (
-              <option key={device.id} value={device.id}>
-                {device.name} {device.isDefault ? '(Default)' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
+          <div className="audio-source-control">
+            <input
+              type="checkbox"
+              aria-label="Mikrofon transkribieren"
+              checked={settings.transcription.mic}
+              onChange={(event) => {
+                const mic = event.currentTarget.checked
+                setSettings((prev) => ({ ...prev, transcription: { mic, speaker: !mic || prev.transcription.speaker } }))
+              }}
+              disabled={statusRunning}
+              title="Mikrofon transkribieren"
+            />
+            <select
+              aria-label="Mikrofon"
+              value={settings.devices.micId ?? ''}
+              onChange={(event) => {
+                const micId = event.currentTarget.value || null
+                setSettings((prev) => ({ ...prev, devices: { ...prev.devices, micId } }))
+              }}
+              disabled={statusRunning || !settings.transcription.mic}
+            >
+              <option value="">System-Default</option>
+              {devices.inputs.map((device) => (
+                <option key={device.id} value={device.id}>
+                  {device.name} {device.isDefault ? '(Default)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
-        <label className="checkbox-field">
-          <input
-            type="checkbox"
-            checked={settings.transcription.mic}
-            onChange={(event) => setSettings((prev) => ({
-              ...prev,
-              transcription: { ...prev.transcription, mic: event.target.checked }
-            }))}
-            disabled={statusRunning || (settings.transcription.mic && !settings.transcription.speaker)}
-            title={
-              settings.transcription.mic && !settings.transcription.speaker
-                ? 'Mindestens eine Quelle muss transkribiert werden.'
-                : undefined
-            }
-          />
-          <span>Mikrofon transkribieren</span>
-        </label>
-
-        <label>
+        <div className="audio-source-field">
           <span className="field-caption"><Icon name="speaker" />Speaker Loopback</span>
-          <select
-            value={settings.devices.speakerLoopbackId ?? ''}
-            onChange={(event) =>
-              setSettings((prev) => ({
-                ...prev,
-                devices: { ...prev.devices, speakerLoopbackId: event.target.value || null }
-              }))
-            }
-            disabled={statusRunning || !settings.transcription.speaker}
-          >
-            <option value="">System-Default</option>
-            {devices.outputs.map((device) => (
-              <option key={device.id} value={device.id}>
-                {device.name} {device.isDefault ? '(Default)' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="checkbox-field">
-          <input
-            type="checkbox"
-            checked={settings.transcription.speaker}
-            onChange={(event) => setSettings((prev) => ({
-              ...prev,
-              transcription: { ...prev.transcription, speaker: event.target.checked }
-            }))}
-            disabled={statusRunning || (settings.transcription.speaker && !settings.transcription.mic)}
-            title={
-              settings.transcription.speaker && !settings.transcription.mic
-                ? 'Mindestens eine Quelle muss transkribiert werden.'
-                : undefined
-            }
-          />
-          <span>Speaker-Loopback transkribieren</span>
-        </label>
+          <div className="audio-source-control">
+            <input
+              type="checkbox"
+              aria-label="Speaker-Loopback transkribieren"
+              checked={settings.transcription.speaker}
+              onChange={(event) => {
+                const speaker = event.currentTarget.checked
+                setSettings((prev) => ({ ...prev, transcription: { speaker, mic: !speaker || prev.transcription.mic } }))
+              }}
+              disabled={statusRunning}
+              title="Speaker-Loopback transkribieren"
+            />
+            <select
+              aria-label="Speaker Loopback"
+              value={settings.devices.speakerLoopbackId ?? ''}
+              onChange={(event) => {
+                const speakerLoopbackId = event.currentTarget.value || null
+                setSettings((prev) => ({ ...prev, devices: { ...prev.devices, speakerLoopbackId } }))
+              }}
+              disabled={statusRunning || !settings.transcription.speaker}
+            >
+              <option value="">System-Default</option>
+              {devices.outputs.map((device) => (
+                <option key={device.id} value={device.id}>
+                  {device.name} {device.isDefault ? '(Default)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
         <label className="checkbox-field">
           <input

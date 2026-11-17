@@ -191,6 +191,13 @@ test('settings separates Proxy into a fixed-size tab and preserves save and test
         assert.deepEqual(await dialog.boundingBox(), before)
         assert.equal(await dialog.getByRole('tabpanel').count(), 1)
       }
+      const [host, port, username, password] = await Promise.all([
+        'Proxy Host', 'Proxy Port', 'Proxy Benutzername (optional)', 'Proxy Passwort (optional)'
+      ].map(name => proxy.getByLabel(name, { exact: true }).boundingBox()))
+      assert.equal(host.y, port.y)
+      assert.equal(username.y, password.y)
+      assert.ok(host.x + host.width <= port.x)
+      assert.ok(username.y > host.y + host.height)
       assert.equal(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth), true)
     }
     await dialog.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).click()
@@ -322,6 +329,49 @@ test('diarization settings default on and independently save all source combinat
   }
 })
 
+for (const inDialog of [false, true]) {
+  test(`microphone transcription toggles independently ${inDialog ? 'in settings' : 'in the idle panel'}`, async () => {
+    const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+    try {
+      if (inDialog) await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+      const panel = inDialog ? page.getByRole('dialog', { name: 'Einstellungen', exact: true }) : page.locator('.idle-audio-panel')
+      if (inDialog) {
+        assert.equal(await panel.locator('.audio-settings-grid').evaluate(element => getComputedStyle(element).marginTop), '0px')
+      }
+      const mic = panel.getByRole('checkbox', { name: 'Mikrofon transkribieren', exact: true })
+      const speaker = panel.getByRole('checkbox', { name: 'Speaker-Loopback transkribieren', exact: true })
+      for (const width of [900, 390]) {
+        await page.setViewportSize({ width, height: 600 })
+        for (const [checkbox, device] of [[mic, 'Mikrofon'], [speaker, 'Speaker Loopback']]) {
+          const toggleBox = await checkbox.boundingBox()
+          const deviceBox = await panel.getByRole('combobox', { name: device, exact: true }).boundingBox()
+          assert.ok(toggleBox.x + toggleBox.width <= deviceBox.x)
+          assert.ok(Math.abs(toggleBox.y + toggleBox.height / 2 - deviceBox.y - deviceBox.height / 2) < 1)
+          assert.equal(await panel.getByText(await checkbox.getAttribute('aria-label'), { exact: true }).count(), 0)
+        }
+      }
+      await mic.click()
+      assert.equal(await mic.isChecked(), false)
+      assert.equal(await speaker.isChecked(), true)
+      assert.equal(await panel.getByRole('combobox', { name: 'Mikrofon', exact: true }).isDisabled(), true)
+      assert.equal(await panel.getByRole('combobox', { name: 'Speaker Loopback', exact: true }).isDisabled(), false)
+      await mic.click()
+      assert.equal(await mic.isChecked(), true)
+      assert.equal(await speaker.isChecked(), true)
+      await speaker.click()
+      assert.equal(await mic.isChecked(), true)
+      assert.equal(await speaker.isChecked(), false)
+      assert.equal(await mic.isDisabled(), false)
+      await mic.click()
+      assert.equal(await mic.isChecked(), false)
+      assert.equal(await speaker.isChecked(), true)
+      await speaker.click()
+      assert.equal(await mic.isChecked(), true)
+      assert.equal(await speaker.isChecked(), false)
+    } finally { await page.close() }
+  })
+}
+
 test('transcription sources default on, persist independently and keep the last source enabled', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
   try {
@@ -330,15 +380,25 @@ test('transcription sources default on, persist independently and keep the last 
     const speaker = page.getByRole('checkbox', { name: 'Speaker-Loopback transkribieren', exact: true })
     assert.equal(await mic.isChecked(), true)
     assert.equal(await speaker.isChecked(), true)
-    // Speaker abschalten: nur der Mic bleibt aktiv und ist deshalb gesperrt.
+    // Speaker abschalten: Mic bleibt aktiv, beide Checkboxen bleiben bedienbar.
     await speaker.uncheck()
     await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.transcription?.speaker === false)
     assert.equal(await mic.isChecked(), true)
     assert.equal(await speaker.isChecked(), false)
-    assert.equal(await mic.isDisabled(), true)
+    assert.equal(await mic.isDisabled(), false)
     assert.equal(await speaker.isDisabled(), false)
-    // Speaker wieder einschalten: der Mic ist danach wieder freigeschaltet.
+    // Letzte aktive Quelle abwaehlen: die andere wird automatisch aktiviert.
+    await mic.uncheck()
+    assert.equal(await mic.isChecked(), false)
+    assert.equal(await speaker.isChecked(), true)
+    await page.getByRole('button', { name: 'Speichern', exact: true }).click()
+    await page.waitForFunction(() => window.lastSavedSettings?.transcription?.mic === false && window.lastSavedSettings?.transcription?.speaker === true)
+    await speaker.uncheck()
+    assert.equal(await mic.isChecked(), true)
+    assert.equal(await speaker.isChecked(), false)
+    await page.getByRole('button', { name: 'Speichern', exact: true }).click()
+    await page.waitForFunction(() => window.lastSavedSettings?.transcription?.mic === true && window.lastSavedSettings?.transcription?.speaker === false)
     await speaker.check()
     assert.equal(await mic.isDisabled(), false)
     await page.getByRole('button', { name: 'Speichern', exact: true }).click()
@@ -601,15 +661,16 @@ test('Console header stays compact, centered and stable across states and breakp
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
   try {
     await emitSegments(page)
-    for (const width of [1280, 801, 800, 501, 500, 390, 320]) {
+    assert.equal(await page.locator('.console-header .wordmark').count(), 0)
+    for (const width of [1280, 900, 801, 800, 501, 500, 390, 320]) {
       await page.setViewportSize({ width, height: 700 })
       assert.equal((await page.locator('.console-header').boundingBox()).height, 52)
       assert.equal((await page.locator('.container').boundingBox()).height, 700)
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight), true)
-      const [title, center, utilities] = await Promise.all(['.console-title-group', '.recording-center', '.utility-actions'].map((selector) => page.locator(selector).boundingBox()))
-      assert.ok(title.x + title.width <= center.x && center.x + center.width <= utilities.x, `No header overlap at ${width}px`)
-      const buttons = await page.locator('.recording-actions').boundingBox()
-      assert.ok(Math.abs(buttons.x + buttons.width / 2 - center.x - center.width / 2) < 1)
+      const [buttons, center, utilities] = await Promise.all(['.recording-actions', '.status-center', '.utility-actions'].map((selector) => page.locator(selector).boundingBox()))
+      assert.ok(buttons.x + buttons.width <= center.x && center.x + center.width <= utilities.x, `No header overlap at ${width}px`)
+      const badge = await page.locator('.live-badge').boundingBox()
+      assert.ok(Math.abs(badge.x + badge.width / 2 - center.x - center.width / 2) < 1)
       assert.equal(await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).innerText(), '')
       const firstColumn = await page.locator('.segment').first().evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ')[0])
       if (width > 500) assert.equal(firstColumn, '120px')

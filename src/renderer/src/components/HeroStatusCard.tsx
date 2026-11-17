@@ -55,29 +55,24 @@ export function HeroStatusCard(props: HeroStatusCardProps) {
 
   return (
     <header className="console-header">
-      <div className="console-title-group">
-        <div className="wordmark" aria-label="Meeting Notes">
-          <span className="brand-mark"><Icon name="wave" /></span><span className="wordmark-label">Meeting Notes</span>
-        </div>
+      <div className="toolbar-actions recording-actions hero-controls">
+        <button type="button" onClick={() => void (status.paused ? props.onResume() : props.onPause())}
+          disabled={!status.running} aria-label={pauseLabel} title={pauseLabel}>
+          <Icon name={status.paused ? 'play' : 'pause'} /><span>{pauseLabel}</span>
+        </button>
+        <button className={status.running ? 'stop-button' : 'start-button primary-button'} type="button"
+          onClick={() => void props.onToggleRecording()}
+          disabled={!status.running && (isStarting || props.startDisabled || !!props.runtimeIssue)}
+          aria-label={recordLabel} title={recordLabel}>
+          <Icon name={status.running ? 'stop' : 'play'} /><span>{recordLabel}</span>
+        </button>
+      </div>
+      <div className="status-center">
         <span className={`live-badge ${status.paused ? 'paused' : status.running ? '' : 'stopped'}`}
           aria-label={`${props.statusLabel}: ${props.durationLabel}`}
           title={`${props.statusLabel} · ${props.runtimeIssue ?? props.statusDescription}`}>
           <span className="dot" /><time title={`Startzeit: ${props.startedAtLabel}`}>{props.durationLabel}</time>
         </span>
-      </div>
-      <div className="recording-center">
-        <div className="toolbar-actions recording-actions hero-controls">
-          <button type="button" onClick={() => void (status.paused ? props.onResume() : props.onPause())}
-            disabled={!status.running} aria-label={pauseLabel} title={pauseLabel}>
-            <Icon name={status.paused ? 'play' : 'pause'} /><span>{pauseLabel}</span>
-          </button>
-          <button className={status.running ? 'stop-button' : 'start-button primary-button'} type="button"
-            onClick={() => void props.onToggleRecording()}
-            disabled={!status.running && (isStarting || props.startDisabled || !!props.runtimeIssue)}
-            aria-label={recordLabel} title={recordLabel}>
-            <Icon name={status.running ? 'stop' : 'play'} /><span>{recordLabel}</span>
-          </button>
-        </div>
       </div>
       <div className="toolbar-actions utility-actions">
         <button type="button" onClick={() => void props.onCopyTranscript()} disabled={!props.canCopyTranscript}

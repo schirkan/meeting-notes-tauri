@@ -17,7 +17,7 @@ Dieses Projekt ist die **Tauri-Migration** des bestehenden Electron-Projekts `pr
 - Live-Transkript mit Interim/Final und verbesserter Lesbarkeit
 - Speaker-Badges/Farben inkl. Alias-Mapping
 - Fehler-/Status-Events via Tauri-Bridge
-- Kompakte dunkle Console-Oberfläche über die gesamte Fensterhöhe: eine gemeinsame Kopfzeile, Timer-Status, zentrierte Aufnahmeaktionen und direkt editierbare Sprechernamen
+- Kompakte dunkle Console-Oberfläche über die gesamte Fensterhöhe: eine gemeinsame Kopfzeile ohne Wortmarke, Aufnahmeaktionen links, Timer-Status in der mittleren Spalte und direkt editierbare Sprechernamen
 - Sprecherzuordnung standardmäßig ausgeblendet; **Folgen** erscheint nur nach manuellem Zurückscrollen
 - Debug-Log über das Drei-Punkte-Menü einblenden: die zunächst unsichtbare Fußzeile öffnet den Logbereich beim ersten Anzeigen direkt nach oben (maximal 50 % des Inhaltsbereichs). Fehlerzähler und **Log löschen** bleiben in der Fußzeile; späteres Aus-/Einblenden erhält den Öffnungszustand.
 - Persistente Einstellungen (Sprache, Devices, Sprechererkennung separat für Mic und Speaker)
@@ -110,6 +110,11 @@ npm run docs:specs                # Stand der Specs in SPEC.md neu erzeugen
 > manuelle Schritt `npm run publish:sidecar` ist nicht mehr nötig —
 > das Skript existiert weiterhin für Ad-hoc-Rebuilds ohne Tauri-Build.
 
+Die Visual-C++-Runtime wird ueber `build.windows.staticVCRuntime: true` in
+`src-tauri/tauri.conf.json` statisch eingebunden. Die Tauri-CLI 2.12.5
+unterstuetzt diese Einstellung; ein Kompatibilitaetscode fuer die veraltete
+Umgebungsvariable `STATIC_VCRUNTIME` ist nicht mehr erforderlich.
+
 Build-Ausgaben liegen getrennt von den C#-Quellen: Publish unter
 `src-tauri/target/sidecar-publish/`, .NET-Zwischenartefakte unter
 `src-tauri/target/sidecar-artifacts/`. Dadurch verändert der Publish nicht
@@ -191,6 +196,20 @@ erhalten. Die Anwendung vorher beenden; anschliessend bei Bedarf neu bauen.
 UI-Regressionstests: `node --test tests/startup-ui.test.mjs` (lokaler Vite-Testserver und headless Microsoft Edge; keine Azure-Verbindungen).
 
 ### Entwicklerwerkzeuge
+Die Proxy-Konfiguration ist zweispaltig: Host/Port sowie Benutzername/Passwort
+stehen jeweils nebeneinander. Die Transkriptions-Checkboxen stehen ohne
+sichtbare Beschriftung links vor den jeweiligen Geraete-Dropdowns; ihre
+zugänglichen Namen und Tooltips bleiben erhalten. Beide Quellen schalten
+unabhaengig. Beim Abwaehlen der letzten aktiven Quelle wird die andere
+automatisch aktiviert; beide Checkboxen bleiben ausserhalb einer Aufnahme
+bedienbar. Der Allgemein-Tab hat keinen zusaetzlichen oberen Formularabstand.
+
+Die initiale Fenstergroesse betraegt 900 x 600 logische Pixel; das Fenster
+bleibt frei skalierbar. Das Windows-App-Icon verwendet das Wave-Symbol des UI
+mit violettem Hintergrund. Die reproduzierbare SVG-Vorlage liegt unter
+`src-tauri/icons/app-icon.svg`; PNG- und ICO-Dateien werden mit `tauri icon`
+erzeugt.
+
 F12 öffnet bzw. schließt die WebView2-DevTools, auch im Release-/Portable-Build. Dazu ist das Tauri-Feature `devtools` aktiviert.
 
 Die Geraeteabfrage beim Start und nach dem Speichern startet den Sidecar unter

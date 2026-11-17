@@ -70,39 +70,27 @@ const api: TranscriptApi = {
   resume: () => invoke<TranscriptStatus>(TAURI_COMMANDS.resumeRecording),
   getStatus: () => invoke<TranscriptStatus>(TAURI_COMMANDS.getStatus),
   getDebugLog: () => invoke<DebugLogEntry[]>(TAURI_COMMANDS.getDebugLog),
-  clearDebugLog: () =>
-    invoke<{ cleared: number }>(TAURI_COMMANDS.clearDebugLog),
-  getDevices: () =>
-    invoke<AudioDeviceSnapshot>(TAURI_COMMANDS.getDevices),
-  getSettings: () =>
-    invoke<UserSettings>(TAURI_COMMANDS.getUserSettings),
-  getConfig: () =>
-    invoke<AppConfigState>(TAURI_COMMANDS.getAppConfig),
-  saveSettings: (settings) =>
-    invoke<UserSettings>(TAURI_COMMANDS.saveUserSettings, { settings }),
-  saveConfig: (config) =>
-    invoke<AppConfigState>(TAURI_COMMANDS.saveFixedConfig, { config }),
-  saveTranscriptMarkdown: (markdown) =>
-    invoke<string>(TAURI_COMMANDS.saveTranscriptMarkdown, { markdown }),
-  testAzureConnectivity: (payload) =>
-    invoke<ConnectivityResult>(TAURI_COMMANDS.testAzureConnectivity, { payload }),
+  clearDebugLog: () => invoke<{ cleared: number }>(TAURI_COMMANDS.clearDebugLog),
+  getDevices: () => invoke<AudioDeviceSnapshot>(TAURI_COMMANDS.getDevices),
+  getSettings: () => invoke<UserSettings>(TAURI_COMMANDS.getUserSettings),
+  getConfig: () => invoke<AppConfigState>(TAURI_COMMANDS.getAppConfig),
+  saveSettings: (settings) => invoke<UserSettings>(TAURI_COMMANDS.saveUserSettings, { settings }),
+  saveConfig: (config) => invoke<AppConfigState>(TAURI_COMMANDS.saveFixedConfig, { config }),
+  saveTranscriptMarkdown: (markdown) => invoke<string>(TAURI_COMMANDS.saveTranscriptMarkdown, { markdown }),
+  testAzureConnectivity: (payload) => invoke<ConnectivityResult>(TAURI_COMMANDS.testAzureConnectivity, { payload }),
   copyTranscript: (segments) => copyTranscriptToClipboard(segments),
-  onSegment: (cb) =>
-    subscribe<TranscriptSegment>(TAURI_EVENTS.segment, cb),
-  onError: (cb) =>
-    subscribe<TranscriptError>(TAURI_EVENTS.error, cb),
-  onStatus: (cb) =>
-    subscribe<TranscriptStatus>(TAURI_EVENTS.status, cb),
-  onDebugLog: (cb) =>
-    subscribe<DebugLogEntry>(TAURI_EVENTS.debug, cb)
+  onSegment: (cb) => subscribe<TranscriptSegment>(TAURI_EVENTS.segment, cb),
+  onError: (cb) => subscribe<TranscriptError>(TAURI_EVENTS.error, cb),
+  onStatus: (cb) => subscribe<TranscriptStatus>(TAURI_EVENTS.status, cb),
+  onDebugLog: (cb) => subscribe<DebugLogEntry>(TAURI_EVENTS.debug, cb)
 }
 
-// Sidecar crash event is not part of TranscriptApi (it's a Tauri-internal
-// event the renderer can also subscribe to). Expose it for completeness.
-;(window as unknown as { transcriptApi: TranscriptApi; transcriptSidecar: { onCrashed: (cb: (p: SidecarCrashedPayload) => void) => () => void } }).transcriptSidecar = {
-  onCrashed: (cb) => subscribe<SidecarCrashedPayload>(TAURI_EVENTS.sidecarCrashed, cb)
-}
+  // Sidecar crash event is not part of TranscriptApi (it's a Tauri-internal
+  // event the renderer can also subscribe to). Expose it for completeness.
+  ; (window as unknown as { transcriptApi: TranscriptApi; transcriptSidecar: { onCrashed: (cb: (p: SidecarCrashedPayload) => void) => () => void } }).transcriptSidecar = {
+    onCrashed: (cb) => subscribe<SidecarCrashedPayload>(TAURI_EVENTS.sidecarCrashed, cb)
+  }
 
-;(window as unknown as { transcriptApi: TranscriptApi }).transcriptApi = api
+  ; (window as unknown as { transcriptApi: TranscriptApi }).transcriptApi = api
 
-export {}
+export { }

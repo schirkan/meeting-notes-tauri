@@ -55,16 +55,13 @@ p { line-height: 1.7; }
   gap: 12px;
   border-bottom: 1px solid var(--line);
 }
-.console-title-group, .wordmark, .toolbar-actions { display: flex; align-items: center; }
-.console-title-group { gap: 12px; }
-.wordmark { gap: 10px; font-size: 14px; font-weight: 650; letter-spacing: -.3px; }
-.brand-mark { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 7px; background: #3b3354; color: #bfadfb; }
+.toolbar-actions { display: flex; align-items: center; }
 .live-badge { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 4px; width: 64px; padding: 4px 6px; border: 1px solid #28493d; border-radius: 5px; background: #20372f; color: #83d5b8; }
 .live-badge time { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .dot { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: currentColor; }
 .live-badge.paused { background: #3a3020; border-color: #5b4c2e; color: #e2bd6a; }
 .live-badge.stopped { background: var(--hover); border-color: var(--line); color: var(--muted); }
-.recording-center { display: flex; justify-content: center; min-width: 0; }
+.status-center { display: flex; justify-content: center; min-width: 0; }
 .toolbar-actions { gap: 4px; }
 .console-header button { font-size: 11px; }
 .recording-actions > button { width: 84px; min-width: 84px; }
@@ -184,6 +181,13 @@ summary::-webkit-details-marker { display: none; }
 .meta-path { margin: 0; color: var(--muted); font-size: 10px; user-select: text; overflow-wrap: anywhere; }
 .settings-block { display: grid; gap: 17px; margin: 0 0 18px; }
 .audio-settings-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin-top: 22px; }
+.settings-dialog .audio-settings-grid { margin-top: 0; }
+.proxy-settings-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.proxy-settings-grid > label { align-content: end; }
+.audio-source-field { display: grid; gap: 7px; min-width: 0; font-size: 11px; color: var(--muted); }
+.audio-source-control { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.audio-source-control input[type="checkbox"] { width: auto; min-height: 0; margin: 0; flex-shrink: 0; accent-color: var(--accent); }
+.audio-source-control select { flex: 1; }
 label { display: grid; gap: 7px; min-width: 0; font-size: 11px; color: var(--muted); }
 .field-caption { display: flex; align-items: center; gap: 7px; }
 input, select { width: 100%; min-width: 0; min-height: 36px; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: var(--bg); color: var(--text); }
@@ -214,13 +218,11 @@ input:disabled, select:disabled { opacity: .5; cursor: not-allowed; }
 
 @media (max-width: 800px) {
   .console-grid { grid-template-columns: minmax(0, 1fr) 225px; }
-  .wordmark-label { display: none; }
   .utility-actions > button { width: 32px; padding: 6px; gap: 0; }
   .utility-actions > button > span { display: none; }
 }
 @media (max-width: 500px) {
   .console-header { padding: 0 10px; gap: 2px; }
-  .console-title-group { gap: 2px; }
   .live-badge time { font-size: 11px; }
   .toolbar-actions > button { width: 28px; min-width: 28px; min-height: 28px; padding: 5px; }
   .recording-actions button { gap: 0; }
