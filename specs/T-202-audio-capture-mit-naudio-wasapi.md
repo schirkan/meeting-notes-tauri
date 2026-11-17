@@ -1,4 +1,4 @@
-﻿# T-202: Audio-Capture mit NAudio (WASAPI Mic + Loopback)
+# T-202: Audio-Capture mit NAudio (WASAPI Mic + Loopback)
 
 ## Kontext
 Status: umgesetzt
