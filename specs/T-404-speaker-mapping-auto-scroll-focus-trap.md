@@ -9,10 +9,10 @@ Abhängigkeiten: T-402
 Verhaltensfeinheiten aus `../meeting-notes` 1:1 portieren und gegen Validierungs-Tests prüfen.
 
 ## Done When
-- [x] **Speaker-Mapping:** numerische IDs werden auf 30 Farbslots zyklisch gemappt (`speaker-guest-1`…`speaker-guest-30`). Mic-IDs erhalten einen Offset von 15, sodass gleich nummerierte Mic-/Speaker-IDs unterschiedliche Farben haben.
-- [x] **Quellentrennung:** Sprecheridentität und Alias-Schlüssel enthalten die Audioquelle, z. B. `mic:Guest-1` und `speaker:Guest-1`. Badges und Zuordnung zeigen ohne Alias `Mic · Guest-1` bzw. `Speaker · Guest-1`; identische SDK-IDs der Quellen teilen keinen Alias.
-- [x] **Mic-Parität:** Bei Mic-Diarization werden verschiedene erkannte Sprecher wie beim Loopback einzeln dargestellt und zugeordnet. Aliase gelten in Badges, letzter-Sprecher-Anzeige und Clipboard-Export; Rohsegmente behalten Quelle und SDK-ID.
-- [x] **Interim-Korrektur:** Neue Interim-/Final-Events entfernen ältere Interims nur derselben Quelle, auch wenn das SDK die Sprecher-ID korrigiert. Andere Quellen und finale Sprechersegmente bleiben erhalten.
+- [x] **Speaker-Mapping:** numerische IDs werden auf 30 Farbslots zyklisch gemappt (`speaker-guest-1`…`speaker-guest-30`). Mic-IDs erhalten einen Offset von 15, sodass gleich nummerierte Mic-/Speaker-IDs unterschiedliche Farben haben. Beleg: src/renderer/src/speaker-utils.ts (30 Farbslots, zyklisch).
+- [x] **Quellentrennung:** Sprecheridentität und Alias-Schlüssel enthalten die Audioquelle, z. B. `mic:Guest-1` und `speaker:Guest-1`. Badges und Zuordnung zeigen ohne Alias `Mic · Guest-1` bzw. `Speaker · Guest-1`; identische SDK-IDs der Quellen teilen keinen Alias. Beleg: src/shared/transcript-contract.ts (source im Segment) und src/renderer/src/speaker-utils.ts (Identitaet mit Quelle).
+- [x] **Mic-Parität:** Bei Mic-Diarization werden verschiedene erkannte Sprecher wie beim Loopback einzeln dargestellt und zugeordnet. Aliase gelten in Badges, letzter-Sprecher-Anzeige und Clipboard-Export; Rohsegmente behalten Quelle und SDK-ID. Beleg: src/renderer/src/speaker-utils.ts (eigene Palette je Quelle, Mic und Loopback gleich behandelt).
+- [x] **Interim-Korrektur:** Neue Interim-/Final-Events entfernen ältere Interims nur derselben Quelle, auch wenn das SDK die Sprecher-ID korrigiert. Andere Quellen und finale Sprechersegmente bleiben erhalten. Beleg: src/renderer/src/use-app-state.ts (entfernt Interim-Events nur derselben Quelle).
 - [x] **Auto-Scroll:** pausiert, sobald Nutzer ≥32 px vom Listenende hochgescrollt hat, reaktiviert beim Zurückscrollen. Beleg: Node-UI-Test zum Follow-Verhalten.
 - [x] **Focus-Trap im Settings-Dialog:** Tab/Shift+Tab zyklisch innerhalb der Dialog-Elemente; Escape schließt den Dialog. Beleg: Node-UI-Test zum Fokus- und Trap-Verhalten.
 - [x] **Initial-Fokus:** beim Öffnen des Settings-Dialogs wird das erste Eingabefeld fokussiert (nicht der Schließen-Button). Beleg: Node-UI-Test zum Fokus beim Oeffnen.

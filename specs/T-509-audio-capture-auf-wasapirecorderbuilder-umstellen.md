@@ -40,17 +40,17 @@ Push in den Azure-`PushAudioInputStream` bleiben semantisch identisch.
   `WithDefaultDeviceStreamRouting()`, `Build()`, `BuildAsync()`.
 
 ## Done When
-- [x] Mic und Speaker-Loopback laufen ueber `WasapiRecorder` (Code umgesetzt; Laufzeitnachweis auf echter Hardware steht aus).
-- [x] Das Zielformat 16 kHz / 16-Bit / mono erreicht Azure unveraendert — im Engine-Modus liefert die WASAPI-Engine direkt, im Resampler-Modus der MediaFoundationResampler.
-- [x] `WasapiCapture`, `WasapiLoopbackCapture` und `DrainResampled` sind aus
+- [x] Mic und Speaker-Loopback laufen ueber `WasapiRecorder` (Code umgesetzt; Laufzeitnachweis auf echter Hardware steht aus). Beleg: sidecar/AudioRecorderSource.cs (WasapiRecorder) (geprueft).
+- [x] Das Zielformat 16 kHz / 16-Bit / mono erreicht Azure unveraendert — im Engine-Modus liefert die WASAPI-Engine direkt, im Resampler-Modus der MediaFoundationResampler. Beleg: sidecar/AudioRecorderSource.cs (16 kHz / 16-bit / mono in beiden Modi).
+- [x] `WasapiCapture`, `WasapiLoopbackCapture` und `DrainResampled` sind aus Beleg: sidecar/AudioRecorderSource.cs (WasapiCapture), sidecar/AudioRecorderSource.cs (WasapiLoopbackCapture) (geprueft).
       `Program.cs` entfernt; die drei ungenutzten Capture-Klassen
       (`AudioCaptureClient`, `MicCaptureClient`, `LoopbackCaptureClient`) sind
       geloescht. `BufferedWaveProvider` und `MediaFoundationResampler` bleiben
       **nur** im automatischen Rueckfallpfad in `AudioRecorderSource.cs`.
-- [x] Keine `#pragma warning disable CS0618` mehr noetig.
+- [x] Keine `#pragma warning disable CS0618` mehr noetig. Beleg: sidecar/*.cs - kein pragma warning disable CS0618 mehr vorhanden (geprueft).
 - [ ] Das Loopback-Verhalten ist unveraendert: Events nur waehrend tatsaechlicher - **offen**: Braucht echte Hardware mit Ausgabegeraet - der Loopback-Pfad ist hier nicht pruefbar.
       Audioausgabe auf dem Zielgeraet.
-- [x] Die C#-Validierung bleibt gruen (467 Assertions PASS).
+- [x] Die C#-Validierung bleibt gruen (467 Assertions PASS). Beleg: npm run test:sidecar - 508 Assertions PASS (Stand 2026-11-17; die Angabe 467 war veraltet).
 - [ ] Latenz und Ausgabequalitaet sind auf echter Hardware gegen die - **offen**: Braucht echte Hardware mit Ausgabegeraet (Loopback und Ausgabequalitaet).
       bisherige Implementierung geprueft.
 

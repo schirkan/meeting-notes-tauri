@@ -23,37 +23,37 @@ eine andere Person und Final-Segmente wurden über die Sitzungsgrenze hinweg
 zusammengeführt.
 
 ## Done When
-- [x] Das Segment-Payload führt die **Session-ID** mit. Der Sidecar meldet die
+- [x] Das Segment-Payload führt die **Session-ID** mit. Der Sidecar meldet die Beleg: sidecar/AzureSpeechService.cs (sessionId im Transcript-Payload) und src/shared/transcript-contract.ts.
   Azure-Session-ID pro Quelle (SessionStarted) im Feld `sessionId`; bis Azure
   sie meldet, wird eine eindeutige Kennung des Streams verwendet.
-- [x] Die Sprecheridentität im UI ist **sessionsicher**
+- [x] Die Sprecheridentität im UI ist **sessionsicher** Beleg: src/renderer/src/speaker-utils.ts (Identitaet aus sessionId und source) und src/shared/transcript-contract.ts.
   (`<sessionId>|<source>:<speaker>`, `getSpeakerIdentity`). Alias-Zuordnung und
   Merge-Zuordnung benutzen diese Identität, nie die nackte SDK-ID.
-- [x] Segmente unterschiedlicher Sitzungen werden **nicht** zusammengeführt.
-- [x] Eine neue Azure-Sitzung erhält eine neue Identität. Die
+- [x] Segmente unterschiedlicher Sitzungen werden **nicht** zusammengeführt. Beleg: src/renderer/src/use-app-state.ts (Merge nur innerhalb derselben Identitaet).
+- [x] Eine neue Azure-Sitzung erhält eine neue Identität. Die Beleg: src/renderer/src/speaker-utils.ts (neue Azure-Sitzung ergibt eine neue Identitaet).
   Sprecherzuordnung wird dadurch nicht still auf eine fremde Person
   übertragen; das UI nummeriert die Anzeige, wenn dieselbe SDK-ID in zwei
   Sitzungen vorkommt (Speaker · Guest-1 #2).
-- [x] **Pause** (`pause_recording`) schickt `{"type":"pause"}` an den
+- [x] **Pause** (`pause_recording`) schickt `{"type":"pause"}` an den Beleg: src/shared/tauri-contract.ts (pause_recording) (geprueft).
   Sidecar. Der Sidecar stoppt die Audio-Zufuhr, beendet die Azure-Sitzung
   aber **nicht**. Status: `paused`.
-- [x] **Fortsetzen** (`resume_recording`) schickt `{"type":"resume"}` und
+- [x] **Fortsetzen** (`resume_recording`) schickt `{"type":"resume"}` und Beleg: src/shared/tauri-contract.ts (resume_recording) (geprueft).
   setzt die Audio-Zufuhr fort. Status: `running`, Startzeit unverändert.
-- [x] Der Sidecar liest Kommandos über **stdin** (bisher wurden
+- [x] Der Sidecar liest Kommandos über **stdin** (bisher wurden Beleg: sidecar/Program.cs (liest pause, resume, reset und shutdown ueber stdin).
   `{"type":"reset"}` und `{"type":"shutdown"}` gesendet, aber nicht
   gelesen). Unterstützt: `pause`, `resume`, `reset`, `shutdown`.
-- [x] Der Sidecar erkennt eine vom Dienst beendete Sitzung und verbindet sie
+- [x] Der Sidecar erkennt eine vom Dienst beendete Sitzung und verbindet sie Beleg: sidecar/AzureSpeechService.cs (erkennt eine vom Dienst beendete Sitzung und verbindet sie neu).
   neu. Während einer Pause wird bewusst **nicht** neu verbunden — sonst
   wären die Sprecher-IDs der Pause verloren.
-- [x] **Stop** beendet die Sitzung endgültig. Der nächste Start setzt
+- [x] **Stop** beendet die Sitzung endgültig. Der nächste Start setzt Beleg: sidecar/Program.cs (Stop beendet die Sitzung endgueltig).
   Segmente und Sprecherbasis zurück: das ist ein neues Transkript.
-- [x] Der Markdown-Export bekommt einen **Snapshot** der beendeten Sitzung.
+- [x] Der Markdown-Export bekommt einen **Snapshot** der beendeten Sitzung. Beleg: src-tauri/src/commands.rs (Snapshot der beendeten Sitzung beim Markdown-Export).
   Startet direkt nach dem Stop ein neues Transkript, geht der Export des
   beendeten Transkripts trotzdem nicht verloren.
-- [x] Die UI zeigt einen zusätzlichen Knopf Pause/Weiter neben Start/Stop;
+- [x] Die UI zeigt einen zusätzlichen Knopf Pause/Weiter neben Start/Stop; Beleg: src/renderer/src/components/HeroStatusCard.tsx (Pause-/Weiter-Knopf neben Start/Stop).
   der Status lautet Pausiert mit der Beschreibung Aufnahme pausiert — Sitzung
   bleibt aktiv.
-- [x] Die Laufzeitanzeige berücksichtigt die Pausezeit: Pausen sind nicht
+- [x] Die Laufzeitanzeige berücksichtigt die Pausezeit: Pausen sind nicht Beleg: src/renderer/src/use-app-state.ts (Pausen zaehlen nicht als Aufnahmezeit); im Node-Test abgedeckt.
   aufgenommene Zeit und werden nicht als Dauer gewertet.
 
 ## Approach

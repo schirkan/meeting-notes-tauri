@@ -32,26 +32,26 @@ Config-Datei `meeting-notes.config.json`:
   gesendet und erzeugt weder ein Gerät noch einen Recognizer.
 
 ## Done When
-- [x] Zwei Bool-Felder in TS-Contract, Rust-Settings und Config-Template.
-- [x] Normalisierung in `normalizeUserSettings` (Default je Feld `true`,
+- [x] Zwei Bool-Felder in TS-Contract, Rust-Settings und Config-Template. Beleg: src/shared/config-contract.ts, src-tauri/src/settings.rs und meeting-notes.config.example.json.
+- [x] Normalisierung in `normalizeUserSettings` (Default je Feld `true`, Beleg: src/renderer/src/use-app-state.ts (normalizeUserSettings) (geprueft).
       explizites `false` bleibt erhalten, unbrauchbare Werte werden nicht
       truthy).
-- [x] Rust-Persistenz: `transcription` überlebt Speichern/Laden; jedes
+- [x] Rust-Persistenz: `transcription` überlebt Speichern/Laden; jedes Beleg: sidecar/ArgsParser.cs (transcription) (geprueft).
       Feld einzeln kombinierbar.
-- [x] Weitergabe an den Sidecar über `--transcription-mic` /
+- [x] Weitergabe an den Sidecar über `--transcription-mic` / Beleg: sidecar/ArgsParser.cs (--transcription-mic / --transcription-speaker) und src-tauri/src/sidecar.rs (transcription_arguments).
       `--transcription-speaker` (unabhängige Booleans).
-- [x] Sidecar: nicht transkribierte Quellen erzeugen **weder** ein
+- [x] Sidecar: nicht transkribierte Quellen erzeugen **weder** ein Beleg: sidecar/AzureSpeechService.cs (nicht transkribierte Quellen erzeugen keinen Recognizer).
       Aufnahmegerät **noch** einen Azure-Recognizer.
-- [x] Sidecar: eine nicht transkribierte Quelle **voraussetzt kein Gerät** —
+- [x] Sidecar: eine nicht transkribierte Quelle **voraussetzt kein Gerät** — Beleg: sidecar/Program.cs (Geraete werden nur fuer transkribierte Quellen geoeffnet).
       ohne Speaker-Transkription wird kein Ausgabegerät gesucht.
-- [x] Beide Quellen ausgeschaltet ist ein Fehlerfall (Exit-Code 23), weil
+- [x] Beide Quellen ausgeschaltet ist ein Fehlerfall (Exit-Code 23), weil Beleg: sidecar/Program.cs (Exit-Code 23, wenn beide Quellen ausgeschaltet sind).
       dann nichts transkribiert würde.
-- [x] Zwei Checkboxen im Settings-Dialog; die Geräteauswahl und die
+- [x] Zwei Checkboxen im Settings-Dialog; die Geräteauswahl und die Beleg: src/renderer/src/components/SettingsPanel.tsx (Checkboxen; die Geraeteauswahl wird deaktiviert).
       Diarization-Checkboxen der jeweiligen Quelle werden deaktiviert, wenn
       die Quelle nicht transkribiert wird.
-- [x] Die letzte aktive Quelle lässt sich nicht abschalten (Mindestens eine
+- [x] Die letzte aktive Quelle lässt sich nicht abschalten (Mindestens eine Beleg: src/renderer/src/components/SettingsPanel.tsx (die letzte aktive Quelle laesst sich nicht abschalten).
       Quelle muss transkribiert werden).
-- [x] Verifikation: Node-Tests, Rust-Tests und C#-Validierung grün.
+- [x] Verifikation: Node-Tests, Rust-Tests und C#-Validierung grün. Beleg: npm run verify (75 Node-Tests, 31 Rust-Tests, 508 C#-Assertions) - gruen.
 
 ## Umsetzung
 ### Contract und Persistenz

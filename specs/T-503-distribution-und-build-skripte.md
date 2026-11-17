@@ -9,17 +9,17 @@ Abhängigkeiten: T-207
 Standardisierte Build-Pipeline für die Tauri-Variante.
 
 ## Done When
-- [x] `src-tauri/build.rs` publisht den C#-Sidecar automatisch vor `cargo build` (RID aus `CARGO_CFG_TARGET_OS`/`CARGO_CFG_TARGET_ARCH`, Config aus `PROFILE`). — siehe `DECISIONS.md → AD-009`.
-- [x] `npm run build` (= `tsc --noEmit && vite build`) baut den React-Renderer via Vite.
-- [x] `npm run tauri -- build` produziert NSIS- und MSI-Installer (Sidecar-Build automatisch in build.rs); Installer-Build wurde zuvor verifiziert, heute nicht erneut ausgeführt.
-- [x] `npm run dist:portable` **verpackt bereits gebaute Artefakte** nach `dist/portable/` (T-504), kompiliert sie nicht.
-- [x] VS-Code-Aufgabe **Build portable distribution** führt `npm ci`, `npm run tauri -- build --no-bundle` und danach Packaging aus. Letzter Portable-Rebuild und anschließendes `npm run test:smoke` erfolgreich, 26 Hashes stimmen.
-- [x] Sidecar-EXE und verwaltete/native DLLs sind über `tauri.conf.json → bundle.resources` im Installer enthalten und liegen in der portablen Ausgabe extern neben der Haupt-EXE.
-- [x] `npm run typecheck` ist grün.
+- [x] `src-tauri/build.rs` publisht den C#-Sidecar automatisch vor `cargo build` (RID aus `CARGO_CFG_TARGET_OS`/`CARGO_CFG_TARGET_ARCH`, Config aus `PROFILE`). — siehe `DECISIONS.md → AD-009`. Beleg: src-tauri/build.rs (build.rs), package.json (build), src-tauri/build.rs (CARGO_CFG_TARGET_OS) (geprueft).
+- [x] `npm run build` (= `tsc --noEmit && vite build`) baut den React-Renderer via Vite. Beleg: package.json (run) (geprueft).
+- [x] `npm run tauri -- build` produziert NSIS- und MSI-Installer (Sidecar-Build automatisch in build.rs); Installer-Build wurde zuvor verifiziert, heute nicht erneut ausgeführt. Beleg: package.json (run) (geprueft).
+- [x] `npm run dist:portable` **verpackt bereits gebaute Artefakte** nach `dist/portable/` (T-504), kompiliert sie nicht. Beleg: package.json (run) (geprueft).
+- [x] VS-Code-Aufgabe **Build portable distribution** führt `npm ci`, `npm run tauri -- build --no-bundle` und danach Packaging aus. Letzter Portable-Rebuild und anschließendes `npm run test:smoke` erfolgreich, 26 Hashes stimmen. Beleg: package.json (ci), package.json (run) (geprueft).
+- [x] Sidecar-EXE und verwaltete/native DLLs sind über `tauri.conf.json → bundle.resources` im Installer enthalten und liegen in der portablen Ausgabe extern neben der Haupt-EXE. Beleg: src-tauri/tauri.conf.json (bundle.resources auf target/sidecar-publish/*) und scripts/dist-portable.mjs.
+- [x] `npm run typecheck` ist grün. Beleg: package.json (run) (geprueft).
 - [ ] `npm run lint` (sofern konfiguriert) ist grün - **offen**: kein Lint-Setup im Projekt.
-- [x] `npm run publish:sidecar` ist nur noch ein optionales Skript für Ad-hoc-Rebuilds ohne Tauri-Build.
-- [x] Toolchain-Skripte verwenden .NET 10 SDK und Rust stable x64/MSVC. Der Checker liest Node-Anforderungen aus `package.json`, Rusts Mindestversion aus `Cargo.toml` und prueft Visual Studio C++-Buildtools sowie Windows SDK. Node und Visual-Studio-Komponenten werden separat installiert; Setup installiert .NET und Rust ohne globale Rust-Standardaenderung. GNU-Patch und ungenutzter Node-Checker sind entfernt.
-- [x] `build:sidecar` und `test:sidecar` legen ihre Ausgaben ausserhalb des C#-Quellbaums ab. `clean:sidecar` entfernt gezielt aktuelle und historische Sidecar-Ausgaben, nicht Rust-Caches; `--dry-run` zeigt nur die Ziele.
+- [x] `npm run publish:sidecar` ist nur noch ein optionales Skript für Ad-hoc-Rebuilds ohne Tauri-Build. Beleg: package.json (run) (geprueft).
+- [x] Toolchain-Skripte verwenden .NET 10 SDK und Rust stable x64/MSVC. Der Checker liest Node-Anforderungen aus `package.json`, Rusts Mindestversion aus `Cargo.toml` und prueft Visual Studio C++-Buildtools sowie Windows SDK. Node und Visual-Studio-Komponenten werden separat installiert; Setup installiert .NET und Rust ohne globale Rust-Standardaenderung. GNU-Patch und ungenutzter Node-Checker sind entfernt. Beleg: package.json (geprueft).
+- [x] `build:sidecar` und `test:sidecar` legen ihre Ausgaben ausserhalb des C#-Quellbaums ab. `clean:sidecar` entfernt gezielt aktuelle und historische Sidecar-Ausgaben, nicht Rust-Caches; `--dry-run` zeigt nur die Ziele. Beleg: scripts/verify.mjs (test:sidecar) (geprueft).
 
 ## Approach
 - `src-tauri/build.rs` ruft `dotnet publish` mit korrektem RID auf, bevor Cargo kompiliert. `cargo:rerun-if-changed=../sidecar` sorgt dafür, dass nur bei Sidecar-Quelländerungen neu publisht wird.

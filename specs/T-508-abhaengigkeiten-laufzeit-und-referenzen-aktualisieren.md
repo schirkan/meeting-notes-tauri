@@ -11,26 +11,26 @@ ohne das Verhalten der Anwendung zu aendern. Kein Feature soll dabei entstehen â
 die Aufnahme- und Transkriptionslogik bleibt unveraendert.
 
 ## Done When
-- [x] **npm:** React und React-Doma auf 19.3.1, `@types/react`/`@types/react-dom` auf 19.3.0,
+- [x] **npm:** React und React-Doma auf 19.3.1, `@types/react`/`@types/react-dom` auf 19.3.0, Beleg: package.json (React 19.3.1, @types/react 19.3.0, @types/react-dom 19.3.0).
   `@vitejs/plugin-react` auf 6.3.0, Vite auf 8.3.8, Playwright auf 1.65.0,
   `@tauri-apps/api` und `@tauri-apps/cli` auf 2.12.4, `@types/node` auf 26.6.6.
   `npm audit` meldet **0 Vulnerabilities**.
-- [x] **TypeScript 7.0.2:** `baseUrl` ist in TS 7 entfernt, die Pfade sind jetzt
+- [x] **TypeScript 7.0.2:** `baseUrl` ist in TS 7 entfernt, die Pfade sind jetzt Beleg: tests/startup-ui.test.mjs (baseUrl) (geprueft).
   relativ (`./src/shared/*`). Der Typecheck laeuft fehlerfrei durch.
-- [x] **.NET:** Ziel-Framework von `net8.0-windows` auf **`net10.0-windows`**.
+- [x] **.NET:** Ziel-Framework von `net8.0-windows` auf **`net10.0-windows`**. Beleg: sidecar/MeetingNotes.Sidecar.csproj (net10.0-windows, zusaetzlich net9.0-windows als zweites Ziel).
   .NET 8 ist seit 10.11.2026 aus der Unterstuetzung; .NET 10 ist die aktuelle LTS.
   `scripts/clean-sidecar.mjs` und `src-tauri/src/sidecar.rs` (Dev-Pfad) sind
   mitgezogen.
-- [x] **NuGet:** `Microsoft.CognitiveServices.Speech` 1.44.0 -> **1.53.0**,
+- [x] **NuGet:** `Microsoft.CognitiveServices.Speech` 1.44.0 -> **1.53.0**, Beleg: sidecar/AzureSpeechService.cs (Microsoft.CognitiveServices.Speech) (geprueft).
   NAudio 2.2.1 -> **3.3.0**.
-- [x] **NAudio-3.x-Anpassungen:** `IWaveProvider.Read` ist jetzt span-basiert
+- [x] **NAudio-3.x-Anpassungen:** `IWaveProvider.Read` ist jetzt span-basiert Beleg: sidecar/AudioResampler.cs (IWaveProvider.Read) (geprueft).
   (`Read(Span<byte>)`) statt `Read(byte[], int, int)` â€” betrifft `AudioResampler`
   und die `DrainResampled`-Helfer in `Program.cs`. `MMDevice.AudioClient` ist
   obsolet und wurde durch `CreateAudioClient()` ersetzt.
-- [x] **Rust:** `reqwest` 0.12 -> **0.13** (Feature `rustls-tls` heisst dort
+- [x] **Rust:** `reqwest` 0.12 -> **0.13** (Feature `rustls-tls` heisst dort Beleg: src-tauri/src/connectivity.rs (reqwest) (geprueft).
   `rustls`), `thiserror` 1 -> **2**, `rust-version` 1.77.2 -> **1.90** (tauri 2.12
   verlangt MSRV 1.90). `Cargo.lock` und `package-lock.json` sind mitgezogen.
-- [x] **Doku:** Alle Versionsangaben in `README.md`, `SPEC.md`, `AGENTS.md`,
+- [x] **Doku:** Alle Versionsangaben in `README.md`, `SPEC.md`, `AGENTS.md`, Beleg: README.md, SPEC.md (SPEC.md), AGENTS.md (AGENTS.md) (geprueft).
   `DECISIONS.md` und den Specs T-204, T-205, T-207, T-306, T-504 sind aktualisiert.
 
 ## Approach

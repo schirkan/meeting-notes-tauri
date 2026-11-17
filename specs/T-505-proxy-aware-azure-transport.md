@@ -17,9 +17,9 @@ Für die Tauri-Variante klären, ob das Proxy-Problem aus `../meeting-notes` auc
 Die native Azure-Speech-SDK nutzt die per `setProxy()` gesetzten Proxy-Properties nicht zuverlässig für den ausgehenden WSS-Connect. In Node 1.44.x bestätigt; in C# zu validieren (siehe T-306).
 
 ## Done When
-- [x] Validierung in C# abgeschlossen: funktioniert `SpeechConfig.SetProxy()` in C# nativ für WSS-Connect? **Ja — am 2026-11-12 im Firmennetz bestätigt.**
-- [x] `SetProxy()` ist im gemeinsamen Builder für Aufnahme und Diagnose konfiguriert; die positive Validierung im Zielnetz erfolgte am 2026-11-12.
-- [x] Bei Nicht-Funktion: entfällt — die native Proxy-Unterstützung funktioniert, ein Workaround ist nicht erforderlich.
+- [x] Validierung in C# abgeschlossen: funktioniert `SpeechConfig.SetProxy()` in C# nativ für WSS-Connect? **Ja — am 2026-11-12 im Firmennetz bestätigt.** Beleg: sidecar/SpeechConfiguration.cs (SetProxy nativ) - am 2026-11-12 im Firmennetz erfolgreich.
+- [x] `SetProxy()` ist im gemeinsamen Builder für Aufnahme und Diagnose konfiguriert; die positive Validierung im Zielnetz erfolgte am 2026-11-12. Beleg: sidecar/SpeechConfiguration.cs (gemeinsamer Builder fuer Aufnahme und Diagnose).
+- [x] Bei Nicht-Funktion: entfällt — die native Proxy-Unterstützung funktioniert, ein Workaround ist nicht erforderlich. Beleg: Kein Workaround im Code - die native Proxy-Unterstuetzung genuegt (README.md, specs/T-306).
 
 ## Aktueller Prüfpfad (2026-11-09)
 - Einstellungen enthalten einen eigenen Proxy-Bereich; **Verbindung testen** liegt im Azure-Bereich und testet auch ungespeicherte Werte.

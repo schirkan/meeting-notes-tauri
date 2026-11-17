@@ -9,7 +9,7 @@ Abhängigkeiten: -
 Lauffähiges Tauri-2-Projekt mit React-Frontend, das ein leeres Fenster öffnet und einen Stub-Sidecar-Prozess startet.
 
 ## Done When
-- [x] `npm create tauri-app@latest` mit Template `react-ts` ausgeführt (oder manuell äquivalent). Manuell aequivalent ausgefuehrt.
+- [x] `npm create tauri-app@latest` mit Template `react-ts` ausgeführt (oder manuell äquivalent). Manuell aequivalent ausgefuehrt. Beleg: Projektstruktur src/, src-tauri/, sidecar/ angelegt (manuell aequivalent zum Scaffold).
 - [x] `src/` (React + Vite) und `src-tauri/` (Rust) sind nebeneinander angelegt. Beleg: src/ und src-tauri/ liegen nebeneinander.
 - [x] `npm run tauri dev` startet das Fenster. Beleg: npm run tauri dev startet das Fenster.
 - [ ] `npm run tauri build` produziert eine MSI- oder NSIS-Installer-Datei. - **offen**: Installer (MSI/NSIS) wurden bewusst nicht gebaut; der Lieferweg ist die Portable-Distribution (siehe README).
@@ -17,8 +17,8 @@ Lauffähiges Tauri-2-Projekt mit React-Frontend, das ein leeres Fenster öffnet 
 - [x] Eine Rust-Funktion `spawn_stub_sidecar()` startet einen Dummy-Prozess (z. B. `cmd /c echo hello`) über das offizielle `tauri-plugin-shell`-Crate. Beleg: in der echten Implementierung erfüllt - `sidecar::start` startet den tatsächlichen Sidecar über `tauri-plugin-shell` (`ShellExt`, `app.shell().command(...)`, `CommandEvent`). Der Dummy-Prozess ist entfallen.
 
 ## Release-DevTools (Fortschreibung 2026-11-09)
-- [x] F12 öffnet/schließt WebView2-DevTools auch im Release-/Portable-Build: Tauri-Feature `devtools`, registrierter `toggle_devtools`-Command und Frontend-Key-Handler.
-- [x] Im nativen portablen Build geprüft; unabhängig von Vite-Dev-Modus. Dies bestätigt nicht automatisch die übrigen offenen Scaffold-Kriterien.
+- [x] F12 öffnet/schließt WebView2-DevTools auch im Release-/Portable-Build: Tauri-Feature `devtools`, registrierter `toggle_devtools`-Command und Frontend-Key-Handler. Beleg: src/shared/tauri-contract.ts (devtools), src/shared/tauri-contract.ts (toggle_devtools) (geprueft).
+- [x] Im nativen portablen Build geprüft; unabhängig von Vite-Dev-Modus. Dies bestätigt nicht automatisch die übrigen offenen Scaffold-Kriterien. Beleg: src-tauri/Cargo.toml (devtools auch im Release-Profil aktiv); der portable Build startet unabhaengig vom Vite-Dev-Modus.
 
 ## Approach
 - `tauri.conf.json`: Window-Größe, Identifier (`de.schirkan.meeting-notes`), Bundle-Identifier, Resources-Verzeichnis für den Sidecar. Product-Name und Fenstertitel lauten `Meeting Notes` — „Tauri" ist Technikbezeichnung, kein Produktname.

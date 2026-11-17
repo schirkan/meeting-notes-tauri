@@ -11,9 +11,9 @@ Alle UI-Komponenten aus `../meeting-notes/src/renderer/src/components/` portiere
 ## Done When
 - [x] `HeroStatusCard.tsx` ist portiert (Status und Aufnahmeaktionen; Verbindungstestergebnisse erscheinen separat gemäß [T-403](./T-403-settings-dialog-mit-verbindung-testen-button.md)). Beleg: src/renderer/src/components/HeroStatusCard.tsx.
 - [x] `TranscriptPanel.tsx` ist portiert (Auto-Scroll-Pausierung bleibt erhalten; Console-Speaker-Badges sind inline editierbar). Beleg: src/renderer/src/components/TranscriptPanel.tsx.
-- [x] `SettingsDialog.tsx` bietet Escape, Focus-Trap und Initial-Fokus sowie drei Tabs und einen Footer mit dem gemeinsamen Config-Pfad.
+- [x] `SettingsDialog.tsx` bietet Escape, Focus-Trap und Initial-Fokus sowie drei Tabs und einen Footer mit dem gemeinsamen Config-Pfad. Beleg: src/renderer/src/components/SettingsDialog.tsx (geprueft).
 - [x] `SettingsPanel.tsx` ist portiert (Sprach-/Device-Auswahl; Alias-Mapping ist im `SpeakerMappingPanel`). Beleg: src/renderer/src/components/SettingsPanel.tsx.
-- [x] `ConfigPanel.tsx` enthält Azure-Form, gemeinsames Azure-/Proxy-Speichern und Test-/Ergebnisaktionen. `ProxyPanel.tsx` enthält die ausgelagerten Proxy-Felder; `ConnectivityDialog.tsx` zeigt Diagnose und Fehlerdetails separat.
+- [x] `ConfigPanel.tsx` enthält Azure-Form, gemeinsames Azure-/Proxy-Speichern und Test-/Ergebnisaktionen. `ProxyPanel.tsx` enthält die ausgelagerten Proxy-Felder; `ConnectivityDialog.tsx` zeigt Diagnose und Fehlerdetails separat. Beleg: src/renderer/src/components/ConfigPanel.tsx, src/renderer/src/components/ProxyPanel.tsx, src/renderer/src/components/ConnectivityDialog.tsx (geprueft).
 - [x] `DebugLogPanel.tsx` ist portiert (separate Öffnen/Schließen-Aktionen, Log-leeren). Beleg: src/renderer/src/components/DebugLogPanel.tsx.
 - [x] `SpeakerMappingPanel.tsx` ist portiert (30 Speaker-Farben, Alias-Mapping). Beleg: src/renderer/src/components/SpeakerMappingPanel.tsx.
 - [x] Funktionales Verhalten bleibt erhalten; Darstellung folgt auf Nutzerwunsch dem Console-Design statt der ursprünglichen 1:1-Portierung. Beleg: Node-UI-Tests decken Bedienung und Layout ab.

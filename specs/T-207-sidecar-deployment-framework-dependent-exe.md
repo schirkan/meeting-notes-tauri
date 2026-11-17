@@ -9,11 +9,11 @@ Abhängigkeiten: T-200 bis T-206
 C#-Sidecar als framework-dependent EXE bauen und über Tauri-Ressourcenmechanismus in den Build einbinden.
 
 ## Done When
-- [x] `src-tauri/build.rs` publiziert automatisch nach `src-tauri/target/sidecar-publish/`; .NET-Zwischenartefakte liegen via `--artifacts-path` unter `src-tauri/target/sidecar-artifacts/`, ausserhalb des ueberwachten Quellbaums. Ein-Befehl-Workflow über `tauri build` reicht.
-- [x] Tauri-`tauri.conf.json` deklariert `bundle.resources` für `target/sidecar-publish/*` (Mapping auf `sidecar/`).
-- [x] Tauri-Main findet die Sidecar-EXE in Development (`dev`) und in Production (`production`) zuverlässig (`sidecar.rs::resolve_sidecar_path` mit CWD-/Resource-/EXE-Fallback).
-- [x] Auf Zielsystem ist nur .NET 10 Runtime erforderlich (kein SDK).
-- [x] EXE-Größe nach Publish: dokumentiert (Erwartung: ~25–35 MB inkl. Speech-Native-Binaries). Gemessen: Sidecar-EXE 0,16 MB (framework-dependent), 7,62 MB mit DLLs, Portable gesamt 23,12 MB.
+- [x] `src-tauri/build.rs` publiziert automatisch nach `src-tauri/target/sidecar-publish/`; .NET-Zwischenartefakte liegen via `--artifacts-path` unter `src-tauri/target/sidecar-artifacts/`, ausserhalb des ueberwachten Quellbaums. Ein-Befehl-Workflow über `tauri build` reicht. Beleg: src-tauri/build.rs (build.rs) (geprueft).
+- [x] Tauri-`tauri.conf.json` deklariert `bundle.resources` für `target/sidecar-publish/*` (Mapping auf `sidecar/`). Beleg: src-tauri/tauri.conf.json (geprueft).
+- [x] Tauri-Main findet die Sidecar-EXE in Development (`dev`) und in Production (`production`) zuverlässig (`sidecar.rs::resolve_sidecar_path` mit CWD-/Resource-/EXE-Fallback). Beleg: src-tauri/src/sidecar.rs (resolve_sidecar_path) (geprueft).
+- [x] Auf Zielsystem ist nur .NET 10 Runtime erforderlich (kein SDK). Beleg: src-tauri/build.rs publiziert framework-dependent (--self-contained false); scripts/verify-deployment.ps1 prueft die .NET-10-Runtime.
+- [x] EXE-Größe nach Publish: dokumentiert (Erwartung: ~25–35 MB inkl. Speech-Native-Binaries). Gemessen: Sidecar-EXE 0,16 MB (framework-dependent), 7,62 MB mit DLLs, Portable gesamt 23,12 MB. Beleg: README.md (letzter verifizierter Build: Sidecar-EXE 0,16 MB, mit DLLs 7,62 MB, Portable 23,19 MB) und scripts/dist-portable.mjs (Groesse im Build-Output).
 
 ## Approach
 - Sidecar-Publish wird in `src-tauri/build.rs` orchestriert (vor `cargo build`). `cargo:rerun-if-changed=../sidecar` triggert nur bei Sidecar-Quelländerungen neu.

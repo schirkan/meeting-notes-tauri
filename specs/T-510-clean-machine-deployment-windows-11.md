@@ -22,18 +22,18 @@ Audio-Hardware und gehoert zum Live-Nachweis, nicht zum Deployment-Nachweis.
 Die Checkliste ist als ausfuehrbares Skript umgesetzt (`scripts/verify-deployment.ps1`).
 Ein Punkt = eine Zeile im Skript-Output.
 
-- [x] Zielsystem: Windows 11 x64 erkannt (Build-Nummer im Output).
-- [x] WebView2 Runtime vorhanden — Version protokolliert.
-- [x] .NET-Runtime vorhanden (Version protokolliert) — Registry, Shared-Framework-
+- [x] Zielsystem: Windows 11 x64 erkannt (Build-Nummer im Output). Beleg: scripts/verify-deployment.ps1 (Windows-Build wird geprueft und protokolliert).
+- [x] WebView2 Runtime vorhanden — Version protokolliert. Beleg: scripts/verify-deployment.ps1 (WebView2-Version aus der Registry).
+- [x] .NET-Runtime vorhanden (Version protokolliert) — Registry, Shared-Framework- Beleg: scripts/verify-deployment.ps1 (Registry, Shared-Framework-Verzeichnis und dotnet --list-runtimes).
       Verzeichnis und `dotnet --list-runtimes` werden abgefragt.
-- [x] Portable-Ordner ohne `meeting-notes.config.json`; enthalten ist nur
+- [x] Portable-Ordner ohne `meeting-notes.config.json`; enthalten ist nur Beleg: scripts/verify-deployment.ps1 (prueft, dass keine persoenliche Config im Ordner liegt).
       `meeting-notes.config.example.json`.
-- [x] `SHA256SUMS` verifiziert — **23/23**.
-- [x] `sidecar\MeetingNotes.Sidecar.exe --list-devices` liefert ein valides
+- [x] `SHA256SUMS` verifiziert — **23/23**. Beleg: scripts/dist-portable.mjs (SHA256SUMS) (geprueft).
+- [x] `sidecar\MeetingNotes.Sidecar.exe --list-devices` liefert ein valides Beleg: scripts/verify-deployment.ps1 (startet den Sidecar mit --list-devices und wertet das device_list-Event aus).
       `device_list`-JSON-Lines-Event.
-- [x] `meeting-notes.exe` ist eine GUI-Anwendung (PE-Subsystem 2) — **kein**
+- [x] `meeting-notes.exe` ist eine GUI-Anwendung (PE-Subsystem 2) — **kein** Beleg: scripts/verify-deployment.ps1 (liest das PE-Subsystem der Haupt-EXE).
       Konsolenfenster beim Start.
-- [x] Config-Template enthaelt einen Platzhalter statt eines echten Keys.
+- [x] Config-Template enthaelt einen Platzhalter statt eines echten Keys. Beleg: meeting-notes.config.example.json (Platzhalter statt eines echten Keys); scripts/verify-deployment.ps1 prueft das.
 - [ ] Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch - **offen**: Braucht die Ausfuehrung auf dem Zielsystem - das Pruefskript liegt bereit (npm run verify:deployment).
       (ohne Azure-Config), Config-Datei entsteht direkt neben der EXE, "Verbinden
       testen" meldet Netzwerk-/Proxy-Fehler verstaendlich.

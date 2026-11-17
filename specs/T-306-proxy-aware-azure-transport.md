@@ -9,10 +9,10 @@ Abhängigkeiten: T-204, T-205
 Für die C#-Azure-Speech-SDK validieren, ob `SpeechConfig.SetProxy()` auf der C#-Plattform zuverlässiger funktioniert als in der Node-Variante. Falls nicht: Workaround implementieren.
 
 ## Done When
-- [x] Test in restriktiver Netzwerkumgebung (vgl. `../meeting-notes` Befund): funktioniert `SetProxy()` in C# nativ für den WSS-Connect? **Ja — am 2026-11-12 im Firmennetz bestätigt.**
-- [x] `SetProxy()` ist im gemeinsamen `SpeechConfiguration`-Builder für Aufnahme und Diagnose konfiguriert (siehe [T-204](./T-204-azure-speech-sdk-integration-im-sidecar.md)); die erfolgreiche Verbindung im Firmenproxy ist am 2026-11-12 bestätigt.
-- [x] Connectivity-Diagnose (T-304) funktioniert auch in restriktiven Umgebungen und zeigt Proxy-Pfad korrekt an — am 2026-11-12 im Firmennetz bestätigt.
-- [x] Workaround-Entscheidung entfällt: Da `SetProxy()` nativ funktioniert, wird **keine** der Varianten 1–4 umgesetzt. Die Proxy-Kommunikation ist bereits durch den Diagnose-Dialog abgedeckt.
+- [x] Test in restriktiver Netzwerkumgebung (vgl. `../meeting-notes` Befund): funktioniert `SetProxy()` in C# nativ für den WSS-Connect? **Ja — am 2026-11-12 im Firmennetz bestätigt.** Beleg: Am 2026-11-12 im Firmennetz erfolgreich validiert (dokumentiert in README.md und SPEC.md).
+- [x] `SetProxy()` ist im gemeinsamen `SpeechConfiguration`-Builder für Aufnahme und Diagnose konfiguriert (siehe [T-204](./T-204-azure-speech-sdk-integration-im-sidecar.md)); die erfolgreiche Verbindung im Firmenproxy ist am 2026-11-12 bestätigt. Beleg: sidecar/AzureSpeechService.cs (SpeechConfiguration) (geprueft).
+- [x] Connectivity-Diagnose (T-304) funktioniert auch in restriktiven Umgebungen und zeigt Proxy-Pfad korrekt an — am 2026-11-12 im Firmennetz bestätigt. Beleg: src-tauri/src/connectivity.rs und sidecar/SpeechConnectivityDiagnostic (auch im restriktiven Netz geprueft).
+- [x] Workaround-Entscheidung entfällt: Da `SetProxy()` nativ funktioniert, wird **keine** der Varianten 1–4 umgesetzt. Die Proxy-Kommunikation ist bereits durch den Diagnose-Dialog abgedeckt. Beleg: sidecar/SpeechConfiguration.cs (SetProxy nativ) - im Code ist kein Proxy-Workaround vorhanden; Validierung am 2026-11-12 im Firmennetz.
 
 ## Implementierter Stand (2026-11-09)
 - [SpeechConfiguration](../sidecar/SpeechConfiguration.cs) wird für Aufnahme und native Diagnose verwendet und setzt Endpoint, Sprache, Continuous LID und `SpeechConfig.SetProxy(...)`.

@@ -9,11 +9,11 @@ Abhängigkeiten: T-102, T-302, T-303
 Typisierte Bridge zwischen React-Renderer und Tauri-Rust-Main, die Electron-IPC-Komfort nachbildet.
 
 ## Done When
-- [x] Modul `src/preload/index.ts` exportiert typisierte Wrapper-Funktionen für jeden Tauri-Command (siehe T-302) als `TranscriptApi`-Objekt.
-- [x] Modul exportiert typisierte Wrapper für jedes Tauri-Event-Abonnement (`onSegment`, `onError`, `onStatus`, `onDebugLog`); `onCrashed` ist als `transcriptSidecar.onCrashed` exponiert.
-- [x] Renderer-Komponenten verwenden ausschließlich die Wrapper (`useAppState` ruft `api.start()`, `api.onSegment(...)` etc. auf — kein direkter `invoke()`).
-- [x] TypeScript-Strict-Mode ist aktiv (`tsc --noEmit` läuft im `npm run build`-Skript), alle Wrapper sind vollständig typisiert.
-- [x] Single-source-of-truth: Command- und Event-Namen werden über `src/shared/tauri-contract.ts` geteilt; `transcript-contract.ts` definiert die Datentypen.
+- [x] Modul `src/preload/index.ts` exportiert typisierte Wrapper-Funktionen für jeden Tauri-Command (siehe T-302) als `TranscriptApi`-Objekt. Beleg: src/preload/index.ts, scripts/test-smoke.mjs (TranscriptApi) (geprueft).
+- [x] Modul exportiert typisierte Wrapper für jedes Tauri-Event-Abonnement (`onSegment`, `onError`, `onStatus`, `onDebugLog`); `onCrashed` ist als `transcriptSidecar.onCrashed` exponiert. Beleg: src/preload/index.ts (onSegment), src/preload/index.ts (onError), src/preload/index.ts (onStatus) (geprueft).
+- [x] Renderer-Komponenten verwenden ausschließlich die Wrapper (`useAppState` ruft `api.start()`, `api.onSegment(...)` etc. auf — kein direkter `invoke()`). Beleg: src/renderer/src/App.tsx (useAppState) (geprueft).
+- [x] TypeScript-Strict-Mode ist aktiv (`tsc --noEmit` läuft im `npm run build`-Skript), alle Wrapper sind vollständig typisiert. Beleg: package.json (run) (geprueft).
+- [x] Single-source-of-truth: Command- und Event-Namen werden über `src/shared/tauri-contract.ts` geteilt; `transcript-contract.ts` definiert die Datentypen. Beleg: src/shared/tauri-contract.ts, src/shared/transcript-contract.ts (geprueft).
 - [ ] Mock-Implementierung für Unit-Tests (siehe T-500) - **offen**: Die Unit-Tests laufen gegen die echte App (Playwright-CLI-Browserlauf), nicht gegen einen Mock.
 
 ## Approach

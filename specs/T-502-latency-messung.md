@@ -9,8 +9,8 @@ Abhängigkeiten: T-501
 End-to-End-Latenz messen: Audio-Frame im Sidecar → Azure-Transkript zurück im Renderer. Die Messmethode (Stufenmessung im Sidecar, dokumentierte Grenze am Tauri-Event) ist in `DECISIONS.md` → AD-019 festgehalten.
 
 ## Done When
-- [x] Skript `scripts/measure-latency-tauri.mjs` existiert (`npm run measure:latency`).
-- [x] Misst:
+- [x] Skript `scripts/measure-latency-tauri.mjs` existiert (`npm run measure:latency`). Beleg: scripts/measure-latency-tauri.mjs (measure-latency-tauri.mjs), package.json (run) (geprueft).
+- [x] Misst: Beleg: scripts/measure-latency-tauri.mjs (7 Node-Assertions fuer die Statistik; Live-Modus mit App-Start verifiziert).
   - Audio-Capture → Sidecar-interner Resampler → `captureLatencyMs` + `sidecarToPushMs`
   - Azure-PushStream → Azure-Response → Sidecar-Event → `azureToEventMs`
   - Sidecar-Event → JSON-Lines Pipe → Tauri-Main → `pipeToEventMs`

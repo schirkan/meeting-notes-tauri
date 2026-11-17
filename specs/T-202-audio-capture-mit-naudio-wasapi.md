@@ -9,10 +9,10 @@ AbhÃ¤ngigkeiten: T-200
 Bestehende NAudio-basierte WASAPI-Capture-Implementierung aus `../meeting-notes/sidecar/Program.cs` 1:1 Ã¼bernehmen und im neuen JSON-Lines-Kontext einbetten.
 
 ## Done When
-- [x] Mic-Capture und Speaker-Loopback laufen ueber `WasapiRecorderBuilder`/`WasapiRecorder` (T-509 umgesetzt). Die Kapselung liegt in `sidecar/AudioRecorderSource.cs`; die frueher geplanten Klassen `AudioCaptureClient.cs`/`LoopbackCaptureClient.cs` wurden als ungenutzt geloescht.
-- [x] Lifecycle (`Start`/`Stop`) ist explizit und idempotent (`AudioRecorderSource.Start`/`Stop`/`Dispose`).
-- [x] Beide Quellen liefern PCM-Frames im Zielformat (16 kHz / 16-bit / mono) an eine interne Pipeline; im Engine-Modus direkt aus dem WASAPI-Puffer, im Resampler-Modus ueber `AudioResampler`.
-- [x] Capture-Fehler (Device verschwindet, Sample-Rate-Inkompatibilitaet) werden als strukturierte Events geloggt und ueber die JSON-Lines-Ausgabe an den Tauri-Main weitergereicht (`AudioRecorderSource` loggt Frame- und Abbruchfehler als `SIDECAR_UNAVAILABLE`).
+- [x] Mic-Capture und Speaker-Loopback laufen ueber `WasapiRecorderBuilder`/`WasapiRecorder` (T-509 umgesetzt). Die Kapselung liegt in `sidecar/AudioRecorderSource.cs`; die frueher geplanten Klassen `AudioCaptureClient.cs`/`LoopbackCaptureClient.cs` wurden als ungenutzt geloescht. Beleg: sidecar/AudioRecorderSource.cs (WasapiRecorderBuilder), sidecar/AudioRecorderSource.cs (WasapiRecorder), sidecar/AudioRecorderSource.cs (geprueft).
+- [x] Lifecycle (`Start`/`Stop`) ist explizit und idempotent (`AudioRecorderSource.Start`/`Stop`/`Dispose`). Beleg: scripts/measure-latency-tauri.mjs (Start), sidecar/AudioRecorderSource.cs (Dispose) (geprueft).
+- [x] Beide Quellen liefern PCM-Frames im Zielformat (16 kHz / 16-bit / mono) an eine interne Pipeline; im Engine-Modus direkt aus dem WASAPI-Puffer, im Resampler-Modus ueber `AudioResampler`. Beleg: sidecar/AudioRecorderSource.cs (AudioResampler) (geprueft).
+- [x] Capture-Fehler (Device verschwindet, Sample-Rate-Inkompatibilitaet) werden als strukturierte Events geloggt und ueber die JSON-Lines-Ausgabe an den Tauri-Main weitergereicht (`AudioRecorderSource` loggt Frame- und Abbruchfehler als `SIDECAR_UNAVAILABLE`). Beleg: sidecar/AudioRecorderSource.cs (AudioRecorderSource), sidecar/AudioRecorderSource.cs (SIDECAR_UNAVAILABLE) (geprueft).
 
 ## Approach
 - Bestehender Code aus `../meeting-notes/sidecar/Program.cs` wird **nicht umgeschrieben**, sondern nur in Klassen aufgeteilt.
