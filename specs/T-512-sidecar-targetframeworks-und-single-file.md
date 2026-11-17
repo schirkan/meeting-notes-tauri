@@ -137,6 +137,20 @@ auf dem Unit-Test. **End-to-end nachgefahren** (2026-11-17, HEAD `6af00ff`):
 Der Rust-Main findet den Single-File-Sidecar damit nicht nur per Unit-Test,
 sondern im echten Start.
 
+**Die net9.0-Variante wurde genauso nachgefahren** (gleicher Lauf, TFM-Schalter
+`MEETING_NOTES_SIDECAR_TFM=net9.0-windows`):
+
+| Pruefung | Ergebnis |
+|---|---|
+| `runtimeconfig.json` | `"version": "9.0.0"`, `"rollForward": "Major"` |
+| `sidecar-publish/` | 21 Dateien (net9.0-Build) |
+| Portable gesamt | 23,09 MB / 24 Dateien / 23 Summen |
+| Smoke-Test | bestanden (23/23) |
+| Deployment-Nachweis mit `-LaunchApp` | **PASS 10 / FAIL 0** |
+
+Beide Ziel-Frameworks sind damit nach dem Rust-Refactoring end-to-end belegt -
+nicht nur der Standard.
+
 ### Findet der Rust-Main den Single-File-Sidecar?
 
 Der Sidecar wird als externe Datei gestartet, und `resolve_sidecar_path` sucht sie
