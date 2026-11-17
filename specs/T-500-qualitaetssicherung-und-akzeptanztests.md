@@ -11,7 +11,7 @@ Vollständige QA-Strecke für die Tauri-Variante: Smoke-Test, Latency-Messung, D
 
 ## Done When
 - [x] Smoke-Test deckt Build-Artefakte + Sidecar-Spawn ab (T-501, headless ohne WebDriver).
-- [ ] Latency-Messung dokumentiert < 5 s End-to-End (T-502) — **offen**: erfordert Live-Azure-Credentials + Audio-Input.
+- [ ] Latency-Messung dokumentiert < 5 s End-to-End (T-502) - **offen**: erfordert Live-Azure-Credentials + Audio-Input.
 - [x] MSI/NSIS-Builds wurden zuvor verifiziert (T-503); heutige Rebuilds verwenden `--no-bundle`. Aktuelle Installer-Parität ist dadurch nicht erneut nachgewiesen.
 - [x] Aktueller Portable-Build ist lokal lauffähig (T-504; kein Clean-Machine-Nachweis).
 - [x] **Gesamte Portable-Distribution** ist ≤ 30 MB: Stand 2026-11-16 (Rebuild nach T-511) Haupt-EXE 15.48 MB, Sidecar 7.62 MB (21 Dateien), Gesamt 23.10 MB einschließlich Templates und Hashdatei. 24 Dateien, 23 geprüfte SHA256-Summen. Für die früheren Builds desselben Tages nennt README 23,09 MB (T-509) und 23,02 MB (Console-Design) — drei verifizierte Messungen derselben Quelle.

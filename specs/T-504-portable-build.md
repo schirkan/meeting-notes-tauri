@@ -17,7 +17,7 @@ die externen Sidecar-Abhaengigkeiten bleiben erforderlich.
   - [x] `meeting-notes.exe` (App, unsigniert)
   - [x] `sidecar/MeetingNotes.Sidecar.exe` + DLLs (framework-dependent)
   - [x] `meeting-notes.config.example.json` — die Config-Vorlage wird mitgeliefert; keine persönlichen Configs oder Credentials.
-- [ ] Portable Build auf einem **frischen** Windows-11-System mit .NET 10 Runtime und WebView2 validiert. Bisherige native Tests erfolgten nur auf dem lokalen Entwicklungsrechner. **Verfahren und Nachweisschritte: [T-510](./T-510-clean-machine-deployment-windows-11.md)** (Vorbereitung, Ausfuehrung offen).
+- [ ] Portable Build auf einem **frischen** Windows-11-System mit .NET 10 Runtime und WebView2 validiert. Bisherige native Tests erfolgten nur auf dem lokalen Entwicklungsrechner. **Verfahren und Nachweisschritte: [T-510](./T-510-clean-machine-deployment-windows-11.md)** (Vorbereitung, Ausfuehrung offen). - **offen**: Braucht ein frisches Windows-11-Zielsystem (T-510) - die lokale Pruefung laeuft auf dem Entwicklerrechner.
 - [x] SHA256SUMS-Datei wird erzeugt und geprüft. Stand 2026-11-16: **23 Summen** für 1 App-EXE + 21 Sidecar-Dateien + 1 Config-Template; **24 Dateien** inklusive SHA256SUMS. `npm run test:smoke` bestätigt 23/23 Hashes.
 - [x] Bundle-Größe wird im Build-Output geloggt (App-EXE / Sidecar / Config-Template / SHA256SUMS / Gesamt).
 

@@ -48,10 +48,10 @@ Push in den Azure-`PushAudioInputStream` bleiben semantisch identisch.
       geloescht. `BufferedWaveProvider` und `MediaFoundationResampler` bleiben
       **nur** im automatischen Rueckfallpfad in `AudioRecorderSource.cs`.
 - [x] Keine `#pragma warning disable CS0618` mehr noetig.
-- [ ] Das Loopback-Verhalten ist unveraendert: Events nur waehrend tatsaechlicher
+- [ ] Das Loopback-Verhalten ist unveraendert: Events nur waehrend tatsaechlicher - **offen**: Braucht echte Hardware mit Ausgabegeraet - der Loopback-Pfad ist hier nicht pruefbar.
       Audioausgabe auf dem Zielgeraet.
 - [x] Die C#-Validierung bleibt gruen (467 Assertions PASS).
-- [ ] Latenz und Ausgabequalitaet sind auf echter Hardware gegen die
+- [ ] Latenz und Ausgabequalitaet sind auf echter Hardware gegen die - **offen**: Braucht echte Hardware mit Ausgabegeraet (Loopback und Ausgabequalitaet).
       bisherige Implementierung geprueft.
 
 ## Approach

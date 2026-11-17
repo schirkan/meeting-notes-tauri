@@ -34,10 +34,10 @@ Ein Punkt = eine Zeile im Skript-Output.
 - [x] `meeting-notes.exe` ist eine GUI-Anwendung (PE-Subsystem 2) — **kein**
       Konsolenfenster beim Start.
 - [x] Config-Template enthaelt einen Platzhalter statt eines echten Keys.
-- [ ] Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch
+- [ ] Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch - **offen**: Braucht die Ausfuehrung auf dem Zielsystem - das Pruefskript liegt bereit (npm run verify:deployment).
       (ohne Azure-Config), Config-Datei entsteht direkt neben der EXE, "Verbinden
       testen" meldet Netzwerk-/Proxy-Fehler verstaendlich.
-- [ ] Befunde sind in `T-504`, `T-500`, `SPEC.md` und `AGENTS.md` nachgezogen.
+- [ ] Befunde sind in `T-504`, `T-500`, `SPEC.md` und `AGENTS.md` nachgezogen. - **offen**: Folgt aus der Ausfuehrung auf dem Zielsystem.
 
 ## Voraussetzungen mit Nachweis
 | Voraussetzung | Nachweis auf dem Zielsystem |

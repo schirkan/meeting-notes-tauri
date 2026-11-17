@@ -24,7 +24,7 @@ deckungsgleich.
 | Spec | Punkt |
 |---|---|
 | T-205 | Diarization funktioniert für mindestens 2 Sprecher je aktivierter Quelle (manueller Live-Azure… |
-| T-500 | Latency-Messung dokumentiert < 5 s End-to-End (T-502) — **offen**: erfordert Live-Azure-Creden… |
+| T-500 | Latency-Messung dokumentiert < 5 s End-to-End (T-502) |
 | T-500 | Erfolgreiche Aufnahme und End-to-End-Latenz (< 5 s) mit echten Zugangsdaten — weiterhin offen… |
 | T-500 | Aktueller Portable-Build auf sauberem Windows-11-Zielsystem geprüft. |
 | T-502 | Report `context/latency-report.md` mit P50/P95/P99 über 100 Audio-Chunks - **offen**: |
@@ -45,9 +45,9 @@ deckungsgleich.
 | T-201 | **Reconnects:** Tauri startet den Sidecar bei Crash automatisch neu (… | bewusst nicht umgesetzt - ein Neustart des Sidecars erzeugt eine **neue Azure-Sitzung**, damit brechen die Sprecher-IDs (T-507).… |
 | T-203 | Smoke-Test: 48-kHz-Stereo-Input führt zu korrektem 16-kHz-Mono-Output… | Der Stichprobentest ist implementiert (`ResamplingValidation`: 48-kHz-Stereo-Ton → 16-kHz-Mono, Länge, Pegel, Übersteuerung, Drop… |
 | T-400 | Visuelles Verhalten ist identisch zur Electron-Variante. | Bewusst nicht 1:1: die Darstellung folgt auf Nutzerwunsch dem Console-Design statt der urspruenglichen Portierung (siehe T-402).… |
-| T-401 | Mock-Implementierung für Unit-Tests (siehe T-500) — **offen**. | Die Unit-Tests laufen gegen die echte App (Playwright-CLI-Browserlauf), nicht gegen einen Mock. |
-| T-501 | Voller End-to-End-Test mit WebDriver + App-Start + `start_recording()… | kein Grund hinterlegt |
-| T-503 | `npm run lint` (sofern konfiguriert) ist grün — **offen**: kein Lint-… | kein Grund hinterlegt |
+| T-401 | Mock-Implementierung für Unit-Tests (siehe T-500) | Die Unit-Tests laufen gegen die echte App (Playwright-CLI-Browserlauf), nicht gegen einen Mock. |
+| T-501 | Voller End-to-End-Test mit WebDriver + App-Start + `start_recording()… | WebDriver-Setup für Tauri 2 ist aufwendig; die headless Smoke-Stufen 1–5 decken die kritischen Artefakt-Invarianten ab. |
+| T-503 | `npm run lint` (sofern konfiguriert) ist grün | kein Lint-Setup im Projekt. |
 
 ### Nächste Schritte auf deinem Rechner (die 11 offenen Punkte)
 
