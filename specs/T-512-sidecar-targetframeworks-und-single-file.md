@@ -132,6 +132,8 @@ nur ihr Inhalt ist gebündelt. Gemessen am 2026-11-17:
 | `EXE-Ordner/sidecar/MeetingNotes.Sidecar.exe` | **existiert** (Rust-Pfad 3) |
 | `EXE-Ordner/MeetingNotes.Sidecar.exe` | existiert nicht (Rust-Pfad 4, nicht nötig) |
 | App-Start mit Single-File-Sidecar | **PASS** (Prozess läuft nach 6 s) |
+| Regressionstest | `sidecar_candidates_cover_portable_and_single_file_layouts` (Rust) |
+
 | Deployment-Prüfung | PASS 10 / FAIL 0 (3/3 SHA256-Summen) |
 | Smoke-Test | bestanden (3/3) |
 

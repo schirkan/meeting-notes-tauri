@@ -8,7 +8,7 @@
 //! The pipe-name parameter from the legacy Electron sidecar is gone
 //! (AD-008): JSON-Lines goes over stdin/stdout, no Named Pipe needed.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -187,6 +187,33 @@ mod connectivity_tests {
     }
 
     #[test]
+    fn sidecar_candidates_cover_portable_and_single_file_layouts() {
+        // T-512: The sidecar is resolved by file name, not by content. Both
+        // layouts therefore share one candidate list: the 21-file portable
+        // (sidecar/<exe> + DLLs) and the single-file portable (just
+        // sidecar/<exe> with the bundled content).
+        let dir = PathBuf::from("C:\\Apps\\MeetingNotes");
+        let candidates = sidecar_candidates(&dir, "MeetingNotes.Sidecar.exe");
+        assert_eq!(
+            candidates,
+            vec![
+                dir.join("sidecar").join("MeetingNotes.Sidecar.exe"),
+                dir.join("MeetingNotes.Sidecar.exe")
+            ]
+        );
+        // The file name stays identical in both layouts — that is exactly
+        // what the resolution relies on.
+        assert_eq!(
+            candidates[0].file_name().and_then(|n| n.to_str()),
+            Some("MeetingNotes.Sidecar.exe")
+        );
+        assert_eq!(
+            candidates[1].file_name().and_then(|n| n.to_str()),
+            Some("MeetingNotes.Sidecar.exe")
+        );
+    }
+
+    #[test]
     fn diarization_arguments_forward_independent_explicit_booleans() {
         for mic in [true, false] {
             for speaker in [true, false] {
@@ -298,6 +325,16 @@ pub async fn stop(handle: SidecarHandle) -> Result<(), SidecarError> {
     Ok(())
 }
 
+/// Candidate locations for the sidecar EXE inside a directory, in order.
+///
+/// The portable layout puts the sidecar in `sidecar/` next to the app EXE,
+/// the fallback is the EXE directory itself. Both layouts (the 21-file portable
+/// and the single-file bundle, T-512) use the same file name — only the content
+/// differs — so the same candidate list applies to both.
+fn sidecar_candidates(exe_dir: &Path, exe: &str) -> Vec<PathBuf> {
+    vec![exe_dir.join("sidecar").join(exe), exe_dir.join(exe)]
+}
+
 /// Locate the sidecar EXE. Search order:
 ///   1. Development publish path under `src-tauri/target/sidecar-publish/`
 ///   2. Bundled resource dir (`app.path().resource_dir()/sidecar/`)
@@ -323,17 +360,14 @@ pub fn resolve_sidecar_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, S
         }
     }
 
-    // 3. Tauri-EXE directory + `sidecar/<exe>` (portable dist layout)
+    // 3./4. Tauri-EXE directory: `sidecar/<exe>` (portable dist layout) or
+    // directly next to it (fallback).
     if let Ok(self_path) = std::env::current_exe() {
         if let Some(dir) = self_path.parent() {
-            let candidate = dir.join("sidecar").join(exe);
-            if candidate.exists() {
-                return Ok(candidate);
-            }
-            // 4. Tauri-EXE directory directly (fallback)
-            let candidate2 = dir.join(exe);
-            if candidate2.exists() {
-                return Ok(candidate2);
+            for candidate in sidecar_candidates(dir, exe) {
+                if candidate.exists() {
+                    return Ok(candidate);
+                }
             }
         }
     }
