@@ -63,6 +63,13 @@ npm run measure:latency -- --live          # echte Messung (startet die App)
 ```
 
 Verifiziert: C#-Build 0 Fehler, Rust 2 neue Tests (Pipe-Stufe und Summe),
+Zusaetzlich geprueft: der **Live-Modus** selbst ist bisher nur zur Haelfte belegt - der
+Selbsttest deckt Statistik, Report-Erzeugung und Datei-Schreiben ab, der App-Start mit
+gesetzter `MEETING_NOTES_LATENCY_LOG` wurde ebenfalls verifiziert (Prozess lebt nach 6 s,
+Logdatei entsteht erwartungsgemaess erst mit dem ersten Event, das Polling behandelt ihr
+Fehlen). **Ungeprueft bleibt der Probenfluss selbst** - er braucht eine Aufnahme mit
+echten Geraeten und Azure-Credentials. Der erste Live-Lauf kann also noch an einem
+Detail scheitern; das Skript meldet das mit Exit 1 und klarer Meldung.
 7 Node-Assertions für die Statistik und die Report-Erzeugung, Selbsttest
 erzeugt einen vollständigen Report.
 
