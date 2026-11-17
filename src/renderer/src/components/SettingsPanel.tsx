@@ -21,6 +21,8 @@ type SettingsPanelProps = {
   devices: AudioDeviceSnapshot
   setSettings: React.Dispatch<React.SetStateAction<UserSettings>>
   audioOnly?: boolean
+  onChooseDirectory: () => Promise<void>
+  choosingDirectory?: boolean
 }
 
 export function SettingsPanel(props: SettingsPanelProps) {
@@ -29,7 +31,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
     settings,
     devices,
     setSettings,
-    audioOnly = false
+    audioOnly = false,
+    onChooseDirectory,
+    choosingDirectory = false
   } = props
 
   return (
@@ -45,7 +49,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
           <span className="field-caption"><Icon name="flag" />Sprache</span>
           <select
             value={settings.language}
-            onChange={(event) => setSettings((prev) => ({ ...prev, language: event.target.value }))}
+            onChange={(event) => {
+              const language = event.currentTarget.value
+              setSettings((prev) => ({ ...prev, language }))
+            }}
             disabled={statusRunning}
           >
             {!languageOptions.some((option) => option.value === settings.language) && (
@@ -56,8 +63,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             ))}
           </select>
         </label>
-        <div className="settings-placeholder" aria-hidden="true" />
-
+        <div className="audio-source-row full-field">
         <div className="audio-source-field">
           <span className="field-caption"><Icon name="mic" />Mikrofon</span>
           <div className="audio-source-control">
@@ -91,6 +97,22 @@ export function SettingsPanel(props: SettingsPanelProps) {
           </div>
         </div>
 
+        <label className="checkbox-field source-diarization">
+          <input
+            type="checkbox"
+            aria-label="Sprechererkennung für Mikrofon"
+            checked={settings.diarization.mic}
+            onChange={(event) => {
+              const mic = event.currentTarget.checked
+              setSettings((prev) => ({ ...prev, diarization: { ...prev.diarization, mic } }))
+            }}
+            disabled={statusRunning || !settings.transcription.mic}
+          />
+          <span>Sprechererkennung</span>
+        </label>
+        </div>
+
+        <div className="audio-source-row full-field">
         <div className="audio-source-field">
           <span className="field-caption"><Icon name="speaker" />Speaker Loopback</span>
           <div className="audio-source-control">
@@ -124,73 +146,69 @@ export function SettingsPanel(props: SettingsPanelProps) {
           </div>
         </div>
 
-        <label className="checkbox-field">
+        <label className="checkbox-field source-diarization">
           <input
             type="checkbox"
-            checked={settings.diarization.mic}
-            onChange={(event) => setSettings((prev) => ({
-              ...prev,
-              diarization: { ...prev.diarization, mic: event.target.checked }
-            }))}
-            disabled={statusRunning || !settings.transcription.mic}
-          />
-          <span>Sprechererkennung für Mikrofon</span>
-        </label>
-
-        <label className="checkbox-field">
-          <input
-            type="checkbox"
+            aria-label="Sprechererkennung für Speaker"
             checked={settings.diarization.speaker}
-            onChange={(event) => setSettings((prev) => ({
-              ...prev,
-              diarization: { ...prev.diarization, speaker: event.target.checked }
-            }))}
+            onChange={(event) => {
+              const speaker = event.currentTarget.checked
+              setSettings((prev) => ({ ...prev, diarization: { ...prev.diarization, speaker } }))
+            }}
             disabled={statusRunning || !settings.transcription.speaker}
           />
-          <span>Sprechererkennung für Speaker</span>
+          <span>Sprechererkennung</span>
         </label>
+        </div>
         {!audioOnly && <>
         <label className="checkbox-field full-field">
           <input
             type="checkbox"
             checked={settings.transcript.markdownExport.enabled}
-            onChange={(event) =>
+            onChange={(event) => {
+              const enabled = event.currentTarget.checked
               setSettings((prev) => ({
                 ...prev,
                 transcript: {
                   ...prev.transcript,
-                  markdownExport: { ...prev.transcript.markdownExport, enabled: event.target.checked }
+                  markdownExport: { ...prev.transcript.markdownExport, enabled }
                 }
               }))
-            }
+            }}
             disabled={statusRunning}
           />
           <span>Transkript automatisch als Markdown speichern</span>
         </label>
 
-        <label className="full-field">
-          Speicherpfad (optional)
+        <div className="full-field directory-field">
+          <label htmlFor="transcript-export-path">Speicherpfad (optional)</label>
+          <div className="directory-control">
           <input
+            id="transcript-export-path"
             type="text"
             value={settings.transcript.markdownExport.path ?? ''}
-            onChange={(event) =>
+            onChange={(event) => {
+              const path = event.currentTarget.value.trim() || null
               setSettings((prev) => ({
                 ...prev,
                 transcript: {
                   ...prev.transcript,
                   markdownExport: {
                     ...prev.transcript.markdownExport,
-                    path: event.target.value.trim() || null
+                    path
                   }
                 }
               }))
-            }
+            }}
             placeholder="Standard: Anwendungsverzeichnis"
             disabled={statusRunning || !settings.transcript.markdownExport.enabled}
           />
-        </label>
+          <button type="button" onClick={() => void onChooseDirectory()}
+            disabled={statusRunning || !settings.transcript.markdownExport.enabled || choosingDirectory}
+            aria-label="Speicherordner auswählen"><Icon name="folder" />Ordner auswählen</button>
+          </div>
+        </div>
         </>}
-        {audioOnly && <p className="meta full-field">Änderungen gelten nach dem Speichern für die nächste Aufnahme.</p>}
       </div>
     </section>
   )

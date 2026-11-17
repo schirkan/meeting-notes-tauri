@@ -77,14 +77,15 @@ Push in den Azure-`PushAudioInputStream` bleiben semantisch identisch.
    Mic und Loopback muessten dann unterschiedlich behandelt werden. Das ist
    eine Architekturentscheidung (Latenzziel < 5 s, siehe T-502) und kein
    Refactor.
-5. **Rueckfall wird gemessen, nicht angenommen.** `WasapiRecorder.WaveFormat`
-   liefert das **angeforderte** Format, nicht das tatsaechlich gelieferte — ein
-   Vergleich gegen das Zielformat waere damit tautologisch und wuerde einen
-   Fehlerfall nicht erkennen. Stattdessen misst `AudioRecorderSource` die
-   Byte-Rate der gelieferten Frames und vergleicht sie mit der Ziel-Bitrate
-   (`WaveFormat.AverageBytesPerSecond`). Weicht sie um mehr als 50 % ab, wird
-   auf den Resampler umgeschaltet. Ein Fenster ohne Daten (z. B. Loopback-Geraet
-   im Leerlauf) wird nicht bewertet.
+5. **Format-Vertrag statt Wandzeit-Heuristik.** Der gepinnte NAudio-3.3.0-Code
+   uebergibt das angeforderte Format an `IAudioClient.Initialize` mit
+   `AutoConvertPcm | SrcDefaultQuality`; bei erfolgreicher Initialisierung gilt
+   dieses Client-Format. Initialisierungsfehler fuehren weiterhin zum Resampler.
+   Die fruehere Byte-pro-Wandzeit-Pruefung war kein Formatnachweis: Leerlauf,
+   sporadische Loopback-Pakete und blockierende Azure-Push-Aufrufe senken diese
+   Rate auch bei korrektem Format. Sie ist deshalb entfernt, nicht bloss
+   grosszuegiger toleriert. Echte Capture-Fehler bleiben ueber RecordingStopped
+   und den Frame-Handler sichtbar.
 6. **Kein MMCSS.** `WithMmcssThreadPriority` wurde bewusst **nicht** gesetzt:
    der Capture-Thread schiebt die Frames blockierend in den Azure-PushStream.
    Eine Audio-Scheduling-Prioritaet wuerde waehrend dieser Netzwerkwartezeit
@@ -92,10 +93,13 @@ Push in den Azure-`PushAudioInputStream` bleiben semantisch identisch.
    Klasse setzte ebenfalls kein MMCSS — die Aufnahme bleibt damit in der
    Scheduler-Klasse unveraendert.
 
-## Verifikation (blockierend: benoetigt echte Audio-Hardware)
-Diese Entwicklungsmaschine meldet `--list-devices` mit **0** Eingangs- und
-**0** Ausgabegeraeten. Der Konvertierungsweg und das Loopback-Verhalten sind
-hier nicht nachweisbar. Ablauf auf einem Rechner mit Mic und Ausgabe:
+## Verifikation (benoetigt echte Audio-Hardware)
+Ein kurzer lokaler Loopback-Test ist vorhanden und bestanden: Start/Stop,
+Handshake-Quittung und kein unnoetiger Resampler-Rueckfall ueber 5 s. Er erfasst
+nur Speaker-Loopback, ohne Mikrofon, Azure oder Audiodateien, und ist bewusst
+opt-in: `npm run test:sidecar:published -- --loopback-hardware`.
+Das ist kein vollstaendiger Nachweis von Audioqualitaet oder Azure-Latenz.
+Ablauf fuer die weitere Abnahme auf einem Rechner mit Mic und Ausgabe:
 
 1. Portable-Build erzeugen (`npm run tauri -- build --no-bundle`) und
    `src-tauri/target/sidecar-publish/MeetingNotes.Sidecar.exe` mit
@@ -111,21 +115,21 @@ hier nicht nachweisbar. Ablauf auf einem Rechner mit Mic und Ausgabe:
    `WithProcessLoopback`).
 
 ## Offene Punkte
-- **Hardware-Verifikation steht aus.** Diese Entwicklungsmaschine meldet
-  `--list-devices` mit **0** Eingangs- und **0** Ausgabegeraeten. Der
-  Konvertierungsweg (Engine- oder Resampler-Modus), das Loopback-Verhalten und
-  die Latenz sind hier nicht nachweisbar.
+- **Vollstaendige Hardware-Verifikation steht aus.** Der 5-s-Loopback-Test
+  prueft Initialisierung und das Ausbleiben falscher Formatwarnungen. Audioqualitaet,
+  beide Quellen im echten Meeting und Azure-Latenz sind damit nicht nachgewiesen.
 - **Float-Mic-Frage ist zur Laufzeit entscheidbar, nicht mehr offen.** Die
   Engine-Konvertierung ist belegt (`AutoConvertPcm | SrcDefaultQuality` im
   Standard-Shared-Pfad — identisch zu `WasapiCapture`), aber ein Float-Mic kann
-  je nach Treiber nicht auf 16-Bit-PCM konvertiert werden. Die Byte-Raten-
-  Messung erkennt das und schaltet auf den Resampler um. Welcher Modus aktiv
+  je nach Treiber nicht auf 16-Bit-PCM konvertiert werden. Scheitert die
+  Initialisierung mit dem Zielformat, wird auf den Resampler umgeschaltet. Welcher Modus aktiv
   ist, steht im Log (`recorder_mode`) und in `ModeLabel`.
 - **Latenzentscheidung:** `WithLowLatency()` ja oder nein — abhaengig vom
   Ziel in T-502 und davon, ob Mic und Loopback unterschiedlich behandelt
   werden duerfen.
 
 ## Log
+- 2026-11-17: Falsche Warnungen `engine_format_mismatch` / `engine_conversion_unavailable` bei sporadischem Loopback korrigiert. 297 Byte/s ueber Wandzeit belegten kein falsches Format. Die Rate-Heuristik einschliesslich ihrer asynchronen Umschaltung ist entfernt; StartRecording initialisiert das explizite Client-Format, echte Initialisierungsfehler nutzen weiterhin den Resampler. Verifiziert gegen die Quelle der gepinnten NAudio-3.3.0-Version (Commit 4f8889e2bd34c3978a25652c6c172fa1502ccba3). Opt-in-Test am publizierten Sidecar: 7 Assertions PASS ueber 5 s, einschliesslich gueltiger handshake-ack-Verarbeitung; kein Mic, kein Azure, keine Audiodateien. Bestehende Validierung: 521 Assertions PASS, MediaFoundation-Stichprobe weiterhin SKIPPED.
 - 2026-11-16: Portable nach dem Umbau neu gebaut: Release-/Renderer-Build, Packaging und
   Smoke-Test erfolgreich. Haupt-EXE 15.47 MB, Sidecar 7.61 MB (21 Dateien), Gesamt
   **23.09 MB / 24 Dateien / 23 gepruefte Hashes**. Native Geraeteabfrage: 0 Eingaenge,

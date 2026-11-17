@@ -31,6 +31,7 @@ const FAST = [
 
 const FULL = [
   { name: 'Release-Build', command: NPM, args: ['run', 'tauri', '--', 'build', '--no-bundle'] },
+  { name: 'Published Sidecar', command: NPM, args: ['run', 'test:sidecar:published'] },
   { name: 'Portable packen', command: NPM, args: ['run', 'dist:portable'] },
   { name: 'Smoke-Test', command: NPM, args: ['run', 'test:smoke'] },
   { name: 'Deployment-Nachweis', command: NPM, args: ['run', 'verify:deployment'] }

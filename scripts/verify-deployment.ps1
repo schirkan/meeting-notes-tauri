@@ -99,56 +99,56 @@ if ($webView2Version) {
     Add-Result 'FAIL' 'WebView2 Runtime' 'Nicht im Registry gefunden - die App startet ohne WebView2 nicht.'
 }
 
-# --- 4. .NET-Runtime ---------------------------------------------------------
-# Erkennung an drei Quellen: Registry, Shared-Framework-Verzeichnis und
-# 'dotnet --list-runtimes'. Script-basiert installierte Runtimes
-# (dotnet-install.ps1) schreiben keinen Registry-Schluessel - ohne das
-# Dateisystem wuerde ein vorhandenes Runtime faelschlich als fehlend gelten.
-$netCoreVersions = @()
-$desktopVersions = @()
-foreach ($base in @('HKLM:\SOFTWARE\dotnet\Shared\Microsoft.NETCore.App', 'HKCU:\SOFTWARE\dotnet\Shared\Microsoft.NETCore.App')) {
-    if (Test-Path $base) {
-        $netCoreVersions += (Get-ChildItem $base -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
-    }
-}
-foreach ($root in @("$env:ProgramFiles\dotnet\shared\Microsoft.NETCore.App", "${env:ProgramFiles(x86)}\dotnet\shared\Microsoft.NETCore.App")) {
-    if ($root -and (Test-Path $root)) {
-        $netCoreVersions += (Get-ChildItem $root -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
-    }
-}
-if ($netCoreVersions.Count -eq 0 -and (Get-Command dotnet -ErrorAction SilentlyContinue)) {
-    $netCoreVersions += (& dotnet --list-runtimes 2>$null |
-        Select-String '^Microsoft\.NETCore\.App\s+(\S+)' |
-        ForEach-Object { $_.Matches[0].Groups[1].Value })
-}
-$netCoreVersions = @($netCoreVersions | Sort-Object -Unique)
-foreach ($base in @('HKLM:\SOFTWARE\dotnet\Shared\Microsoft.WindowsDesktop.App')) {
-    if (Test-Path $base) {
-        $desktopVersions += (Get-ChildItem $base -Directory -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
-    }
-}
-
+# --- 4. Self-contained-Runtime ----------------------------------------------
 $sidecarExe = Join-Path $PortableDir 'MeetingNotes.Sidecar.exe'
-$runtimeConfig = Join-Path $PortableDir 'MeetingNotes.Sidecar.runtimeconfig.json'
-$requiredMajor = 10
-if (Test-Path $runtimeConfig) {
+$sidecarProbe = $null
+if (Test-Path $sidecarExe) {
+    $process = New-Object System.Diagnostics.Process
+    $probeDeps = $null
     try {
-        $rc = Get-Content $runtimeConfig -Raw | ConvertFrom-Json
-        $requiredMajor = [int](($rc.framework.version -split '\.')[0])
-    } catch { }
-}
-
-$installedMajors = @($netCoreVersions |
-    Where-Object { $_ -match '^(\d+)\.' } |
-    ForEach-Object { [int]($_ -split '\.')[0] } |
-    Sort-Object -Descending)
-$hasRuntime = @($installedMajors | Where-Object { $_ -ge $requiredMajor }).Count -gt 0
-if ($hasRuntime) {
-    Add-Result 'PASS' ('.NET ' + $requiredMajor + ' Runtime') ("Installiert: {0}" -f (($netCoreVersions | Sort-Object -Descending) -join ', '))
+        $start = New-Object System.Diagnostics.ProcessStartInfo
+        $start.FileName = (Resolve-Path $sidecarExe -ErrorAction Stop).Path
+        $start.Arguments = '--list-devices'
+        $start.UseShellExecute = $false
+        $start.CreateNoWindow = $true
+        $start.RedirectStandardOutput = $true
+        $start.RedirectStandardError = $true
+        $missingRoot = Join-Path ([System.IO.Path]::GetTempPath()) ([Guid]::NewGuid().ToString())
+        $probeDeps = $missingRoot + '.deps.json'
+        [System.IO.File]::WriteAllText($probeDeps, '{')
+        # Additional deps are ignored ONLY by self-contained applications.
+        # A missing file may be ignored too, so use an EXISTING malformed one.
+        $start.EnvironmentVariables['DOTNET_ADDITIONAL_DEPS'] = $probeDeps
+        $start.EnvironmentVariables['DOTNET_ROOT'] = $missingRoot
+        $start.EnvironmentVariables['DOTNET_ROOT_X64'] = $missingRoot
+        $start.EnvironmentVariables['DOTNET_ROOT_ARM64'] = $missingRoot
+        $start.EnvironmentVariables['DOTNET_MULTILEVEL_LOOKUP'] = '0'
+        $process.StartInfo = $start
+        [void]$process.Start()
+        $stdout = $process.StandardOutput.ReadToEndAsync()
+        $stderr = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit(15000)) {
+            Stop-Process -Id $process.Id -ErrorAction Stop
+            throw 'Sidecar antwortet nicht innerhalb von 15 s.'
+        }
+        $sidecarProbe = [PSCustomObject]@{ ExitCode = $process.ExitCode; Stdout = $stdout.Result; Stderr = $stderr.Result }
+        if ($sidecarProbe.ExitCode -ne 0 -or $sidecarProbe.Stderr.Trim() -ne '') {
+            throw ("Exit {0}: {1}" -f $sidecarProbe.ExitCode, $sidecarProbe.Stderr.Trim())
+        }
+        $event = $sidecarProbe.Stdout.Trim() | ConvertFrom-Json -ErrorAction Stop
+        if ($event.type -ne 'device_list') { throw 'Kein device_list-Event erhalten.' }
+        Add-Result 'PASS' '.NET Self-contained' 'Sidecar startet mit ungueltigem DOTNET_ROOT und defekten Additional-Deps. Keine installierte .NET-Runtime erforderlich.'
+    } catch {
+        Add-Result 'FAIL' '.NET Self-contained' $_.Exception.Message
+    } finally {
+        $process.Dispose()
+        if ($probeDeps -and (Test-Path -LiteralPath $probeDeps)) {
+            Remove-Item -LiteralPath $probeDeps -ErrorAction Stop
+        }
+    }
 } else {
-    Add-Result 'FAIL' ('.NET ' + $requiredMajor + ' Runtime') ("Nicht installiert. Gefunden: {0}. Der Sidecar ist framework-dependent und startet ohne Runtime nicht." -f ($(if ($netCoreVersions) { $netCoreVersions -join ', ' } else { 'keine' })))
+    Add-Result 'FAIL' '.NET Self-contained' 'MeetingNotes.Sidecar.exe fehlt.'
 }
-Add-Result 'INFO' '.NET WindowsDesktop.App' ($(if ($desktopVersions) { ($desktopVersions -join ', ') } else { 'nicht vorhanden (fuer den Sidecar nicht noetig)' }))
 
 # --- 5. Integritaet: SHA256SUMS --------------------------------------------
 $sumsFile = Join-Path $PortableDir 'SHA256SUMS'
@@ -208,7 +208,10 @@ if (-not (Test-Path $sidecarExe)) {
     $subsystem = Get-PeSubsystem $sidecarExe
     Add-Result 'PASS' 'Sidecar-EXE' ("{0:N2} MB, Subsystem {1} (3 = Konsole, erwartet)." -f ((Get-Item $sidecarExe).Length / 1MB), $subsystem)
     try {
-        $out = & $sidecarExe --list-devices 2>&1 | Out-String
+        if ($null -eq $sidecarProbe -or $sidecarProbe.ExitCode -ne 0) {
+            throw 'Sidecar-Runtime-Probe fehlgeschlagen.'
+        }
+        $out = $sidecarProbe.Stdout
         $first = ($out -split '\r?\n' | Where-Object { $_.Trim() -ne '' } | Select-Object -First 1)
         try {
             $json = $first | ConvertFrom-Json

@@ -118,5 +118,7 @@ Bleibt `MeetingNotes.Sidecar.exe` (siehe OQ-1). Vermeidet unnötige Doppelpflege
 `creation_flags = CREATE_NO_WINDOW` beim Tauri-Sidecar-Spawn (siehe `T-301`). Newline-Flushing auf C#-Seite verhindert, dass Output im Stdout-Buffer hängen bleibt.
 
 ## Log
+- 2026-11-17: `handshake-ack` wird jetzt im stdin-Kommandoleser des Sidecars explizit akzeptiert und als `handshake_ack` auf Info-Level protokolliert. Die bisherige unknown_command-Warnung war eine fehlende Behandlung der regulaeren Rust-Quittung, kein fehlgeschlagener Handshake. Unbekannte Kommandos bleiben Warnungen.
+- 2026-11-17: Falschen Handshake-Timeout im laufenden Audio-/Transkriptionspfad korrigiert. Logger-Zeilen wie `type=status, level=info, code=capturing` sind Logs ohne Event-Payload; bisher wurden sie als `running=false` verarbeitet und loeschten das bereits empfangene Handshake. Rust trennt jetzt flache Logs und Payload-Events vor dem Routing. Fehler-Logs behalten Code/Nachricht und werden als Fehler gemeldet. Das 15-s-Zeitlimit bleibt unveraendert. Testnachweis: `status_log_is_not_a_recording_status_event` und `flat_error_logs_preserve_error_details_and_reject_malformed_logs`.
 - 2026-06-25: Spec angelegt.
 - 2026-06-25: Komplett umgeschrieben — Transport wechselt von Named Pipe zu `stdin/stdout` über `tauri-plugin-shell` (siehe `DECISIONS.md → AD-008`). OQ-2 geschlossen.

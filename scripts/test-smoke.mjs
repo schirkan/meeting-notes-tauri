@@ -20,13 +20,15 @@
  * Usage:  node scripts/test-smoke.mjs
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync, rmSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { pipeline } from 'node:stream/promises'
+import { tmpdir } from 'node:os'
+import { randomUUID } from 'node:crypto'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = join(__dirname, '..')
@@ -41,6 +43,21 @@ const PORTABLE_SHA256SUMS = join(PORTABLE_DIR, 'SHA256SUMS')
 const TRANSCRIPT_CONTRACT = join(PROJECT_ROOT, 'src', 'shared', 'transcript-contract.ts')
 
 const failures = []
+const missingRuntimeRoot = join(tmpdir(), randomUUID())
+const invalidDeps = `${missingRuntimeRoot}.deps.json`
+writeFileSync(invalidDeps, '{')
+process.on('exit', () => rmSync(invalidDeps, { force: true }))
+
+function selfContainedEnvironment() {
+  return {
+    ...process.env,
+    DOTNET_ROOT: missingRuntimeRoot,
+    DOTNET_ROOT_X64: missingRuntimeRoot,
+    DOTNET_ROOT_ARM64: missingRuntimeRoot,
+    DOTNET_MULTILEVEL_LOOKUP: '0',
+    DOTNET_ADDITIONAL_DEPS: invalidDeps
+  }
+}
 
 function pass(label, detail) {
   console.log(`  \u2713 ${label}${detail ? `: ${detail}` : ''}`)
@@ -131,7 +148,8 @@ if (existsSync(SIDECAR_EXE)) {
   const proc = spawnSync(SIDECAR_EXE, ['--list-devices'], {
     encoding: 'utf8',
     timeout: 15000,
-    windowsHide: true
+    windowsHide: true,
+    env: selfContainedEnvironment()
   })
 
   if (proc.error) {
@@ -151,7 +169,7 @@ if (existsSync(SIDECAR_EXE)) {
         if (!Array.isArray(inputs) || !Array.isArray(outputs)) {
           fail('sidecar device_list payload', 'Inputs/Outputs not arrays')
         } else {
-          pass('sidecar --list-devices', `inputs=${inputs.length} outputs=${outputs.length}`)
+          pass('self-contained sidecar --list-devices', `inputs=${inputs.length} outputs=${outputs.length}; invalid DOTNET_ROOT/additional deps ignored`)
         }
       } catch (e) {
         fail('sidecar device_list JSON', e.message)
@@ -170,10 +188,11 @@ header('3b. Protokoll-Handshake')
 // beendet die App den Sidecar nach 5 s (Timeout) - der Smoke-Test prueft
 // deshalb end-to-end, dass die Zeile wirklich kommt.
 if (existsSync(SIDECAR_EXE)) {
-  const handshake = spawnSync(SIDECAR_EXE, [], {
+  const handshake = spawnSync(SIDECAR_EXE, ['--transcription-mic', 'false', '--transcription-speaker', 'false'], {
     encoding: 'utf8',
     timeout: 10000,
-    windowsHide: true
+    windowsHide: true,
+    env: selfContainedEnvironment()
   })
   const firstLine = (handshake.stdout || '')
     .split('\n')
@@ -218,6 +237,23 @@ if (existsSync(PORTABLE_TAURI)) {
 
 if (existsSync(PORTABLE_SIDECAR)) {
   pass('dist/portable/MeetingNotes.Sidecar.exe', `${(statSync(PORTABLE_SIDECAR).size / 1024 / 1024).toFixed(2)} MB`)
+  const probe = spawnSync(PORTABLE_SIDECAR, ['--list-devices'], {
+    encoding: 'utf8', timeout: 15000, windowsHide: true, env: selfContainedEnvironment()
+  })
+  if (probe.error || probe.status !== 0) {
+    fail('portable self-contained sidecar', probe.error?.message || `exit=${probe.status}, stderr=${probe.stderr?.slice(0, 200)}`)
+  } else {
+    try {
+      const event = JSON.parse(probe.stdout.trim())
+      if (event.type !== 'device_list' || !Array.isArray(event.payload?.Inputs) || !Array.isArray(event.payload?.Outputs)) {
+        fail('portable self-contained sidecar', 'invalid device_list payload')
+      } else {
+        pass('portable self-contained sidecar', 'starts without installed runtime probing')
+      }
+    } catch (error) {
+      fail('portable self-contained sidecar', error.message)
+    }
+  }
 } else {
   fail('dist/portable/MeetingNotes.Sidecar.exe', 'missing — run `npm run dist:portable`')
 }

@@ -295,6 +295,9 @@ try
                 var command = SidecarCommands.ReadType(line);
                 switch (command)
                 {
+                    case SidecarCommands.HandshakeAck:
+                        Logger.Info("sidecar", "handshake_ack", "Protokoll-Handshake bestätigt.");
+                        break;
                     case SidecarCommands.Pause:
                         azure?.SetPaused(true);
                         Logger.Info("sidecar", "pause", "Aufnahme pausiert; Azure-Session bleibt verbunden.");

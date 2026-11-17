@@ -2,25 +2,37 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <!--
-      T-512: Zwei Zielframeworks.
-
-      net9.0-windows  ist das niedrigste von NAudio 3.3.0 unterstuetzte TFM
-      (das Paket liefert nur net9.0). net10.0-windows ist der Standard-Build.
-
-      RollForward=Major laesst den Sidecar auf hoeheren Runtimes laufen: ein
-      net9.0-Build startet auf .NET 9, 10 und 11+, ein net10.0-Build auf .NET 10
-      und 11+. Ein Rollforward auf aeltere Runtimes gibt es nicht.
+      T-512: Nur net10.0-windows. Das optionale .NET-9-Ziel wurde beim
+      NuGet-Update entfernt, da die aktuellen System-Pakete es nicht mehr
+      unterstuetzen. RollForward=Major erlaubt hoehere, nicht aeltere Runtimes.
 
       .NET 8 ist mit NAudio 3.3.0 nicht moeglich (NU1202: Paket unterstuetzt nur
       net9.0). Siehe specs/T-512-sidecar-targetframeworks-und-single-file.md.
     -->
-    <TargetFrameworks>net9.0-windows;net10.0-windows</TargetFrameworks>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <RollForward>Major</RollForward>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>MeetingNotes.Sidecar</RootNamespace>
     <AssemblyName>MeetingNotes.Sidecar</AssemblyName>
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishTrimmed>true</PublishTrimmed>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <!-- JSON payloads and native Speech callbacks use reflection. Trim the runtime,
+       but retain these assemblies and their metadata. -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="MeetingNotes.Sidecar" />
+    <TrimmerRootAssembly Include="Microsoft.CognitiveServices.Speech.csharp" />
+  </ItemGroup>
 
   <ItemGroup>
     <Compile Remove="Validation\**\*.cs" />
@@ -29,6 +41,25 @@
 
   <ItemGroup>
     <PackageReference Include="NAudio" Version="3.3.0" />
-    <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.53.0" />
+    <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.53.1" />
+  </ItemGroup>
+
+  <!-- Pin transitive dependencies to current stable versions as well. -->
+  <ItemGroup>
+    <PackageReference Include="Azure.Core" Version="1.65.0" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="11.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="11.0.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="11.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Abstractions" Version="11.0.0" />
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Abstractions" Version="11.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="11.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="11.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Primitives" Version="11.0.0" />
+    <PackageReference Include="Microsoft.IdentityModel.Abstractions" Version="8.23.0" />
+    <PackageReference Include="System.ClientModel" Version="1.17.0" />
+    <PackageReference Include="System.Memory.Data" Version="11.0.0" />
+    <PackageReference Include="System.Numerics.Tensors" Version="11.0.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="11.0.0" />
   </ItemGroup>
 </Project>

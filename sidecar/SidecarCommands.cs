@@ -8,6 +8,7 @@ namespace MeetingNotes.Sidecar;
 /// </summary>
 public static class SidecarCommands
 {
+    public const string HandshakeAck = "handshake-ack";
     public const string Pause = "pause";
     public const string Resume = "resume";
     public const string Shutdown = "shutdown";

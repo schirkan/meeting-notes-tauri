@@ -422,6 +422,15 @@ mehr als 50 % von der Ziel-Bitrate ab, wird auf den Resampler umgeschaltet.
   die MF-Transform-Erzeugung - Validierungen laufen deshalb mit einem Watchdog und
   melden `SKIPPED` statt zu haengen (2026-11-17).
 
+**Korrektur 2026-11-17:** Die oben beschriebene Byte-Raten-Heuristik war kein
+Formatnachweis und ist entfernt. Sporadischer Loopback, Leerlauf und blockierende
+Azure-Push-Aufrufe konnten bei korrektem Format eine Rate von nur 297 Byte/s
+melden und unnoetig den Resampler aktivieren. Die gepinnte NAudio-Quelle
+uebergibt das Zielformat direkt an `IAudioClient.Initialize` mit AutoConvertPcm;
+der Rueckfall erfolgt nur bei einem echten Initialisierungsfehler. Ein opt-in
+5-s-Test am publizierten Sidecar prueft nativen Loopback-Start/Stop und die
+Handshake-Quittung, ohne Mikrofon, Azure oder Audiodateien.
+
 Siehe [T-509](./specs/T-509-audio-capture-auf-wasapirecorderbuilder-umstellen.md).
 
 ## AD-016 · Transkription ist eine eigene Achse neben der Diarization (2026-11-16)
@@ -481,6 +490,26 @@ Haupt-EXE, ohne Unterordner. Die Namen sind vereinheitlicht: `MeetingNotes.exe`,
 `MeetingNotes.config.example.json`. Portable-Packing, Tauri-Ressourcen,
 Pfadaufloesung und Nachweisskripte verwenden das flache Layout. Alte persoenliche
 `meeting-notes.config.json` beim Umstieg umbenennen; das Format bleibt gleich.
+
+**NuGet-Fortschreibung 2026-11-17:** Alle direkten und transitiven Sidecar-Pakete
+sind auf latest stable aktualisiert. Die System-Pakete 11.0.0 unterstuetzen
+das .NET-9-Ziel nicht mehr offiziell. Auf ausdrueckliche Nutzerentscheidung
+entfaellt deshalb `net9.0-windows`; einziges Ziel ist `net10.0-windows`.
+`RollForward=Major` und framework-dependent Single-File bleiben unveraendert.
+Ein alter .NET-9-TFM-Override wird mit klarer Meldung abgewiesen, nicht ignoriert.
+Transitive Versionen sind explizit gepinnt, damit auch sie reproduzierbar auf
+dem aktuellen stabilen Stand bleiben.
+
+**Deployment-Fortschreibung 2026-11-17 (AD-006/AD-017):** Auf Nutzerwunsch ist
+Self-contained + Kompression + konservatives Trimming der Standard. Die .NET-10-
+Runtime wird im Sidecar mitgeliefert, eine Zielsystem-Installation entfaellt.
+Sidecar-/Speech-SDK-Assemblies und JSON-Reflection bleiben fuer dynamische
+Payloads/native Callbacks erhalten. Warnungen werden nicht unterdrueckt;
+Live-Abnahme ist weiter noetig. Zentrale Publish-Einstellungen im C#-Projekt
+gelten fuer Tauri und direkten Publish. Die publizierte EXE wird separat getestet;
+Deployment-/Smoke-Proben unterscheiden den Self-contained-Build durch defekte
+Additional-Deps und ungueltige DOTNET_ROOT-Pfade von framework-dependent Builds.
+Gemessen: 14,74 MiB Sidecar / 30,22 MiB Portable.
 
 ## Offene Fragen
 

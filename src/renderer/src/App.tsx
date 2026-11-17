@@ -36,6 +36,11 @@ export function App() {
     onResetTranscript,
     onResume,
     onSaveAll,
+    isSavingSettings,
+    settingsSaveFailed,
+    setIdleSettings,
+    onChooseTranscriptDirectory,
+    isChoosingDirectory,
     onTestConnectivity,
     isTestingConnectivity,
     connectivityResult,
@@ -74,7 +79,7 @@ export function App() {
           statusDescription={statusDescription}
           runtimeIssue={runtimeIssue}
           isStarting={isStarting}
-          startDisabled={!isConfigReady}
+          startDisabled={!isConfigReady || isSavingSettings || settingsSaveFailed}
           canCopyTranscript={finalCount > 0}
           canResetTranscript={!status.running && !isStarting && segments.length > 0}
           durationLabel={durationLabel}
@@ -104,8 +109,7 @@ export function App() {
             following={autoScrollEnabled}
             onFollow={onFollowTranscript}
             emptyContent={!status.running && !isStarting && <div className="idle-audio-panel">
-              <SettingsPanel audioOnly statusRunning={false} settings={settings} devices={devices} setSettings={setSettings} />
-              <button className="primary-button" type="button" onClick={() => void onSaveAll()}>Speichern</button>
+              <SettingsPanel audioOnly statusRunning={false} settings={settings} devices={devices} setSettings={setIdleSettings} onChooseDirectory={onChooseTranscriptDirectory} />
             </div>}
           />
           <aside className="console-inspector" id="console-speakers" hidden={!speakersOpen} aria-labelledby="console-speakers-title">
@@ -129,6 +133,7 @@ export function App() {
 
       <SettingsDialog
         isOpen={settingsDialogOpen}
+        busy={isSavingSettings || isChoosingDirectory}
         onClose={closeSettingsDialog}
         tabs={['Allgemein', 'Azure-Konfiguration', 'Proxy']}
         footer={
@@ -141,7 +146,7 @@ export function App() {
               className="primary-button settings-save-button"
               type="button"
               onClick={() => void onSaveAll()}
-              disabled={status.running}
+              disabled={status.running || isSavingSettings || isChoosingDirectory}
             >
               Speichern
             </button>
@@ -154,6 +159,8 @@ export function App() {
           settings={settings}
           devices={devices}
           setSettings={setSettings}
+          onChooseDirectory={onChooseTranscriptDirectory}
+          choosingDirectory={isChoosingDirectory}
         />
 
         <ConfigPanel

@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.Threading.Tasks;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
@@ -21,37 +20,25 @@ namespace MeetingNotes.Sidecar;
 /// <see cref="AudioResampler"/> (MediaFoundation) wandelt dann wie bisher auf das
 /// Zielformat um. Das entspricht der bisherigen Aufnahmekette.</para>
 ///
-/// <para>Die Quelle startet im Engine-Modus und faellt in zwei Faellen auf den
-/// Resampler zurueck: wenn die Initialisierung scheitert, oder wenn die
-/// Laufzeitmessung zeigt, dass die Engine ein anderes Format liefert als
-/// angefordert. Welcher Weg aktiv ist, steht nach dem Start in
+/// <para>Die Quelle startet im Engine-Modus und faellt auf den Resampler
+/// zurueck, wenn die Initialisierung mit dem Zielformat scheitert.
+/// Datenmenge pro Wandzeit ist bei Loopback mit Leerlauf kein Formatnachweis.
+/// Welcher Weg aktiv ist, steht nach dem Start in
 /// <see cref="ModeLabel"/>.</para>
 /// </summary>
 internal sealed class AudioRecorderSource : IDisposable
 {
-    /// <summary>Fensterlaenge der Format-Ueberwachung.</summary>
-    private static readonly TimeSpan FormatWatchWindow = TimeSpan.FromSeconds(1);
-
-    /// <summary>Toleranz, in der die Byte-Rate vom Zielformat abweichen darf.</summary>
-    private const double RateTolerance = 0.5;
-
     private readonly MMDevice _device;
     private readonly bool _loopback;
     private readonly WaveFormat _targetFormat;
     private readonly Action<byte[], long, int> _onFrame;
     private readonly string _label;
 
-    private readonly object _verifyLock = new();
     private WasapiRecorder _recorder;
     private BufferedWaveProvider? _mixBuffer;
     private AudioResampler? _resampler;
     private bool _engineMode;
     private bool _disposed;
-    private bool _fallbackTriggered;
-
-    private long _bytesInWindow;
-    private double _windowStartSeconds;
-    private bool _rateMismatchReported;
 
     private AudioRecorderSource(
         MMDevice device,
@@ -118,7 +105,6 @@ internal sealed class AudioRecorderSource : IDisposable
         try
         {
             _recorder.StartRecording();
-            _windowStartSeconds = NowSeconds();
             Logger.Info(
                 "format",
                 "recorder_mode",
@@ -234,79 +220,10 @@ internal sealed class AudioRecorderSource : IDisposable
             // Engine-Modus: das Zielformat soll direkt aus der Engine kommen.
             // Der Span gilt nur fuer die Dauer des Callbacks, deshalb kopieren.
             _onFrame(buffer.ToArray(), capturedAtTicks, captureLatencyMs);
-            WatchEngineRate(buffer.Length);
         }
         catch (Exception ex)
         {
             Logger.Error("SIDECAR_UNAVAILABLE", $"Aufnahmefehler ({_label}): {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Prueft, ob die Engine wirklich das angeforderte Format liefert. Die
-    /// Byte-Rate muss zum Zielformat passen; liefert die Engine ein anderes
-    /// Format (z. B. Float statt 16-Bit-PCM), wird auf den Resampler
-    /// zurueckgeschaltet.
-    /// </summary>
-    private void WatchEngineRate(int bytes)
-    {
-        bool mismatch = false;
-        lock (_verifyLock)
-        {
-            if (_fallbackTriggered) return;
-            _bytesInWindow += bytes;
-            var now = NowSeconds();
-            var elapsed = now - _windowStartSeconds;
-            if (elapsed < FormatWatchWindow.TotalSeconds) return;
-
-            // Keine Daten im Fenster: die Quelle liefert gerade nichts (z. B.
-            // ein Loopback-Geraet im Leerlauf). Daraus laesst sich kein
-            // Format ableiten - also nichts bewerten.
-            if (_bytesInWindow == 0)
-            {
-                _windowStartSeconds = now;
-                return;
-            }
-
-            var actualRate = _bytesInWindow / elapsed;
-            var expectedRate = _targetFormat.AverageBytesPerSecond;
-            _bytesInWindow = 0;
-            _windowStartSeconds = now;
-
-            if (actualRate >= expectedRate * (1 - RateTolerance) &&
-                actualRate <= expectedRate * (1 + RateTolerance))
-            {
-                return;
-            }
-            mismatch = true;
-            _fallbackTriggered = true;
-            if (!_rateMismatchReported)
-            {
-                _rateMismatchReported = true;
-                Logger.Warn(
-                    "format",
-                    "engine_format_mismatch",
-                    $"Quelle '{_label}': Die Engine liefert {actualRate:F0} Byte/s statt der " +
-                    $"erwarteten {expectedRate:F0} Byte/s fuer {_targetFormat}. " +
-                    "Es wird auf den MediaFoundation-Resampler zurueckgeschaltet.");
-            }
-        }
-
-        if (!mismatch) return;
-        // Nicht im Capture-Thread umschalten: Dispose wartet auf das Ende
-        // dieses Threads und wuerde sonst selbst blockieren.
-        _ = Task.Run(SwitchToFallbackFromWatch);
-    }
-
-    private void SwitchToFallbackFromWatch()
-    {
-        try
-        {
-            SwitchToFallback("Die Engine lieferte ein anderes Format als angefordert.");
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("SIDECAR_UNAVAILABLE", $"Rueckfall auf den Resampler fehlgeschlagen: {ex.Message}");
         }
     }
 
@@ -317,8 +234,6 @@ internal sealed class AudioRecorderSource : IDisposable
             "SIDECAR_UNAVAILABLE",
             $"Aufnahme ({_label}) wurde abgebrochen: {e.Exception.Message}");
     }
-
-    private static double NowSeconds() => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
 
     private static WasapiRecorder BuildRecorder(
         MMDevice device,

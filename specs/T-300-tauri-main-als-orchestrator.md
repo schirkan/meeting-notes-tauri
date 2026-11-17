@@ -14,7 +14,7 @@ Rust-Main-Prozess orchestriert Sidecar-Lifecycle, IPC-Bridge zum Renderer und Se
 - [x] Tauri-Commands und Tauri-Events sind vollständig typisiert. Beleg: src-tauri/src/commands.rs und src/shared/tauri-contract.ts.
 - [x] Connectivity-Diagnose ist als Tauri-Command verfügbar. Beleg: test_azure_connectivity in commands.rs.
 - [x] Settings werden persistent gespeichert. Beleg: src-tauri/src/settings.rs.
-- [x] App-Crashes oder Sidecar-Crashes führen zu klarer UI-Fehlermeldung. Beleg: umgesetzt - der Renderer abonniert jetzt `sidecar:crashed` (use-app-state.ts) und zeigt einen persistenten Fehler-Toast mit Exit-Code; Node-UI-Test `a crashed sidecar surfaces a persistent error toast`.
+- [x] App-Crashes oder Sidecar-Crashes führen zu klarer UI-Fehlermeldung. Beleg: Renderer abonniert `sidecar:crashed` (use-app-state.ts), zeigt einen persistenten Fehler-Toast mit Exit-Code und erlaubt manuellen Start einer neuen Sitzung. Testnachweis: `a crashed sidecar surfaces a persistent error toast and allows a new recording`; Rust-Tests `stopped_or_replaced_sidecar_cannot_affect_the_current_session` und `restarting_after_stop_requires_a_new_handshake`.
 
 ## Approach
 - Subtasks T-301 bis T-306 als sequenzielle Kernimplementierung.
@@ -22,4 +22,5 @@ Rust-Main-Prozess orchestriert Sidecar-Lifecycle, IPC-Bridge zum Renderer und Se
 - Logging von Anfang an strukturiert (tracing oder env_logger).
 
 ## Log
+- 2026-11-17: Permanenten UI-Startblocker nach Sidecar-Crash entfernt. Crash setzt Aufnahme/Pause zurueck, vorhandenes Transkript bleibt bis zum naechsten Start erhalten. Der manuelle Start erzeugt eine neue Sitzung; kein automatischer Reconnect. Rust entfernt das tote Handle, verwirft Events/Timeouts alter Prozesse und setzt den Handshake bei Stop zurueck. Absichtliches Stoppen meldet keinen Crash mehr.
 - 2026-06-25: Spec angelegt.

@@ -148,7 +148,6 @@ summary::-webkit-details-marker { display: none; }
 .debug-summary button { min-height: 28px; padding: 4px 8px; font-size: 10px; border: 0; background: transparent; color: inherit; }
 .debug-summary > button:last-child { color: var(--muted); }
 .debug-summary button:hover { background: var(--hover); }
-.console-debug.has-errors { color: #f0a4ac; }
 .console-debug.has-errors .count-pill { color: #ffc0c6; background: #512d37; }
 /* Header (52px) and visible log footer (39px) leave the remaining workspace. */
 .debug-content { position: absolute; bottom: 100%; left: 0; right: 0; max-height: calc((100dvh - 91px) / 2); overflow: auto; padding: 8px 22px 16px; background: #181b21; border-top: 1px solid var(--line); box-shadow: 0 -12px 30px #00000030; user-select: text; font: 11px Consolas, monospace; }
@@ -180,11 +179,17 @@ summary::-webkit-details-marker { display: none; }
 .settings-dialog-footer-content .hint { grid-column: 1 / -1; margin: 0; }
 .meta-path { margin: 0; color: var(--muted); font-size: 10px; user-select: text; overflow-wrap: anywhere; }
 .settings-block { display: grid; gap: 17px; margin: 0 0 18px; }
-.audio-settings-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin-top: 22px; }
+.audio-settings-grid { grid-template-columns: minmax(0, 1fr); margin-top: 22px; }
 .settings-dialog .audio-settings-grid { margin-top: 0; }
 .proxy-settings-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .proxy-settings-grid > label { align-content: end; }
 .audio-source-field { display: grid; gap: 7px; min-width: 0; font-size: 11px; color: var(--muted); }
+.audio-source-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: end; }
+.source-diarization { white-space: nowrap; }
+.directory-field { display: grid; gap: 7px; }
+.directory-control { display: flex; gap: 8px; align-items: center; }
+.directory-control input { flex: 1; }
+.directory-control button { flex-shrink: 0; }
 .audio-source-control { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .audio-source-control input[type="checkbox"] { width: auto; min-height: 0; margin: 0; flex-shrink: 0; accent-color: var(--accent); }
 .audio-source-control select { flex: 1; }
@@ -234,7 +239,6 @@ input:disabled, select:disabled { opacity: .5; cursor: not-allowed; }
   .segment { grid-template-columns: minmax(0, 1fr); gap: 5px; }
   .segment-heading { display: flex; align-items: center; gap: 8px; }
   .audio-settings-grid { grid-template-columns: minmax(0, 1fr); }
-  .settings-placeholder { display: none; }
   .settings-dialog-overlay { padding: 16px; }
   .settings-tabs { margin-left: 10px; margin-right: 10px; gap: 0; padding: 0; }
   .settings-tabs button { padding: 10px; }

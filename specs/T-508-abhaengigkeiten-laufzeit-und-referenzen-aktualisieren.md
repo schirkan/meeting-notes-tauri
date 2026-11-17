@@ -17,11 +17,11 @@ die Aufnahme- und Transkriptionslogik bleibt unveraendert.
   `npm audit` meldet **0 Vulnerabilities**.
 - [x] **TypeScript 7.0.2:** `baseUrl` ist in TS 7 entfernt, die Pfade sind jetzt Beleg: tests/startup-ui.test.mjs (baseUrl) (geprueft).
   relativ (`./src/shared/*`). Der Typecheck laeuft fehlerfrei durch.
-- [x] **.NET:** Ziel-Framework von `net8.0-windows` auf **`net10.0-windows`**. Beleg: sidecar/MeetingNotes.Sidecar.csproj (net10.0-windows, zusaetzlich net9.0-windows als zweites Ziel).
+- [x] **.NET:** Ziel-Framework von `net8.0-windows` auf **`net10.0-windows`**. Beleg: sidecar/MeetingNotes.Sidecar.csproj (net10.0-windows; das optionale net9.0-Ziel wurde beim neuesten NuGet-Update auf Nutzerwunsch entfernt).
   .NET 8 ist seit 10.11.2026 aus der Unterstuetzung; .NET 10 ist die aktuelle LTS.
   `scripts/clean-sidecar.mjs` und `src-tauri/src/sidecar.rs` (Dev-Pfad) sind
   mitgezogen.
-- [x] **NuGet:** `Microsoft.CognitiveServices.Speech` 1.44.0 -> **1.53.0**, Beleg: sidecar/AzureSpeechService.cs (Microsoft.CognitiveServices.Speech) (geprueft).
+- [x] **NuGet:** `Microsoft.CognitiveServices.Speech` 1.44.0 -> **1.53.1**, Beleg: sidecar/MeetingNotes.Sidecar.csproj; `dotnet list package --outdated --include-transitive` meldet keine Updates fuer Sidecar und Validation.
   NAudio 2.2.1 -> **3.3.0**.
 - [x] **NAudio-3.x-Anpassungen:** `IWaveProvider.Read` ist jetzt span-basiert Beleg: sidecar/AudioResampler.cs (IWaveProvider.Read) (geprueft).
   (`Read(Span<byte>)`) statt `Read(byte[], int, int)` — betrifft `AudioResampler`
@@ -96,6 +96,7 @@ plus ein Verifikationsfenster mit Audio-Hardware.
   ein Nachweis auf einem frischen System steht aus.
 
 ## Log
+- 2026-11-17: Alle NuGet-Abhaengigkeiten einschliesslich transitiver Pakete auf latest stable aktualisiert: Speech 1.53.1, Azure.Core 1.65.0, System.ClientModel 1.17.0, Microsoft.IdentityModel.Abstractions 8.23.0 sowie System-/Microsoft.Extensions-Pakete 11.0.0. NAudio 3.3.0 ist weiterhin aktuell. Nach 7 TFM-Kompatibilitaetswarnungen ist das optionale .NET-9-Ziel auf ausdrueckliche Nutzerentscheidung entfernt; .NET 10 bleibt das Ziel. Transitive Versionen sind explizit im Projekt gepinnt. Verifiziert: Build 0 Warnungen / 0 Fehler, 508 Sidecar-Assertions (Resampler-Hardwareprobe mit bestehendem 10-s-Zeitlimit SKIPPED), Single-File-Publish und `--list-devices` erfolgreich, keine veralteten Pakete in Sidecar und Validation. Bestehendes Portable nicht neu gepackt.
 - 2026-11-13: Alle Referenzen und Pakete aktualisiert (npm, TypeScript 7, .NET 10,
 - 2026-11-16: Git-Sync mit `origin/main` (Commits `107265c`, `8238bc5`): Fast-forward ohne Konflikte. Enthommen: Compact-Console-UI (Renderer-Grundriss neu, `Icon.tsx`), bereinigte Toolchain-Skripte (`check-toolchain.ps1`, `setup-toolchain.ps1`, `run-with-toolchain.ps1`) und die Build-Umstellung auf `src-tauri/target/sidecar-publish/` bzw. `sidecar-artifacts`. T-507 (Pause/Stop, sessionsichere Sprecherzuordnung) sowie T-508/T-509 sind vollstaendig erhalten. Portable neu gebaut: Haupt-EXE 15.47 MB, Sidecar 7.61 MB (21 Dateien), Gesamt 23.08 MB / 24 Dateien / 23 SHA256-Summen (lokaler Rebuild nach dem Sync; README nennt fuer den Console-Design-Build 23,02 MB — zwei verifizierte Messungen derselben Quelle). Verifiziert: 62 Node-Tests, 21 Rust-Tests, 467 C#-Assertions, Release-Build und Smoke-Test gruen.
   NAudio 3.3.0, Speech SDK 1.53.0, reqwest 0.13, thiserror 2). NAudio-3.x-API-Bruch

@@ -39,6 +39,8 @@ async function openApp(options) {
   await page.addInitScript((input) => {
     const noSubscription = () => () => {}
     let currentStatus = { running: input.running ?? false, paused: false }
+    window.settingsSaveError = input.saveSettingsError
+    window.directoryPickerResult = input.directoryPickerResult ?? null
     window.transcriptApi = {
       getStatus: async () => currentStatus,
       start: async () => { window.lastStartCalled = true; return currentStatus = { running: true, startedAt: new Date().toISOString() } },
@@ -57,12 +59,22 @@ async function openApp(options) {
           transcript: input.transcript
         }),
       saveSettings: async (settings) => {
+        window.settingsSaveCalls ??= []
+        window.settingsSaveCalls.push(settings)
+        if (window.settingsSaveError) throw new Error(window.settingsSaveError)
+        if (input.deferSettings) {
+          window.pendingSettingsSaves ??= []
+          return new Promise((resolve) => window.pendingSettingsSaves.push(() => {
+            window.lastSavedSettings = settings
+            resolve(settings)
+          }))
+        }
         window.lastSavedSettings = settings
         return settings
       },
       getDevices: async () => {
         if (input.devicesError) throw new Error('Gerätetest fehlgeschlagen')
-        return { inputs: [], outputs: [], fetchedAtIso: new Date(0).toISOString() }
+        return { inputs: input.inputs ?? [], outputs: input.outputs ?? [], fetchedAtIso: new Date(0).toISOString() }
       },
       getDebugLog: async () => input.debugLog ?? [],
       clearDebugLog: async () => { window.lastClearLogCalled = true; return { cleared: input.debugLog?.length ?? 0 } },
@@ -71,12 +83,18 @@ async function openApp(options) {
         return input.configState
       },
       saveConfig: async (config) => {
+        if (input.saveConfigError) throw new Error(input.saveConfigError)
         window.lastSavedConfig = config
         return { exists: true, path: 'test-config', config }
       },
       saveTranscriptMarkdown: async (markdown) => {
         window.lastSavedMarkdown = markdown
         return 'D:/Notes/transcript-2026-11-11-22-05-00.md'
+      },
+      selectTranscriptDirectory: async () => {
+        window.directoryPickerCalls = (window.directoryPickerCalls ?? 0) + 1
+        if (input.directoryPickerError) throw new Error(input.directoryPickerError)
+        return window.directoryPickerResult
       },
       testAzureConnectivity: async (payload) => {
         window.lastConnectivityPayload = payload
@@ -102,6 +120,11 @@ async function openApp(options) {
   await page.goto(baseUrl)
   await page.locator('.layout-grid').waitFor()
   return page
+}
+
+async function reopenSettings(page) {
+  await page.getByRole('dialog', { name: 'Einstellungen', exact: true }).waitFor({ state: 'hidden' })
+  await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
 }
 
 for (const [name, configState] of [
@@ -182,6 +205,8 @@ test('settings separates Proxy into a fixed-size tab and preserves save and test
     await dialog.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => !!window.lastSavedConfig)
     assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), { ...validConfig, proxy: proxyConfig })
+    await reopenSettings(page)
+    await dialog.getByRole('tab', { name: 'Proxy', exact: true }).click()
     assert.deepEqual(await dialog.boundingBox(), dialogBox)
     for (const width of [1280, 800, 560, 390]) {
       await page.setViewportSize({ width, height: 860 })
@@ -255,6 +280,7 @@ test('settings offers a single save button in the footer that persists config an
     await page.waitForFunction(() => !!window.lastSavedSettings && !!window.lastSavedConfig)
     assert.equal(await page.evaluate(() => window.lastSavedSettings.language), 'en-US')
     assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), validConfig)
+    await dialog.waitFor({ state: 'hidden' })
   } finally {
     await page.close()
   }
@@ -271,6 +297,7 @@ test('language dropdown saves the selection and forwards it to connectivity test
     await language.selectOption('en-US')
     await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.language === 'en-US')
+    await reopenSettings(page)
     await page.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).click()
     await page.getByRole('button', { name: 'Verbindung testen', exact: true }).click()
     await page.getByRole('dialog', { name: 'Verbindungstest', exact: true }).waitFor()
@@ -279,6 +306,70 @@ test('language dropdown saves the selection and forwards it to connectivity test
     await page.close()
   }
 })
+
+test('idle settings save rapid changes in order before enabling recording', async () => {
+  const page = await openApp({
+    configState: { exists: true, path: 'test-config', config: validConfig },
+    deferSettings: true,
+    inputs: [{ id: 'mic-one', name: 'Testmikrofon', isDefault: false }]
+  })
+  try {
+    const idle = page.locator('.idle-audio-panel')
+    await idle.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('en-US')
+    await idle.getByRole('combobox', { name: 'Mikrofon', exact: true }).selectOption('mic-one')
+    await idle.getByRole('checkbox', { name: 'Speaker-Loopback transkribieren', exact: true }).uncheck()
+    assert.equal(await page.getByRole('button', { name: 'Start', exact: true }).isDisabled(), true)
+    assert.equal(await page.evaluate(() => window.settingsSaveCalls.length), 1)
+    for (let count = 1; count <= 3; count++) {
+      await page.evaluate(() => window.pendingSettingsSaves.shift()())
+      if (count < 3) {
+        await page.waitForFunction(value => window.settingsSaveCalls.length === value, count + 1)
+        assert.equal(await idle.getByRole('combobox', { name: 'Mikrofon', exact: true }).inputValue(), 'mic-one')
+        assert.equal(await idle.getByRole('checkbox', { name: 'Speaker-Loopback transkribieren', exact: true }).isChecked(), false)
+      }
+    }
+    await page.waitForFunction(() => window.lastSavedSettings?.devices.micId === 'mic-one' && window.lastSavedSettings.transcription.speaker === false)
+    assert.equal(await page.evaluate(() => window.lastSavedSettings.language), 'en-US')
+    await page.locator('.hero-controls .primary-button:not(:disabled)').waitFor()
+    assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
+  } finally { await page.close() }
+})
+
+test('failed idle autosave is visible and a successful retry restores recording', async () => {
+  const page = await openApp({
+    configState: { exists: true, path: 'test-config', config: validConfig },
+    saveSettingsError: 'Konfiguration ist schreibgeschützt'
+  })
+  try {
+    const idle = page.locator('.idle-audio-panel')
+    await idle.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('en-US')
+    await page.getByRole('alert').waitFor()
+    assert.match(await page.getByRole('alert').innerText(), /schreibgeschützt/)
+    assert.equal(await page.getByRole('button', { name: 'Start', exact: true }).isDisabled(), true)
+    await page.evaluate(() => { window.settingsSaveError = null })
+    await idle.getByRole('checkbox', { name: 'Sprechererkennung für Mikrofon', exact: true }).uncheck()
+    await page.waitForFunction(() => window.lastSavedSettings?.language === 'en-US' && window.lastSavedSettings.diarization.mic === false)
+    await page.locator('.hero-controls .primary-button:not(:disabled)').waitFor()
+    assert.equal(await page.getByRole('alert').count(), 0)
+  } finally { await page.close() }
+})
+
+for (const failure of ['saveSettingsError', 'saveConfigError']) {
+  test(`settings dialog stays open on ${failure}`, async () => {
+    const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, [failure]: 'Datei kann nicht gespeichert werden' })
+    try {
+      await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+      const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
+      await dialog.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('en-US')
+      assert.equal(await page.evaluate(() => window.lastSavedSettings), undefined)
+      await dialog.getByRole('button', { name: 'Speichern', exact: true }).click()
+      await page.getByRole('alert').waitFor()
+      assert.equal(await dialog.isVisible(), true)
+      assert.match(await dialog.locator('.hint').innerText(), /Datei kann nicht gespeichert werden/)
+      assert.equal(await dialog.getByRole('button', { name: 'Speichern', exact: true }).isDisabled(), false)
+    } finally { await page.close() }
+  })
+}
 
 test('language dropdown preserves a configured language outside the default options', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, language: 'fr-CA' })
@@ -290,6 +381,46 @@ test('language dropdown preserves a configured language outside the default opti
   } finally {
     await page.close()
   }
+})
+
+test('export folder picker preserves cancellation and saves the selected folder', async () => {
+  const page = await openApp({
+    configState: { exists: true, path: 'test-config', config: validConfig },
+    directoryPickerResult: 'D:\\Meeting Notes'
+  })
+  try {
+    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+    const path = page.getByRole('textbox', { name: 'Speicherpfad (optional)', exact: true })
+    const picker = page.getByRole('button', { name: 'Speicherordner auswählen', exact: true })
+    await picker.click()
+    await page.waitForFunction(() => document.querySelector('#transcript-export-path')?.value === 'D:\\Meeting Notes')
+    await page.evaluate(() => { window.directoryPickerResult = null })
+    await picker.click()
+    await page.waitForFunction(() => window.directoryPickerCalls === 2)
+    assert.equal(await path.inputValue(), 'D:\\Meeting Notes')
+    await page.getByRole('button', { name: 'Speichern', exact: true }).click()
+    await page.waitForFunction(() => window.lastSavedSettings?.transcript.markdownExport.path === 'D:\\Meeting Notes')
+    await reopenSettings(page)
+    await page.getByRole('checkbox', { name: 'Transkript automatisch als Markdown speichern', exact: true }).uncheck()
+    assert.equal(await picker.isDisabled(), true)
+    assert.equal(await path.isDisabled(), true)
+  } finally { await page.close() }
+})
+
+test('export folder picker errors leave the previous path intact and visible', async () => {
+  const page = await openApp({
+    configState: { exists: true, path: 'test-config', config: validConfig },
+    transcript: { markdownExport: { enabled: true, path: 'D:\\Existing' } },
+    directoryPickerError: 'Ordnerauswahl fehlgeschlagen'
+  })
+  try {
+    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+    await page.getByRole('button', { name: 'Speicherordner auswählen', exact: true }).click()
+    await page.getByRole('alert').waitFor()
+    assert.match(await page.getByRole('alert').innerText(), /Ordnerauswahl fehlgeschlagen/)
+    assert.equal(await page.getByRole('textbox', { name: 'Speicherpfad (optional)', exact: true }).inputValue(), 'D:\\Existing')
+    assert.equal(await page.getByRole('dialog', { name: 'Einstellungen', exact: true }).isVisible(), true)
+  } finally { await page.close() }
 })
 
 test('language dropdown remains disabled during recording', async () => {
@@ -317,6 +448,7 @@ test('diarization settings default on and independently save all source combinat
       await speaker.setChecked(settings.speaker)
       await page.getByRole('button', { name: 'Speichern', exact: true }).click()
       await page.waitForFunction((value) => window.lastSavedSettings?.diarization.mic === value.mic && window.lastSavedSettings?.diarization.speaker === value.speaker, settings)
+      await reopenSettings(page)
       assert.equal(await mic.isChecked(), settings.mic)
       assert.equal(await speaker.isChecked(), settings.speaker)
     }
@@ -340,15 +472,24 @@ for (const inDialog of [false, true]) {
       }
       const mic = panel.getByRole('checkbox', { name: 'Mikrofon transkribieren', exact: true })
       const speaker = panel.getByRole('checkbox', { name: 'Speaker-Loopback transkribieren', exact: true })
-      for (const width of [900, 390]) {
-        await page.setViewportSize({ width, height: 600 })
+      for (const width of [950, 390]) {
+        await page.setViewportSize({ width, height: 650 })
         for (const [checkbox, device] of [[mic, 'Mikrofon'], [speaker, 'Speaker Loopback']]) {
           const toggleBox = await checkbox.boundingBox()
           const deviceBox = await panel.getByRole('combobox', { name: device, exact: true }).boundingBox()
           assert.ok(toggleBox.x + toggleBox.width <= deviceBox.x)
           assert.ok(Math.abs(toggleBox.y + toggleBox.height / 2 - deviceBox.y - deviceBox.height / 2) < 1)
           assert.equal(await panel.getByText(await checkbox.getAttribute('aria-label'), { exact: true }).count(), 0)
+          const diarization = await panel.getByRole('checkbox', {
+            name: device === 'Mikrofon' ? 'Sprechererkennung für Mikrofon' : 'Sprechererkennung für Speaker', exact: true
+          }).boundingBox()
+          assert.ok(diarization.x >= deviceBox.x + deviceBox.width)
+          assert.ok(Math.abs(diarization.y + diarization.height / 2 - deviceBox.y - deviceBox.height / 2) < 1)
         }
+        const micBox = await panel.getByRole('combobox', { name: 'Mikrofon', exact: true }).boundingBox()
+        const speakerBox = await panel.getByRole('combobox', { name: 'Speaker Loopback', exact: true }).boundingBox()
+        assert.ok(speakerBox.y >= micBox.y + micBox.height)
+        assert.equal(await panel.evaluate(element => element.scrollWidth <= element.clientWidth), true)
       }
       await mic.click()
       assert.equal(await mic.isChecked(), false)
@@ -384,6 +525,7 @@ test('transcription sources default on, persist independently and keep the last 
     await speaker.uncheck()
     await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.transcription?.speaker === false)
+    await reopenSettings(page)
     assert.equal(await mic.isChecked(), true)
     assert.equal(await speaker.isChecked(), false)
     assert.equal(await mic.isDisabled(), false)
@@ -394,15 +536,18 @@ test('transcription sources default on, persist independently and keep the last 
     assert.equal(await speaker.isChecked(), true)
     await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.transcription?.mic === false && window.lastSavedSettings?.transcription?.speaker === true)
+    await reopenSettings(page)
     await speaker.uncheck()
     assert.equal(await mic.isChecked(), true)
     assert.equal(await speaker.isChecked(), false)
     await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.transcription?.mic === true && window.lastSavedSettings?.transcription?.speaker === false)
+    await reopenSettings(page)
     await speaker.check()
     assert.equal(await mic.isDisabled(), false)
     await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.transcription?.speaker === true)
+    await reopenSettings(page)
     // Ein deaktiviertes Quellgeraet wird nicht mehr gebraucht.
     await speaker.uncheck()
     assert.equal(await page.getByRole('combobox', { name: 'Speaker Loopback', exact: true }).isDisabled(), true)
@@ -527,7 +672,7 @@ test('saving a complete configuration replaces the warning and enables recording
     await page.getByLabel('Speech Key', { exact: true }).fill(validConfig.speechKey)
     await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => document.querySelector('.toast-info')?.textContent.includes('Einstellungen gespeichert.'))
-    await page.getByRole('button', { name: 'Dialog schließen', exact: true }).click()
+    await page.getByRole('dialog', { name: 'Einstellungen', exact: true }).waitFor({ state: 'hidden' })
     await page.locator('.hero-controls .primary-button:not(:disabled)').waitFor()
     assert.equal(await page.getByRole('dialog').count(), 0)
   } finally {
@@ -731,17 +876,21 @@ test('idle audio settings synchronize with dialog, persist, and reset is stopped
     assert.equal(await idle.getByRole('combobox').count(), 3)
     assert.equal(await idle.getByRole('checkbox').count(), 4)
     assert.equal(await idle.getByLabel('Speicherpfad (optional)', { exact: true }).count(), 0)
+    assert.equal(await idle.getByRole('button', { name: 'Speichern', exact: true }).count(), 0)
+    assert.equal(await idle.getByText(/Änderungen gelten/).count(), 0)
     await idle.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('en-US')
     await idle.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).uncheck()
+    await page.waitForFunction(() => window.lastSavedSettings?.language === 'en-US' && window.lastSavedSettings?.diarization.speaker === false)
+    assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
     const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
     assert.equal(await dialog.getByRole('combobox', { name: 'Sprache', exact: true }).inputValue(), 'en-US')
     assert.equal(await dialog.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).isChecked(), false)
     await dialog.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('fr-FR')
-    await dialog.getByRole('button', { name: 'Dialog schließen', exact: true }).click()
-    assert.equal(await idle.getByRole('combobox', { name: 'Sprache', exact: true }).inputValue(), 'fr-FR')
-    await idle.getByRole('button', { name: 'Speichern', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.language === 'fr-FR')
+    await dialog.waitFor({ state: 'hidden' })
+    assert.equal(await idle.getByRole('combobox', { name: 'Sprache', exact: true }).inputValue(), 'fr-FR')
     assert.equal(await page.getByRole('button', { name: 'Transkript löschen', exact: true }).isDisabled(), true)
     await page.getByRole('button', { name: 'Start', exact: true }).click()
     await emitSegments(page)
@@ -770,6 +919,11 @@ test('Debug dock starts hidden, opens upward within half the workspace, and clea
     await page.locator('.debug-log-entry').nth(69).waitFor()
     assert.equal(await page.locator('.debug-summary .count-pill').innerText(), '2 Fehler')
     assert.equal(await page.locator('.console-debug.has-errors').count(), 1)
+    const colors = await page.locator('.debug-log-message').evaluateAll(elements => elements.map(element => getComputedStyle(element).color))
+    assert.notEqual(colors[0], colors[2])
+    await page.evaluate(() => window.emitDebugLog({ id: 'new-info', timestampIso: new Date().toISOString(), source: 'ipc', level: 'info', message: 'Normaler Eintrag' }))
+    await page.getByText('Normaler Eintrag', { exact: true }).waitFor()
+    assert.equal(await page.getByText('Normaler Eintrag', { exact: true }).evaluate(element => getComputedStyle(element).color), colors[2])
     for (const height of [860, 420]) {
       await page.setViewportSize({ width: 800, height })
       const workspace = await page.locator('.console-grid').boundingBox()
@@ -887,10 +1041,11 @@ test('failed Stop surfaces details and leaves recording and reset protection int
   } finally { await page.close() }
 })
 
-test('a crashed sidecar surfaces a persistent error toast', async () => {
-  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+test('a crashed sidecar surfaces a persistent error toast and allows a new recording', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, running: true })
   try {
-    await page.locator('.hero-controls .primary-button:not(:disabled)').waitFor()
+    await page.getByRole('button', { name: 'Stop', exact: true }).waitFor()
+    await emitSegments(page)
     assert.equal(await page.locator('.toast').count(), 0)
 
     await page.evaluate(() => window.emitCrashed({ exitCode: 1, lastError: 'Azure-Start fehlgeschlagen' }))
@@ -898,13 +1053,19 @@ test('a crashed sidecar surfaces a persistent error toast', async () => {
     await toast.waitFor()
     assert.match(await toast.innerText(), /Sidecar abgestuerzt/)
     assert.match(await toast.innerText(), /Exit-Code 1/)
-    // Persistent: ein Fehler bleibt als alert sichtbar und wird nicht von
-    // einem weiteren Status-Event verdraengt.
     assert.equal(await toast.getAttribute('role'), 'alert')
     await page.evaluate(() => window.emitStatus({ running: false, paused: false }))
     await page.waitForTimeout(150)
     assert.equal(await page.locator('.toast').count(), 1)
     assert.match(await toast.innerText(), /Sidecar abgestuerzt/)
+    assert.equal(await page.getByRole('button', { name: 'Start', exact: true }).isDisabled(), false)
+    assert.equal(await page.getByRole('button', { name: 'Pause', exact: true }).isDisabled(), true)
+    assert.equal(await page.locator('.segment').count(), 2)
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
+    await page.getByRole('button', { name: 'Stop', exact: true }).waitFor()
+    assert.equal(await page.evaluate(() => window.lastStartCalled), true)
+    assert.equal(await page.locator('.segment').count(), 0)
+    assert.equal(await page.locator('.toast-error').count(), 0)
   } finally {
     await page.close()
   }

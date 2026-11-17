@@ -44,15 +44,11 @@ fn main() {
     let sidecar_csproj = PathBuf::from("../sidecar/MeetingNotes.Sidecar.csproj");
     let sidecar_out = PathBuf::from("target/sidecar-publish");
 
-    // T-512: Das Ziel-Framework des Publishs ist umschaltbar. Voreinstellung ist
-    // net10.0-windows. net9.0-windows erzeugt einen Sidecar, der auch auf
-    // .NET-9-Runtimes startet (RollForward=Major). Nur die beiden gebauten
-    // TFMs sind zulaessig - der Wert geht ungefiltert in die dotnet-Argumente.
+    // Reject obsolete overrides instead of silently publishing another TFM.
     let sidecar_tfm = match env::var("MEETING_NOTES_SIDECAR_TFM").ok().as_deref() {
-        Some("net9.0-windows") => "net9.0-windows",
         Some("net10.0-windows") | None => "net10.0-windows",
         Some(other) => panic!(
-            "MEETING_NOTES_SIDECAR_TFM muss net9.0-windows oder net10.0-windows sein, war: {other}"
+            "MEETING_NOTES_SIDECAR_TFM muss net10.0-windows sein; .NET 9 wird nicht mehr unterstuetzt, war: {other}"
         ),
     };
     println!("cargo:rerun-if-env-changed=MEETING_NOTES_SIDECAR_TFM");
@@ -62,7 +58,7 @@ fn main() {
     let _ = std::fs::remove_dir_all(&sidecar_out);
 
     println!(
-        "build.rs: publishing sidecar (config={config}, rid={rid}, tfm={sidecar_tfm}, single_file=true) → {}",
+        "build.rs: publishing sidecar (config={config}, rid={rid}, tfm={sidecar_tfm}, self_contained=true, compression=true, trimmed=true) → {}",
         sidecar_out.display()
     );
 
@@ -75,19 +71,13 @@ fn main() {
         .arg("-r")
         .arg(rid)
         .arg("--self-contained")
-        .arg("false")
-        // T-512: Bei Multi-Target muss das TFM beim Publish explizit benannt
-        // werden, sonst bricht der Publish mit NETSDK1047 ab.
+        .arg("true")
         .arg("-f")
         .arg(sidecar_tfm)
         .arg("--artifacts-path")
         .arg("target/sidecar-artifacts")
         .arg("-o")
-        .arg(&sidecar_out)
-        // Native Speech-DLLs werden beim Start aus der einzelnen EXE entpackt.
-        .arg("-p:PublishSingleFile=true")
-        .arg("-p:IncludeNativeLibrariesForSelfExtract=true")
-        .arg("-p:DebugType=none");
+        .arg(&sidecar_out);
     let status = publish.status()
         .unwrap_or_else(|e| {
             panic!(

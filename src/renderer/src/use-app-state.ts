@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_USER_SETTINGS, normalizeUserSettings, type AppConfigState } from '@shared/config-contract'
+import { DEFAULT_USER_SETTINGS, normalizeUserSettings, type AppConfigState, type UserSettings } from '@shared/config-contract'
 import { buildTranscriptMarkdown } from '@shared/transcript-markdown'
 import {
   formatSpeakerIdentity,
@@ -51,6 +51,14 @@ export function useAppState() {
   const [lastError, setLastError] = useState<TranscriptError | null>(null)
   const [runtimeIssue, setRuntimeIssue] = useState<string | null>(null)
   const [settings, setSettings] = useState(DEFAULT_USER_SETTINGS)
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
+  const settingsSaveQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const settingsSaveRevisionRef = useRef(0)
+  const settingsSaveErrorRef = useRef<string | null>(null)
+  const [isSavingSettings, setIsSavingSettings] = useState(false)
+  const [settingsSaveFailed, setSettingsSaveFailed] = useState(false)
+  const [isChoosingDirectory, setIsChoosingDirectory] = useState(false)
   const [devices, setDevices] = useState<AudioDeviceSnapshot>(initialDevices)
   const [debugLog, setDebugLog] = useState<DebugLogEntry[]>([])
   const [settingsHint, setSettingsHint] = useState<string | null>(null)
@@ -192,7 +200,9 @@ export function useAppState() {
     // Das Ereignis kam bisher bis zum Preload, wurde aber von niemandem
     // abonniert - die Oberflaeche blieb bei einem Crash stumm.
     const unsubCrashed = window.transcriptSidecar?.onCrashed((payload) => {
-      setRuntimeIssue('Der Aufnahmedienst ist abgestuerzt.')
+      setLastError({ code: 'SIDECAR_UNAVAILABLE', message: 'Der Aufnahmedienst ist abgestuerzt.' })
+      setStatus((prev) => ({ ...prev, running: false, paused: false }))
+      setIsStarting(false)
       setToast({
         message:
           `Sidecar abgestuerzt (Exit-Code ${payload.exitCode ?? 'unbekannt'}). ` +
@@ -269,7 +279,7 @@ export function useAppState() {
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!status.running) {
+      if (!status.running && !isSavingSettings) {
         return undefined
       }
 
@@ -283,7 +293,7 @@ export function useAppState() {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
     }
-  }, [status.running])
+  }, [status.running, isSavingSettings])
 
   const isConfigReady = useMemo(() => {
     if (!configState?.exists || !configState.config) {
@@ -413,6 +423,8 @@ export function useAppState() {
   const onStart = async () => {
     setIsStarting(true)
     try {
+      await settingsSaveQueueRef.current
+      if (settingsSaveErrorRef.current) throw new Error(settingsSaveErrorRef.current)
       setLastError(null)
       // Ein Start nach Stop beginnt immer ein NEUES Transkript (T-507):
       // Segmente und Sprecherbasis werden zurueckgesetzt, damit die
@@ -498,6 +510,42 @@ export function useAppState() {
     setAutoScrollEnabled(true)
   }
 
+  const setIdleSettings: React.Dispatch<React.SetStateAction<UserSettings>> = (update) => {
+    const next = typeof update === 'function' ? update(settingsRef.current) : update
+    settingsRef.current = next
+    setSettings(next)
+    const revision = ++settingsSaveRevisionRef.current
+    setIsSavingSettings(true)
+
+    // Serialize full snapshots so rapid changes cannot overwrite one another.
+    settingsSaveQueueRef.current = settingsSaveQueueRef.current.then(async () => {
+      try {
+        const saved = normalizeUserSettings(await window.transcriptApi.saveSettings(next))
+        if (revision === settingsSaveRevisionRef.current) {
+          if (settingsRef.current === next) {
+            settingsRef.current = saved
+            setSettings(saved)
+          }
+          const previousError = settingsSaveErrorRef.current
+          if (previousError) setToast((previous) => previous?.message === previousError ? null : previous)
+          settingsSaveErrorRef.current = null
+          setSettingsSaveFailed(false)
+          setSettingsHint(null)
+        }
+      } catch (error) {
+        const message = errorDetail(error, 'Einstellungen konnten nicht automatisch gespeichert werden.')
+        if (revision === settingsSaveRevisionRef.current) {
+          settingsSaveErrorRef.current = message
+          setSettingsSaveFailed(true)
+        }
+        setSettingsHint(message)
+        setToast({ message, variant: 'error', persistent: true })
+      } finally {
+        if (revision === settingsSaveRevisionRef.current) setIsSavingSettings(false)
+      }
+    })
+  }
+
   // Einziger Speichern-Pfad fuer den Settings-Dialog: der Button im
   // Dialog-Footer schreibt beide Abschnitte (Azure-Konfiguration inkl. Proxy
   // und Benutzereinstellungen). Die Benutzereinstellungen werden zuerst
@@ -505,35 +553,71 @@ export function useAppState() {
   // automatischen Oeffnen nach einem Start ohne Konfiguration) die
   // Sprache-/Geraete-Auswahl nicht verwerft.
   const onSaveAll = async () => {
-    const errors: string[] = []
+    if (isSavingSettings) return
+    setIsSavingSettings(true)
+    const snapshot = settingsRef.current
+    const revision = settingsSaveRevisionRef.current
+    const save = settingsSaveQueueRef.current.then(async () => {
+      const errors: string[] = []
 
+      try {
+        const saved = await window.transcriptApi.saveSettings(snapshot)
+        if (settingsRef.current === snapshot) setSettings(normalizeUserSettings(saved))
+        settingsSaveErrorRef.current = null
+        setSettingsSaveFailed(false)
+        const refreshedDevices = await window.transcriptApi.getDevices()
+        setDevices(refreshedDevices)
+        setSettingsHint(null)
+      } catch (error) {
+        const message = errorDetail(error, 'Einstellungen konnten nicht gespeichert werden.')
+        settingsSaveErrorRef.current = message
+        setSettingsSaveFailed(true)
+        errors.push(message)
+      }
+
+      try {
+        const payload = draftToConfig(configDraft)
+        const savedState = await window.transcriptApi.saveConfig(payload)
+        setConfigState(savedState)
+        setConfigDraft(toConfigDraft(savedState.config))
+      } catch (error) {
+        errors.push(errorDetail(error, 'Azure-Konfiguration konnte nicht gespeichert werden.'))
+      }
+
+      if (revision === settingsSaveRevisionRef.current) setIsSavingSettings(false)
+      if (errors.length > 0) {
+        const message = errors.join(' ')
+        setSettingsHint(message)
+        setToast({ message, variant: 'error', persistent: true })
+        return
+      }
+
+      setSettingsDialogOpen(false)
+      setToast({ message: 'Einstellungen gespeichert.', variant: 'info', persistent: false })
+    })
+    settingsSaveQueueRef.current = save
+    await save
+  }
+
+  const onChooseTranscriptDirectory = async () => {
+    if (isChoosingDirectory) return
+    setIsChoosingDirectory(true)
     try {
-      const saved = await window.transcriptApi.saveSettings(settings)
-      setSettings(normalizeUserSettings(saved))
-      const refreshedDevices = await window.transcriptApi.getDevices()
-      setDevices(refreshedDevices)
-      setSettingsHint(null)
+      const path = await window.transcriptApi.selectTranscriptDirectory()
+      if (path === null) return
+      setSettings((previous) => ({
+        ...previous,
+        transcript: {
+          ...previous.transcript,
+          markdownExport: { ...previous.transcript.markdownExport, path }
+        }
+      }))
     } catch (error) {
-      errors.push(error instanceof Error ? error.message : 'Einstellungen konnten nicht gespeichert werden.')
-    }
-
-    try {
-      const payload = draftToConfig(configDraft)
-      const savedState = await window.transcriptApi.saveConfig(payload)
-      setConfigState(savedState)
-      setConfigDraft(toConfigDraft(savedState.config))
-    } catch (error) {
-      errors.push(error instanceof Error ? error.message : 'Azure-Konfiguration konnte nicht gespeichert werden.')
-    }
-
-    if (errors.length > 0) {
-      const message = errors.join(' ')
-      setSettingsHint(message)
+      const message = errorDetail(error, 'Speicherordner konnte nicht ausgewählt werden.')
       setToast({ message, variant: 'error', persistent: true })
-      return
+    } finally {
+      setIsChoosingDirectory(false)
     }
-
-    setToast({ message: 'Einstellungen gespeichert.', variant: 'info', persistent: false })
   }
 
   const [connectivityResult, setConnectivityResult] = useState<ConnectivityResult | null>(null)
@@ -741,6 +825,11 @@ export function useAppState() {
     onOpenSettingsDialog: () => setSettingsDialogOpen(true),
     onResetTranscript,
     onSaveAll,
+    isSavingSettings,
+    settingsSaveFailed,
+    setIdleSettings,
+    onChooseTranscriptDirectory,
+    isChoosingDirectory,
     onTestConnectivity,
     isTestingConnectivity,
     connectivityResult,

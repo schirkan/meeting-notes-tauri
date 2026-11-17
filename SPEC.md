@@ -31,7 +31,7 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-500 | Aktueller Portable-Build auf sauberem Windows-11-Zielsystem geprüft. |
 | T-502 | Report `context/latency-report.md` mit P50/P95/P99 über 100 Audio-Chunks - **offen**: |
 | T-502 | Ziel: P95 < 5 s End-to-End |
-| T-504 | Portable Build auf einem **frischen** Windows-11-System mit .NET 10 Runtime und WebView2 valid… |
+| T-504 | Portable Build auf einem **frischen** Windows-11-System ohne .NET-Installation mit WebView2 va… |
 | T-509 | Das Loopback-Verhalten ist unveraendert: Events nur waehrend tatsaechlicher |
 | T-509 | Latenz und Ausgabequalitaet sind auf echter Hardware gegen die |
 | T-510 | Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch |
@@ -87,7 +87,7 @@ Auf deinem Rechner prüft er 48-kHz-Stereo → 16-kHz-Mono inklusive Länge,
 Pegel, Übersteuerung und Dropouts.
 
 **5. Deployment auf einem frischen Windows 11 (T-504, T-510)** — Ordner
-`dist/portable` kopieren, .NET 10 Runtime und WebView2 installieren, dann:
+`dist/portable` kopieren, WebView2 sicherstellen (keine .NET-Installation noetig), dann:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\verify-deployment.ps1 -PortableDir D:\Apps\MeetingNotes -LaunchApp
@@ -129,11 +129,11 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 ## 3.1 Technische Architektur
 
 - **App-Container:** Tauri 2 (Rust). Verantwortlich für Fenster/WebView2-Lifecycle, Sidecar-Spawn, Settings-Persistenz, UI-Bridge.
-- **Backend:** C#/.NET 10 als Sidecar (`MeetingNotes.Sidecar.exe`, framework-dependent publiziert). Verantwortlich für Audio-Capture, Audio-Resampling, Azure-Speech-Transkription, Speaker-Diarization und Event-Streaming.
+- **Backend:** C#/.NET 10 als Sidecar (`MeetingNotes.Sidecar.exe`, self-contained, komprimiert und konservativ getrimmt). Verantwortlich für Audio-Capture, Audio-Resampling, Azure-Speech-Transkription, Speaker-Diarization und Event-Streaming.
 - **Frontend:** React 19 + TypeScript 6 + Vite 8 (im Tauri-Renderer-WebView2).
 - **IPC Sidecar ↔ App:** `stdin/stdout` über `tauri-plugin-shell` mit JSON-Lines (siehe `DECISIONS.md → AD-008`). Named Pipe entfällt.
 - **IPC App ↔ Renderer:** Tauri-`invoke()` für Commands + Tauri-`listen()` für Events (typed JSON).
-- **Distribution:** NSIS-/MSI-Installer oder gesamter Portable-Ordner. Sidecar-EXE und verwaltete/native DLLs werden extern ausgeliefert, nicht in die Haupt-EXE eingebettet. Zielsystem braucht .NET 10 Runtime (win-x64) — der Sidecar läuft dank `RollForward=Major` auch auf neueren Runtimes und WebView2.
+- **Distribution:** Gesamter Portable-Ordner. Die Sidecar-EXE buendelt die .NET-Runtime sowie verwaltete/native Abhaengigkeiten und liegt neben der Haupt-EXE. Zielsystem braucht WebView2, aber keine installierte .NET-Runtime. Aktuell 30,67 MiB / 4 Dateien; keine Installer erzeugt.
 
 ## 4. Transkription
 - API: Azure Speech
@@ -158,12 +158,14 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - Aufnahmesteuerung mit **Start**, **Pause**/**Weiter** und **Stop**. Pause haelt die Azure-Sitzung am Leben, speist aber kein Audio zu: der pausierte Abschnitt erscheint nicht im Transkript, und die Sprecher-IDs der Sitzung bleiben gueltig. Stop beendet die Sitzung endgueltig; der naechste Start beginnt ein neues Transkript mit frischer Sprecherbasis. Ein Fortsetzen nach Stop ist nicht moeglich. Pausen zaehlen nicht als Aufnahmezeit.
 - Bei geänderter SDK-Sprecher-ID ersetzt ein neues Interim-/Final-Event ältere Interims derselben Quelle; andere Quellen und finale Segmente bleiben erhalten. Transkript, Sprecherzuordnung und Export berücksichtigen Aliase.
 - Diagnostikbereich mit laufendem Debug-Log (App/Sidecar/IPC).
-- Die Debug-Fußzeile ist initial unsichtbar und wird über **Debug-Log** im Drei-Punkte-Menü umgeschaltet. Beim ersten Anzeigen öffnet sich der Logbereich nach oben, maximal bis 50 % des Inhaltsbereichs. Späteres Aus-/Einblenden erhält seinen Öffnungszustand. Fußzeile mit Fehlerzähler, farblicher Fehlerhervorhebung und **Log löschen**.
-- Einstellungen haben drei Tabs: **Allgemein**, **Azure-Konfiguration**, **Proxy**. Die Dialogposition und -größe bleiben beim Wechsel gleich; Inhalte scrollen intern. Der Footer enthält den einzigen **Speichern**-Button und den tatsächlichen Backend-Pfad der gemeinsamen Konfigurationsdatei. Tabs unterstützen Pfeiltasten, Home und End; Escape und Focus-Trap bleiben erhalten.
-- Bei leerem Transkript und gestoppter Aufnahme zeigt der Hauptbereich nur Sprache und Audioeinstellungen mit Speichern-Aktion. Mikrofon-/Loopback-Auswahl und jeweilige Sprechererkennung stehen paarweise nebeneinander; bei höchstens 500 px untereinander. **Löschen** im Header ist während Aufnahme, Pause und Start deaktiviert und auch im Handler gesperrt.
+- Die Debug-Fußzeile ist initial unsichtbar und wird über **Debug-Log** im Drei-Punkte-Menü umgeschaltet. Beim ersten Anzeigen öffnet sich der Logbereich nach oben, maximal bis 50 % des Inhaltsbereichs. Späteres Aus-/Einblenden erhält seinen Öffnungszustand. Fußzeile mit Fehlerzähler und **Log löschen**; nur Fehlerzeilen und der Zaehler werden rot hervorgehoben, nicht der gesamte Logtext.
+- Einstellungen haben drei Tabs: **Allgemein**, **Azure-Konfiguration**, **Proxy**. Die Dialogposition und -größe bleiben beim Wechsel gleich; Inhalte scrollen intern. Der Footer enthält den einzigen **Speichern**-Button und den tatsächlichen Backend-Pfad der gemeinsamen Konfigurationsdatei. Erfolgreiches Speichern schliesst den Dialog; bei Fehlern bleibt er mit Fehlermeldung offen. Tabs unterstützen Pfeiltasten, Home und End; Escape und Focus-Trap bleiben erhalten.
+- Bei leerem Transkript und gestoppter Aufnahme zeigt der Hauptbereich nur Sprache und Audioeinstellungen ohne Anwendungshinweis oder Speichern-Button. Aenderungen werden sofort seriell gespeichert; Azure-/Proxy-Drafts bleiben davon unberuehrt. Start wartet auf erfolgreiche Persistenz. Mikrofon und Speaker-Loopback stehen untereinander; pro Zeile steht die Transkriptions-Checkbox links vor dem Geraet und die Sprechererkennung rechts daneben. **Löschen** im Header ist während Aufnahme, Pause und Start deaktiviert und auch im Handler gesperrt.
+- Nach einem Sidecar-Crash kann der Nutzer mit **Start** eine neue Sitzung beginnen, ohne die App neu zu starten. Kein automatischer Reconnect; das alte Transkript bleibt bis zum manuellen Start erhalten. Veraltete Prozess-Events/Timeouts werden ignoriert und absichtliches Stoppen meldet keinen Crash.
 - Nutzer kann Sprache/Devices sowie Azure-Konfiguration und Proxy bearbeiten. Proxy wird gemeinsam mit Azure gespeichert; **Verbindung testen** und laufende/letzte Ergebnisse öffnen liegen im Azure-Bereich.
 - Spracheinstellung und unabhängige Sprechererkennung für Mic/Speaker werden über Neustarts hinweg persistiert. Beide Diarization-Checkboxen stehen bei den jeweiligen Geräten im Bereich **Allgemein** und sind während der Aufnahme deaktiviert. Gespeicherte Änderungen gelten für die nächste Aufnahme.
-- Im Bereich **Allgemein** stehen außerdem **Transkript automatisch als Markdown speichern** (standardmäßig aktiv) und das optionale Feld **Speicherpfad**. Leer bedeutet Anwendungsverzeichnis.
+- Im Bereich **Allgemein** stehen außerdem **Transkript automatisch als Markdown speichern** (standardmäßig aktiv) und das optionale Feld **Speicherpfad** mit nativem Ordner-Picker. Manuelle Eingabe bleibt moeglich; Abbrechen der Ordnerauswahl veraendert den Pfad nicht. Leer bedeutet Anwendungsverzeichnis.
+- Die initiale Fenstergroesse ist 950 x 650 logische Pixel; das Fenster bleibt skalierbar.
 - Bei fehlender, nicht lesbarer oder unvollständiger Azure-Konfiguration öffnen sich Einstellungen beim Start automatisch; schließbarer Bottom-Toast ohne Verschiebung des Hauptinhalts. Das ist lokale Pflichtfeldprüfung, keine Azure-Key-Verifikation.
 - Separater Diagnose-Dialog mit Transportstatus und vollständiger Schritttabelle nach Abschluss. Schließen kehrt zu Einstellungen zurück, ohne einen laufenden Test abzubrechen; Ergebnisse können wieder geöffnet werden.
 - F12 öffnet/schließt DevTools auch im Release-/Portable-Build.
@@ -223,7 +225,7 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 
 ## 8.1 Sidecar-Deployment (Runtime-Anforderung)
 - Lokale Entwicklung/Build: .NET 10 SDK erforderlich, um das Sidecar zu veröffentlichen.
-- Zielsystem: .NET 10 Runtime (win-x64) ausreichend; SDK ist dort nicht erforderlich. Zusätzlich baubar: net9.0-Variante und Single-File-Variante (je eine Datei) — siehe [T-512](./specs/T-512-sidecar-targetframeworks-und-single-file.md).
+- Zielsystem: keine .NET-Runtime oder SDK erforderlich; die .NET-10-Runtime ist im komprimierten, getrimmten Single-File-Sidecar enthalten. Native Bibliotheken werden beim Start extrahiert. Sidecar-/Speech-SDK-Metadaten bleiben fuer Reflection erhalten; Trim-Warnungen bleiben sichtbar. Nur `net10.0-windows` wird gebaut — siehe [T-512](./specs/T-512-sidecar-targetframeworks-und-single-file.md).
 - Build-/Start-Flow:
   - Dev: `build.rs` publiziert Sidecar automatisch, danach Start durch Tauri.
   - Installer: `npm run tauri -- build` bündelt Sidecar-EXE **und DLLs** als externe Resources.

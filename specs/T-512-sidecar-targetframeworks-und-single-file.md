@@ -12,7 +12,30 @@ Baupfad verfügbar machen:
 1. **Kann das Sidecar für .NET 8 und .NET 10 gebaut werden?**
 2. **Lässt sich das Sidecar zu einer einzigen Datei zusammenführen?**
 
-## Messungen (2026-11-17, alle empirisch)
+## Aktueller Stand nach dem NuGet-Update (2026-11-17)
+Auf Nutzerentscheidung ist nur noch `net10.0-windows` konfiguriert. Die aktuellen
+System-Pakete 11.0.0 unterstuetzen .NET 9 nicht mehr offiziell. `RollForward=Major`
+bleibt im Projekt erhalten. Standard ist jetzt ein self-contained, komprimierter
+und konservativ getrimmter Single-File-Build. Alte .NET-9-Overrides
+werden im `build.rs` explizit abgewiesen. Die folgenden Messungen dokumentieren
+den vorherigen Stand, nicht eine weiterhin verfuegbare .NET-9-Build-Option.
+
+### Self-contained + Kompression + Trimming (aktueller Standard)
+Alle Publish-Einstellungen liegen in `sidecar/MeetingNotes.Sidecar.csproj`;
+Tauri und der direkte npm-Publish verwenden denselben Baupfad. Native Bibliotheken
+werden beim Start extrahiert. JSON-Reflection ist aktiviert, Sidecar und Speech-SDK
+werden als `TrimmerRootAssembly` vollstaendig erhalten. Trimming betrifft den
+uebrigen Code; IL2026/IL2075/IL2104 werden nicht unterdrueckt.
+
+Gemessen: Sidecar **14,74 MiB**, Portable **30,22 MiB / 4 Dateien / 3 Summen**.
+`npm run test:sidecar:published`: **521 Assertions**, inklusive JSON-Events,
+Handshake und beiden nativen Speech-Clients gegen einen lokalen CONNECT-Proxy.
+Smoke und Deployment **9 PASS / 0 FAIL** pruefen den Start mit ungueltigen
+DOTNET_ROOT-Pfaden und defekten Additional-Deps; eine installierte .NET-Runtime
+ist nicht erforderlich. Die Resampler-Hardwareprobe wurde uebersprungen,
+Azure-/Audio-Live-Abnahme und Clean-Machine-Test stehen weiterhin aus.
+
+## Historische Messungen (2026-11-17, vor dem NuGet-Update, alle empirisch)
 ### Frage 1 — Target-Frameworks
 
 | Ziel | Ergebnis |
@@ -72,7 +95,7 @@ native DLLs nach): `--test-connectivity` liefert für **alle drei** Varianten
 Die nativen Speech-DLLs werden also auch aus dem Single-File-Bundle korrekt
 gefunden.
 
-## Umsetzung
+## Historische Umsetzung vor dem NuGet-Update
 - `sidecar/MeetingNotes.Sidecar.csproj`: `<TargetFrameworks>net9.0-windows;net10.0-windows</TargetFrameworks>`
   und `<RollForward>Major</RollForward>`.
 - `src-tauri/build.rs` und `npm run publish:sidecar`: beim Publish muss das TFM
@@ -81,7 +104,7 @@ gefunden.
 - **Keine eigenen Publish-Skripte:** Das TFM ist ueber eine Umgebungsvariable
   im `build.rs` waehlbar; Single-File ist immer aktiviert.
 
-**Aktueller Standard-Build:** net10.0-windows, framework-dependent,
+**Damals geltender Standard-Build:** net10.0-windows, framework-dependent,
 eine `MeetingNotes.Sidecar.exe` direkt neben `MeetingNotes.exe`. Die Single-File-
 Umgebungsvariable ist entfernt; net9 bleibt optional. Die folgenden Messungen
 dokumentieren den zuvor geprueften Vergleich beider Layouts.

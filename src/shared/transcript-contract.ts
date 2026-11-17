@@ -174,6 +174,7 @@ export interface TranscriptApi {
   saveSettings: (settings: import('./config-contract').UserSettings) => Promise<import('./config-contract').UserSettings>
   saveConfig: (config: import('./config-contract').AzureConfig) => Promise<import('./config-contract').AppConfigState>
   saveTranscriptMarkdown: (markdown: string) => Promise<string>
+  selectTranscriptDirectory: () => Promise<string | null>
   testAzureConnectivity: (payload?: unknown) => Promise<{
     probeUrl: string
     reachable: boolean

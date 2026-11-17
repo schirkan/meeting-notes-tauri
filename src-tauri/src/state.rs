@@ -139,6 +139,7 @@ impl AppState {
         inner.running = false;
         inner.paused = false;
         inner.started_at = None;
+        inner.handshake_version = None;
         TranscriptStatus {
             running: false,
             paused: false,
@@ -220,6 +221,19 @@ mod pause_tests {
         assert!(!stopped.running);
         assert!(!stopped.paused, "Nach Stop ist die Aufnahme nicht mehr pausiert");
         assert_eq!(stopped.started_at, None);
+    }
+
+    #[test]
+    fn restarting_after_stop_requires_a_new_handshake() {
+        let state = AppState::default();
+        state.mark_started();
+        state.mark_handshake("1.0.0");
+        state.mark_stopped();
+        let restarted = state.mark_started();
+        assert!(restarted.running);
+        assert!(state.handshake_version().is_none());
+        state.mark_handshake("1.0.0");
+        assert_eq!(state.handshake_version().as_deref(), Some("1.0.0"));
     }
 
     /// Der Status muss die Pause auch ueber get_status sichtbar machen.

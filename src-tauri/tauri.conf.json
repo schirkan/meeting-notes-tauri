@@ -17,8 +17,8 @@
     "windows": [
       {
         "title": "Meeting Notes",
-        "width": 900,
-        "height": 600,
+        "width": 950,
+        "height": 650,
         "resizable": true,
         "label": "main"
       }

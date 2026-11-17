@@ -8,6 +8,7 @@ type SettingsDialogProps = {
   title?: string
   tabs?: string[]
   footer?: React.ReactNode
+  busy?: boolean
 }
 
 const FOCUSABLE_SELECTOR = [
@@ -20,7 +21,7 @@ const FOCUSABLE_SELECTOR = [
 ].join(',')
 
 export function SettingsDialog(props: SettingsDialogProps) {
-  const { isOpen, onClose, children, title = 'Einstellungen', tabs, footer } = props
+  const { isOpen, onClose, children, title = 'Einstellungen', tabs, footer, busy = false } = props
   const [activeTab, setActiveTab] = useState(0)
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const dialogRef = useRef<HTMLElement | null>(null)
@@ -48,7 +49,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
 
       const focusables = Array.from(
         dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
-      ).filter((el) => el.tabIndex >= 0 && el.offsetParent !== null)
+      ).filter((el) => el.tabIndex >= 0 && el.offsetParent !== null && !el.closest('[inert]'))
 
       if (focusables.length === 0) {
         event.preventDefault()
@@ -121,6 +122,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        aria-busy={busy}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="settings-dialog-header">
@@ -146,7 +148,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               tabRefs.current[next]?.focus()
             }}>{tab}</button>)}
         </div>}
-        <div className="settings-dialog-grid">
+        <div className="settings-dialog-grid" inert={busy}>
           {tabs ? Children.toArray(children).map((child, index) => <div key={tabs[index]} role="tabpanel"
             id={`settings-panel-${index}`} aria-labelledby={`settings-tab-${index}`} hidden={activeTab !== index}>{child}</div>) : children}
         </div>

@@ -1,4 +1,4 @@
-# T-510: Clean-Machine-Deployment (Windows 11, .NET 10 Runtime, WebView2)
+# T-510: Clean-Machine-Deployment (Windows 11, Self-contained-Sidecar, WebView2)
 
 ## Kontext
 Status: vorbereitet (2 Punkte offen; Pruefskript vorhanden und erprobt, Ausfuehrung auf dem Zielsystem steht aus)
@@ -10,8 +10,8 @@ Der Portable-Build wird auf einem **frischen** Windows-11-System validiert: ohne
 Entwickler-Toolchain (kein Visual Studio, kein .NET SDK, kein Rust, kein Node),
 ohne persoenliche Konfiguration und ohne hinterlegte Azure-Credentials.
 
-Nachweisziel ist die **Installationsseite**: reichen die zwei dokumentierten
-Voraussetzungen (.NET 10 Runtime win-x64 und WebView2 Runtime) aus, startet
+Nachweisziel ist die **Installationsseite**: reicht WebView2 Runtime aus,
+ohne eine .NET-Runtime zu installieren, startet
 die App ohne weitere Schritte, spawnt den Sidecar und laeuft fehlerfrei bis zur
 Settings-Dialog-Oeffnung?
 
@@ -24,8 +24,7 @@ Ein Punkt = eine Zeile im Skript-Output.
 
 - [x] Zielsystem: Windows 11 x64 erkannt (Build-Nummer im Output). Beleg: scripts/verify-deployment.ps1 (Windows-Build wird geprueft und protokolliert). Testnachweis: npm run verify:deployment - PASS 10 / FAIL 0 (2026-11-17).
 - [x] WebView2 Runtime vorhanden — Version protokolliert. Beleg: scripts/verify-deployment.ps1 (WebView2-Version aus der Registry). Testnachweis: npm run verify:deployment - PASS 10 / FAIL 0 (2026-11-17).
-- [x] .NET-Runtime vorhanden (Version protokolliert) — Registry, Shared-Framework- Beleg: scripts/verify-deployment.ps1 (Registry, Shared-Framework-Verzeichnis und dotnet --list-runtimes). Testnachweis: npm run verify:deployment - PASS 10 / FAIL 0 (2026-11-17).
-      Verzeichnis und `dotnet --list-runtimes` werden abgefragt.
+- [x] Self-contained-Sidecar startet ohne installierte .NET-Runtime. Beleg: scripts/verify-deployment.ps1 (ungueltige DOTNET_ROOT-Pfade und defekte DOTNET_ADDITIONAL_DEPS nur im Kindprozess). Testnachweis: verify-deployment.ps1 gegen eine saubere Kopie der vier Distributionsdateien - PASS 9 / FAIL 0 (2026-11-17, Self-contained-Build).
 - [x] Portable-Ordner ohne `MeetingNotes.config.json`; enthalten ist nur Beleg: scripts/verify-deployment.ps1 (prueft, dass keine persoenliche Config im Ordner liegt). Testnachweis: npm run verify:deployment - PASS 10 / FAIL 0 (2026-11-17).
       `MeetingNotes.config.example.json`.
 - [x] `SHA256SUMS` verifiziert — **3/3** im flachen Single-File-Portable. Beleg: scripts/dist-portable.mjs (SHA256SUMS) (geprueft).
@@ -42,12 +41,12 @@ Ein Punkt = eine Zeile im Skript-Output.
 ## Voraussetzungen mit Nachweis
 | Voraussetzung | Nachweis auf dem Zielsystem |
 |---|---|
-| .NET 10 Runtime (win-x64) | `dotnet --list-runtimes` → `Microsoft.NETCore.App 10.x.x` |
+| Gebuendelte .NET-Runtime | Sidecar liefert `device_list` trotz ungueltiger DOTNET_ROOT-Pfade und defekter Additional-Deps |
 | WebView2 Runtime (Evergreen) | Registry `HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}` → Wert `pv` |
 | Integritaet der Dateien | `certutil -hashfile <Datei> SHA256` gegen `SHA256SUMS` |
 
-Kein .NET **SDK** noetig — der Sidecar ist framework-dependent publiziert
-(`--self-contained false`), siehe AD-006. Der WebView2-Loader ist beim
+Keine .NET-Installation noetig — der Sidecar ist self-contained, komprimiert
+und konservativ getrimmt publiziert, siehe Fortschreibung von AD-006. Der WebView2-Loader ist beim
 unterstuetzten MSVC-Build statisch gelinkt; eine separate
 `WebView2Loader.dll` wird nicht verteilt.
 
@@ -60,9 +59,9 @@ noch das Repository, nur den Portable-Ordner. Auf dem Zielsystem:
 powershell -ExecutionPolicy Bypass -File .\verify-deployment.ps1 -PortableDir D:\Apps\MeetingNotes
 ```
 
-Geprueft werden: Windows-11-Build, WebView2-Runtime (Registry), vorhandene .NET-Runtime
-(Registry **und** Shared-Framework-Verzeichnis **und** `dotnet --list-runtimes` —
-script-installierte Runtimes schreiben keinen Registry-Schlüssel), Integritaet aller Dateien
+Geprueft werden: Windows-11-Build, WebView2-Runtime (Registry), Self-contained-Start
+mit absichtlich ungueltigen DOTNET_ROOT-Pfaden und defekter `DOTNET_ADDITIONAL_DEPS`-
+Datei (wird nur bei Self-contained ignoriert), Integritaet aller Dateien
 gegen `SHA256SUMS`, Abwesenheit einer persoenlichen Config, Platzhalter statt Credentials im
 Template, `MeetingNotes.Sidecar.exe --list-devices` mit gueltigem `device_list`-Event
 sowie die PE-Subsysteme (Haupt-EXE = GUI, also **kein** Konsolenfenster; Sidecar = Konsole).
@@ -89,7 +88,7 @@ PowerShell 7.
    `dist/portable/`. Persoenliche `MeetingNotes.config.json` vor dem
    Kopieren entfernen und die SHA256-Summenliste als Referenz mitnehmen.
 2. **Zielsystem protokollieren:** Windows-Version, Edge-/WebView2-Version,
-   `dotnet --list-runtimes`, freier Speicher, Antivirautyp. Ergebnis in
+   Fehlen einer .NET-Installation, freier Speicher, Antivirautyp. Ergebnis in
    dieser Spec unter "Log" festhalten.
 3. **Kopieren und pruefen:** Gesamten Ordner kopieren, `SHA256SUMS` verifizieren.
 4. **Start ohne Credentials:** App starten, Settings-Dialog pruefen, Config-
@@ -100,7 +99,8 @@ PowerShell 7.
 
 ## Risiken
 - WebView2 Runtime fehlt auf entfernten oder stark abgespeckten Windows-11-Images.
-- .NET 10 Runtime muss **win-x64** sein (kein ARM-Build, keine .NET 8).
+- Der Self-contained-Sidecar ist **win-x64**; auf dem Zielsystem muss keine .NET-Version installiert sein.
+- Native Runtime-/Speech-Bibliotheken werden beim Start extrahiert; das Extraktionsverzeichnis muss beschreibbar sein.
 - Kein persoenlicher Config-Transfer: Credentials gehoeren in die
   `MeetingNotes.config.json` neben der EXE und sind zu keinem Zeitpunkt Teil
   der verteilten Dateien.
@@ -116,6 +116,7 @@ PowerShell 7.
   Installationsseite. Beide sind umgesetzt und unabhaengig voneinander.
 
 ## Log
+- 2026-11-17: Deployment-Pruefer auf Self-contained umgestellt. Kein Runtime-Installationscheck mehr; die EXE muss trotz ungueltiger DOTNET_ROOT-Pfade und defekter Additional-Deps starten. Negativkontrolle: ein framework-dependent Sidecar scheitert an derselben defekten Datei. Eine lediglich fehlende Datei wurde von diesem Host ebenfalls ignoriert und ist deshalb kein geeigneter Nachweis. Prozessfenster unterdrueckt, stdout/stderr erhalten, Zeitlimit 15 s. Neues Portable 30,22 MiB / 4 Dateien: PASS 9 / FAIL 0; Azure-/Audio-Live-Test und echte Clean-Machine-Abnahme weiterhin offen.
 - 2026-11-17: Checkliste in `scripts/verify-deployment.ps1` als ausfuehrbaren Nachweis
   umgesetzt und gegen die lokale Distribution erprobt (PASS 9 / FAIL 0). Zwei Befunde dabei
   korrigiert, die ausschliesslich das Skript betrafen: die Runtime-Erkennung lief nur
