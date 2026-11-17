@@ -452,6 +452,11 @@ und ist deshalb bewusst unterblieben. Single-File wird als **Option**
 Artefakt bleibt der 21-Dateien-Build, damit der Bundle-Pfad
 (Tauri-Resource + `dist-portable.mjs` + Smoke-Test) unberuehrt bleibt.
 
+Der TFM-Schalter `MEETING_NOTES_SIDECAR_TFM` (zulaessig: `net9.0-windows` und
+`net10.0-windows`, Standard `net10.0-windows`) wirkt ebenfalls auf den Bundle-Pfad.
+Er war zuerst nur als Publish-Skript erreichbar, sodass die net9-Variante nie im
+Artefakt ankam — genau diese Inkonsistenz wurde durch den Schalter behoben.
+
 Der Schalter `MEETING_NOTES_SIDECAR_SINGLE_FILE=1` wirkt im `build.rs` auf den
 kompletten Tauri-Bundle-Pfad (verifiziert: Portable 23,09 MB ueber 4 Dateien, Smoke
 bestanden). `build.rs` leert den Publish-Ordner vorher, damit die Dateien zweier

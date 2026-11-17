@@ -107,6 +107,18 @@ Gemessen (2026-11-17):
 | Portable gesamt | 23,10 MB / 24 Dateien / 23 Summen | **23,09 MB / 4 Dateien / 3 Summen** |
 | Smoke-Test | bestanden (23/23) | **bestanden (3/3)** |
 
+### TFM-Schalter
+Der zweite Schalter `MEETING_NOTES_SIDECAR_TFM` (zulaessig: `net9.0-windows` und
+`net10.0-windows`, Standard `net10.0-windows`) waehlt das Ziel-Framework des
+Bundle-Builds. Damit ist auch die net9.0-Variante end-to-end erreichbar. Vorher war
+sie nur ueber `npm run publish:sidecar:net9` erreichbar und kam deshalb **nie im
+Artefakt** an — eine Inkonsistenz, die der Schalter behebt.
+
+Gemessen: net9.0 durch den Bundle-Pfad ergibt 21 Dateien mit `tfm=net9.0`,
+`rollForward=Major`, Portable 23,09 MB / 24 Dateien / 23 Summen, Smoke-Test bestanden.
+Ungueltige Werte werden mit klarer Meldung abgewiesen, statt still zu einem
+anderen TFM zu fuehren.
+
 Der `dist-portable.mjs`-Pfad und der Tauri-Resource-Glob
 (`target/sidecar-publish/*` → `sidecar/`) arbeiten mit beiden Layouts, ohne Änderung.
 

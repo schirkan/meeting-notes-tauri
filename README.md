@@ -123,6 +123,17 @@ npm run dist:portable
 ```
 
 Ohne die Variable bleibt der Standard: 21 Sidecar-Dateien, 23,10 MB ueber 24 Dateien. Der Schalter wirkt auf den kompletten Bundle-Pfad, Smoke-Test inklusive.
+
+Fuer einen Sidecar, der auch auf .NET-9-Runtimes startet (statt zwingend .NET 10):
+
+```powershell
+$env:MEETING_NOTES_SIDECAR_TFM = 'net9.0-windows'
+npm run tauri -- build --no-bundle
+npm run dist:portable
+```
+
+Beide Schalter wirken auf den kompletten Bundle-Pfad. `net9.0-windows` und `net10.0-windows`
+sind moeglich, alles andere wird mit klarer Meldung abgewiesen.
 npm run test:sidecar   # C#-Validierung nach src-tauri/target/sidecar-validation-artifacts
 npm run clean:sidecar -- --dry-run  # Cleanup nur anzeigen
 ```

@@ -44,6 +44,19 @@ fn main() {
     let sidecar_csproj = PathBuf::from("../sidecar/MeetingNotes.Sidecar.csproj");
     let sidecar_out = PathBuf::from("target/sidecar-publish");
 
+    // T-512: Das Ziel-Framework des Publishs ist umschaltbar. Voreinstellung ist
+    // net10.0-windows. net9.0-windows erzeugt einen Sidecar, der auch auf
+    // .NET-9-Runtimes startet (RollForward=Major). Nur die beiden gebauten
+    // TFMs sind zulaessig - der Wert geht ungefiltert in die dotnet-Argumente.
+    let sidecar_tfm = match env::var("MEETING_NOTES_SIDECAR_TFM").ok().as_deref() {
+        Some("net9.0-windows") => "net9.0-windows",
+        Some("net10.0-windows") | None => "net10.0-windows",
+        Some(other) => panic!(
+            "MEETING_NOTES_SIDECAR_TFM muss net9.0-windows oder net10.0-windows sein, war: {other}"
+        ),
+    };
+    println!("cargo:rerun-if-env-changed=MEETING_NOTES_SIDECAR_TFM");
+
     // T-512: Optionaler Single-File-Publish. Mit gesetzter Variable wird der
     // Sidecar als eine einzige EXE ausgeliefert (statt 21 Dateien). Der
     // Schalter loest Cargo neu aus, damit der Wechsel auch greift.
@@ -57,7 +70,7 @@ fn main() {
     let _ = std::fs::remove_dir_all(&sidecar_out);
 
     println!(
-        "build.rs: publishing sidecar (config={config}, rid={rid}) → {}",
+        "build.rs: publishing sidecar (config={config}, rid={rid}, tfm={sidecar_tfm}, single_file={single_file}) → {}",
         sidecar_out.display()
     );
 
@@ -74,7 +87,7 @@ fn main() {
         // T-512: Bei Multi-Target muss das TFM beim Publish explizit benannt
         // werden, sonst bricht der Publish mit NETSDK1047 ab.
         .arg("-f")
-        .arg("net10.0-windows")
+        .arg(sidecar_tfm)
         .arg("--artifacts-path")
         .arg("target/sidecar-artifacts")
         .arg("-o")
