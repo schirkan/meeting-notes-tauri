@@ -34,7 +34,7 @@ Dieses Projekt ist die **Tauri-Migration** des bestehenden Electron-Projekts `pr
 - Node gemäß `package.json`: ≥22.12.0 <23 oder ≥24.0.0 <24.16.0 (Empfehlung: 22 LTS)
 - Rust Toolchain (für Tauri 2)
 - .NET 10 SDK (lokal für Sidecar-Build)
-- .NET 10 Runtime (auf Zielsystemen; .NET 8 wird seit dem 10.11.2026 nicht mehr unterstützt)
+- .NET 10 Runtime (auf Zielsystemen; .NET 8 wird seit dem 10.11.2026 nicht mehr unterstützt) Der Sidecar ist framework-dependent und läuft mit `RollForward=Major` auch auf neueren Runtimes; eine net9.0-Variante sowie eine Single-File-Variante (eine Datei statt 21) stehen als Build-Optionen bereit — siehe [T-512](./specs/T-512-sidecar-targetframeworks-und-single-file.md).
 - Windows 11 mit WebView2 (auf Zielsystemen)
 
 ## Setup
@@ -111,6 +111,8 @@ gleichzusetzen. Die erste Kompilierung nach Profilwechsel bleibt teurer.
 
 ```powershell
 npm run build:sidecar  # .NET-Build nach src-tauri/target/sidecar-artifacts
+npm run publish:sidecar:net9    # Alternative: net9.0-Variante (laeuft auf .NET 9/10/11+)
+npm run publish:sidecar:single  # Alternative: Single-File (1 Datei statt 21, 7,61 MB)
 npm run test:sidecar   # C#-Validierung nach src-tauri/target/sidecar-validation-artifacts
 npm run clean:sidecar -- --dry-run  # Cleanup nur anzeigen
 ```

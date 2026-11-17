@@ -439,6 +439,21 @@ Exit-Code 23 abgewiesen, weil dann nichts transkribiert wuerde.
 
 Siehe [T-511](./specs/T-511-transkriptions-quellen-auswaehlen.md).
 
+## AD-016 · Sidecar: Multi-Target net9/net10 mit RollForward, Single-File als Option (2026-11-17)
+
+**Kontext:** Martin frage, ob das Sidecar fuer .NET 8 und .NET 10 gebaut werden
+koenne und ob es sich zu einer einzigen Datei mergen lasse.
+
+**Entscheidung:** Der Sidecar wird als Multi-Target `net9.0-windows;net10.0-windows`
+mit `RollForward=Major` gefuehrt. .NET 8 ist mit NAudio 3.3.0 **nicht**
+erreichbar (NU1202); der Downgrade auf NAudio 2.2.1 wuerde T-509 zuruecknehmen
+und ist deshalb bewusst unterblieben. Single-File wird als **Option**
+(`publish:sidecar:single`) vorgehalten, nicht als Standard: das ausgelieferte
+Artefakt bleibt der 21-Dateien-Build, damit der Bundle-Pfad
+(Tauri-Resource + `dist-portable.mjs` + Smoke-Test) unberuehrt bleibt.
+
+Siehe [T-512](./specs/T-512-sidecar-targetframeworks-und-single-file.md).
+
 ## Offene Fragen
 
 **Build-Fortschreibung 2026-11-15 (AD-009):** Der direkte `dotnet publish`-Aufruf

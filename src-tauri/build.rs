@@ -58,6 +58,10 @@ fn main() {
         .arg(rid)
         .arg("--self-contained")
         .arg("false")
+        // T-512: Bei Multi-Target muss das TFM beim Publish explizit benannt
+        // werden, sonst bricht der Publish mit NETSDK1047 ab.
+        .arg("-f")
+        .arg("net10.0-windows")
         .arg("--artifacts-path")
         .arg("target/sidecar-artifacts")
         .arg("-o")

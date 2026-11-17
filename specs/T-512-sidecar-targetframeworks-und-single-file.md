@@ -1,0 +1,105 @@
+# T-512: Target-Frameworks des Sidecars und Single-File-Variante
+
+## Kontext
+Status: implemented
+Priorität: medium
+Abhängigkeiten: T-508, T-509
+
+## Goal
+Zwei Fragen aus dem Betrieb klären und die belastbaren Antworten als
+Baupfad verfügbar machen:
+
+1. **Kann das Sidecar für .NET 8 und .NET 10 gebaut werden?**
+2. **Lässt sich das Sidecar zu einer einzigen Datei zusammenführen?**
+
+## Messungen (2026-11-17, alle empirisch)
+### Frage 1 — Target-Frameworks
+
+| Ziel | Ergebnis |
+|---|---|
+| `net10.0-windows` | **ja** — Build 0 Warnungen / 0 Fehler, unverändert der Standard |
+| `net9.0-windows` | **ja** — Build 0 Warnungen / 0 Fehler, Publish 21 Dateien / 7,61 MB, `--list-devices` Exit 0 |
+| `net8.0-windows` | **nein** — `error NU1202`: NAudio 3.3.0 ist nicht mit net8.0-windows kompatibel, das Paket unterstützt nur `net9.0` |
+
+**Warum .NET 8 nicht möglich ist:** NAudio 3.3.0 liefert ausschließlich eine
+`net9.0`-Bibliothek. Die Alternative wäre ein Downgrade auf NAudio 2.2.1 —
+das bringt zwar eine `net6.0`-Bibliothek mit (und damit .NET-8-Tauglichkeit),
+aber **NAudio 2.x kennt `WasapiRecorder` und `WasapiRecorderBuilder` nicht**
+(nachgewiesen: `error CS0246`). Ein .NET-8-Build würde damit T-509 zurücknehmen
+und wieder auf die obsoleten `WasapiCapture`/`WasapiLoopbackCapture` mit
+`#pragma warning disable CS0618` zurückfallen. **Das ist bewusst nicht gemacht** —
+der Gewinn eines .NET-8-Ziels wiegt den Verlust der Wartbarkeit nicht auf.
+
+**Was stattdessen gilt:** `net9.0-windows` ist das niedrigste von NAudio 3.3.0
+unterstützte TFM. Mit `RollForward=Major` startet ein net9.0-Build auf .NET 9,
+10 und 11+ — nachgewiesen über `DOTNET_ROLL_FORWARD=LatestMajor` (Exit 0).
+Ein Rollforward auf **ältere** Runtimes gibt es nicht; .NET 8 bleibt damit
+technisch unerreichbar.
+
+### Frage 2 — eine einzige Datei
+
+| Variante | Ergebnis |
+|---|---|
+| Framework-dependent, 21 Dateien (Standard) | Haupt-EXE 0,16 MB + 17 DLLs, gesamt 7,62 MB |
+| **Framework-dependent + `PublishSingleFile`** | **1 Datei, 7,61 MB**, `--list-devices` Exit 0 |
+| Self-contained + `PublishSingleFile` + Kompression | 6 Dateien, 41,92 MB (die Speech-Native-DLLs liegen daneben) |
+
+**Kompression ist nur self-contained möglich** (`error NETSDK1176`). Für die
+framework-dependent-Variante ist die einzelne Datei also **7,61 MB statt
+7,62 MB in 21 Dateien** — die Größe bleibt, die Dateizahl kollabiert.
+
+**Startzeitvergleich** (3 Läufe, `--list-devices`):
+
+| Variante | Startzeiten |
+|---|---|
+| 21 Dateien | 689 / 185 / 203 ms |
+| 1 Datei (Single-File) | 207 / 211 / 173 ms |
+| self-contained, komprimiert | 238 / 235 / 221 ms |
+
+Kein messbarer Nachteil für die Single-File-Variante.
+
+**Native-DLL-Nachweis** (der eigentliche Risikopunkt: das Speech-SDK lädt
+native DLLs nach): `--test-connectivity` liefert für **alle drei** Varianten
+**identische Schritt-Sets** — `speech_proxy: ok`, `speech_recognizer_wss: error`,
+`conversation_transcriber_wss: error` (der Endpunkt war absichtlich tot).
+Die nativen Speech-DLLs werden also auch aus dem Single-File-Bundle korrekt
+gefunden.
+
+## Umsetzung
+- `sidecar/MeetingNotes.Sidecar.csproj`: `<TargetFrameworks>net9.0-windows;net10.0-windows</TargetFrameworks>`
+  und `<RollForward>Major</RollForward>`.
+- `src-tauri/build.rs` und `npm run publish:sidecar`: beim Publish muss das TFM
+  explizit mit `-f` benannt werden, sonst bricht der Publish bei Multi-Target
+  mit NETSDK1047 ab. Standard ist `net10.0-windows`.
+- Neue Skripte: `npm run publish:sidecar:net9` (net9.0-Variante) und
+  `npm run publish:sidecar:single` (Single-File, 1 Datei).
+
+**Der Standard-Build bleibt unverändert:** net10.0-windows, framework-dependent,
+21 Dateien im `sidecar/`-Ordner. Single-File und net9 sind **Optionen**, kein
+Umbau des ausgelieferten Artefakts — der Portable-Build und die bestehende
+Verifikation bleiben damit unberührt.
+
+## Verifikation
+- Multi-Target-Build: beide TFMs bauen mit 0 Warnungen / 0 Fehler.
+- net9.0-Publish: 21 Dateien / 7,61 MB, `runtimeconfig.json` mit
+  `"rollForward": "Major"`, `--list-devices` Exit 0.
+- net9.0-Build auf .NET-10-Runtime: `DOTNET_ROLL_FORWARD=LatestMajor` → Exit 0.
+- Single-File: 1 Datei / 7,61 MB, `--list-devices` Exit 0, identische
+  Diagnose-Schritte wie die 21-Dateien-Variante.
+
+## Offene Punkte
+- Die Single-File-Variante ist als **Option** umgesetzt, nicht als Standard:
+  Das Tauri-Sidecar wird als externe Datei aus dem Resource-Ordner gestartet, und
+  ein umgestellter Bundle-Pfad (Tauri-Resource + `dist-portable.mjs` +
+  Smoke-Test) wäre ein eigener Umbau mit zusätzlichem Risiko. Die Messung
+  zeigt aber, dass es technisch trägt.
+- .NET 8 bleibt unerreichbar (siehe oben) — NAudio 3.x ist die harte Grenze.
+
+## Log
+- 2026-11-17: Beide Fragen empirisch beantwortet. Multi-Target
+  `net9.0-windows;net10.0-windows` mit `RollForward=Major` eingefuehrt;
+  `-f` beim Publish ergaenzt; Skripte `publish:sidecar:net9` und
+  `publish:sidecar:single` ergaenzt. .NET 8 als nicht moeglich dokumentiert
+  (NU1202 durch NAudio 3.3.0; NAudio 2.x ohne `WasapiRecorderBuilder`).
+  Single-File als Option: 1 Datei / 7,61 MB, Startzeit ohne Nachteil, native
+  Speech-DLLs nachweislich korrekt geladen.

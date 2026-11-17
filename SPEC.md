@@ -42,7 +42,7 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - **Frontend:** React 19 + TypeScript 6 + Vite 8 (im Tauri-Renderer-WebView2).
 - **IPC Sidecar ↔ App:** `stdin/stdout` über `tauri-plugin-shell` mit JSON-Lines (siehe `DECISIONS.md → AD-008`). Named Pipe entfällt.
 - **IPC App ↔ Renderer:** Tauri-`invoke()` für Commands + Tauri-`listen()` für Events (typed JSON).
-- **Distribution:** NSIS-/MSI-Installer oder gesamter Portable-Ordner. Sidecar-EXE und verwaltete/native DLLs werden extern ausgeliefert, nicht in die Haupt-EXE eingebettet. Zielsystem braucht .NET 10 Runtime (win-x64) und WebView2.
+- **Distribution:** NSIS-/MSI-Installer oder gesamter Portable-Ordner. Sidecar-EXE und verwaltete/native DLLs werden extern ausgeliefert, nicht in die Haupt-EXE eingebettet. Zielsystem braucht .NET 10 Runtime (win-x64) — der Sidecar läuft dank `RollForward=Major` auch auf neueren Runtimes und WebView2.
 
 ## 4. Transkription
 - API: Azure Speech
@@ -132,7 +132,7 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 
 ## 8.1 Sidecar-Deployment (Runtime-Anforderung)
 - Lokale Entwicklung/Build: .NET 10 SDK erforderlich, um das Sidecar zu veröffentlichen.
-- Zielsystem: .NET 10 Runtime (win-x64) ausreichend; SDK ist dort nicht erforderlich.
+- Zielsystem: .NET 10 Runtime (win-x64) ausreichend; SDK ist dort nicht erforderlich. Zusätzlich baubar: net9.0-Variante und Single-File-Variante (je eine Datei) — siehe [T-512](./specs/T-512-sidecar-targetframeworks-und-single-file.md).
 - Build-/Start-Flow:
   - Dev: `build.rs` publiziert Sidecar automatisch, danach Start durch Tauri.
   - Installer: `npm run tauri -- build` bündelt Sidecar-EXE **und DLLs** als externe Resources.

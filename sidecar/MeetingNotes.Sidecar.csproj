@@ -1,7 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <!--
+      T-512: Zwei Zielframeworks.
+
+      net9.0-windows  ist das niedrigste von NAudio 3.3.0 unterstuetzte TFM
+      (das Paket liefert nur net9.0). net10.0-windows ist der Standard-Build.
+
+      RollForward=Major laesst den Sidecar auf hoeheren Runtimes laufen: ein
+      net9.0-Build startet auf .NET 9, 10 und 11+, ein net10.0-Build auf .NET 10
+      und 11+. Ein Rollforward auf aeltere Runtimes gibt es nicht.
+
+      .NET 8 ist mit NAudio 3.3.0 nicht moeglich (NU1202: Paket unterstuetzt nur
+      net9.0). Siehe specs/T-512-sidecar-targetframeworks-und-single-file.md.
+    -->
+    <TargetFrameworks>net9.0-windows;net10.0-windows</TargetFrameworks>
+    <RollForward>Major</RollForward>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>MeetingNotes.Sidecar</RootNamespace>
