@@ -72,6 +72,15 @@ Build 26300, WebView2 157.0.4341.46, .NET 10.0.13, SHA256SUMS 23/23, `device_lis
 0 Eingängen/0 Ausgängen, Haupt-EXE PE-Subsystem 2 = GUI).
 
 ## Approach
+
+**Kompatibilitaet (wichtig):** Das Skript muss auf dem Zielsystem laufen, also auch
+unter **Windows PowerShell 5.1** — PowerShell 7 ist dort nicht installiert. Erster
+Test unter 5.1 scheiterte mit einem Parserfehler: die Datei enthielt UTF-8-Umlaute
+**ohne BOM**, und PowerShell 5.1 liest `.ps1` ohne BOM als ANSI. Dabei wurde das
+Byte `0x94` des Gedankenstrichs zu einem abschliessenden Anfuehrungszeichen und
+brach den String. Das Skript ist deshalb **bewusst ASCII-only** und ohne BOM.
+Nach der Umstellung: PASS 9 / FAIL 0 unter Windows PowerShell 5.1 **und** unter
+PowerShell 7.
 1. **Vorbereitung (Entwicklerrechner):** `npm run dist:portable` erzeugt
    `dist/portable/`. Persoenliche `meeting-notes.config.json` vor dem
    Kopieren entfernen und die SHA256-Summenliste als Referenz mitnehmen.

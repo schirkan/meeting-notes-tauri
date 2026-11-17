@@ -19,7 +19,7 @@
     "publish:sidecar:single": "dotnet publish sidecar/MeetingNotes.Sidecar.csproj -c Release -r win-x64 --self-contained false -f net10.0-windows -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none --artifacts-path src-tauri/target/sidecar-artifacts -o src-tauri/target/sidecar-publish-single",
     "dist:portable": "node scripts/dist-portable.mjs",
     "test:smoke": "node scripts/test-smoke.mjs",
-    "verify:deployment": "pwsh -NoProfile -File scripts/verify-deployment.ps1 -PortableDir dist/portable",
+    "verify:deployment": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-deployment.ps1 -PortableDir dist/portable",
     "test:unit": "node --test tests/*.test.mjs"
   },
   "dependencies": {

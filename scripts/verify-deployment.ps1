@@ -4,17 +4,22 @@
     Prueft eine Portable-Distribution auf einem fremden Rechner.
 
 .DESCRIPTION
-    Umsetzt die Checkliste aus specs/T-510-clean-machine-deployment-windows-11.md
-    als ausfuehrbaren Nachweis. Das Skript ist selbststaendig: es braucht weder
-    Node noch Rust noch das Repository - nur den Portable-Ordner.
+    Setzt die Checkliste aus specs/T-510-clean-machine-deployment-windows-11.md
+    als ausfuehrbaren Nachweis um. Das Skript ist selbststaendig: es braucht
+    weder Node noch Rust noch das Repository - nur den Portable-Ordner.
 
     Auf dem Zielsystem wird der Ordner komplett kopiert und dieses Skript
-    daneben (oder mit -PortableDir darauf) ausgefuehrt:
+    daneben ausgefuehrt:
 
         powershell -ExecutionPolicy Bypass -File .\verify-deployment.ps1
 
-    Ausgabe: eine Zeile je Pruefung mit Status (PASS/FAIL/INFO/MANUELL) und
-    Begründung. Exit-Code 0 = keine FAIL-Pruefung, 1 = mindestens eine FAIL.
+    AUSGABE: eine Zeile je Pruefung mit Status (PASS/FAIL/INFO/MANUELL) und
+    Begruendung. Exit-Code 0 = keine FAIL-Pruefung, 1 = mindestens eine FAIL.
+
+    KOMPATIBELITAET: laeuft unter Windows PowerShell 5.1 (auf jedem
+    Windows 11 vorhanden) wie auch unter PowerShell 7. Die Datei ist bewusst
+    ASCII-only und ohne BOM: Windows PowerShell 5.1 liest Skripte ohne BOM
+    als ANSI, wodurch UTF-8-Umlaute den Parser brechen koennten.
 
 .PARAMETER PortableDir
     Pfad zum Portable-Ordner (Standard: neben diesem Skript).
@@ -53,7 +58,7 @@ function Get-PeSubsystem {
 }
 
 Write-Host ''
-Write-Host '=== Meeting Notes — Deployment-Pruefung ===' -ForegroundColor Cyan
+Write-Host '=== Meeting Notes - Deployment-Pruefung ===' -ForegroundColor Cyan
 Write-Host ("Zielordner: {0}" -f (Resolve-Path $PortableDir -ErrorAction SilentlyContinue))
 Write-Host ''
 
@@ -74,9 +79,9 @@ foreach ($t in @(@('dotnet SDK', 'dotnet'), @('node', 'node'), @('cargo', 'cargo
     if ($cmd) { $tools += $t[0] }
 }
 if ($tools.Count -eq 0) {
-    Add-Result 'PASS' 'Keine Entwickler-Toolchain' 'Weder dotnet, noch node, noch cargo im PATH — entspricht dem Clean-Machine-Ziel.'
+    Add-Result 'PASS' 'Keine Entwickler-Toolchain' 'Weder dotnet, noch node, noch cargo im PATH - entspricht dem Clean-Machine-Ziel.'
 } else {
-    Add-Result 'INFO' 'Entwickler-Toolchain vorhanden' ("Im PATH gefunden: {0}. Für den Clean-Machine-Nachweis idealerweise nicht vorhanden." -f ($tools -join ', '))
+    Add-Result 'INFO' 'Entwickler-Toolchain vorhanden' ("Im PATH gefunden: {0}. Fuer den Clean-Machine-Nachweis idealerweise nicht vorhanden." -f ($tools -join ', '))
 }
 
 # --- 3. WebView2 Runtime -----------------------------------------------------
@@ -91,13 +96,13 @@ foreach ($base in @('HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients', '
 if ($webView2Version) {
     Add-Result 'PASS' 'WebView2 Runtime' ("Version {0}" -f $webView2Version)
 } else {
-    Add-Result 'FAIL' 'WebView2 Runtime' 'Nicht im Registry gefunden — die App startet ohne WebView2 nicht.'
+    Add-Result 'FAIL' 'WebView2 Runtime' 'Nicht im Registry gefunden - die App startet ohne WebView2 nicht.'
 }
 
 # --- 4. .NET-Runtime ---------------------------------------------------------
-# Runtime-Erkennung an drei Quellen: Registry, Shared-Framework-Verzeichnis
-# und 'dotnet --list-runtimes'. Script-basiert installierte Runtimes
-# (dotnet-install.ps1) schreiben keinen Registry-Schlüssel - ohne das
+# Erkennung an drei Quellen: Registry, Shared-Framework-Verzeichnis und
+# 'dotnet --list-runtimes'. Script-basiert installierte Runtimes
+# (dotnet-install.ps1) schreiben keinen Registry-Schluessel - ohne das
 # Dateisystem wuerde ein vorhandenes Runtime faelschlich als fehlend gelten.
 $netCoreVersions = @()
 $desktopVersions = @()
@@ -125,17 +130,19 @@ foreach ($base in @('HKLM:\SOFTWARE\dotnet\Shared\Microsoft.WindowsDesktop.App')
 
 $sidecarExe = Join-Path $PortableDir 'sidecar\MeetingNotes.Sidecar.exe'
 $runtimeConfig = Join-Path $PortableDir 'sidecar\MeetingNotes.Sidecar.runtimeconfig.json'
-$requiredMajor = $null
+$requiredMajor = 10
 if (Test-Path $runtimeConfig) {
     try {
         $rc = Get-Content $runtimeConfig -Raw | ConvertFrom-Json
         $requiredMajor = [int](($rc.framework.version -split '\.')[0])
     } catch { }
 }
-if (-not $requiredMajor) { $requiredMajor = 10 }
 
-$installed = @($netCoreVersions | Where-Object { $_ -match '^(\d+)\.' } | ForEach-Object { [int]($_ -split '\.')[0] } | Sort-Object -Descending)
-$hasRuntime = ($installed | Where-Object { $_ -ge $requiredMajor }).Count -gt 0
+$installedMajors = @($netCoreVersions |
+    Where-Object { $_ -match '^(\d+)\.' } |
+    ForEach-Object { [int]($_ -split '\.')[0] } |
+    Sort-Object -Descending)
+$hasRuntime = @($installedMajors | Where-Object { $_ -ge $requiredMajor }).Count -gt 0
 if ($hasRuntime) {
     Add-Result 'PASS' ('.NET ' + $requiredMajor + ' Runtime') ("Installiert: {0}" -f (($netCoreVersions | Sort-Object -Descending) -join ', '))
 } else {
@@ -146,9 +153,9 @@ Add-Result 'INFO' '.NET WindowsDesktop.App' ($(if ($desktopVersions) { ($desktop
 # --- 5. Integritaet: SHA256SUMS --------------------------------------------
 $sumsFile = Join-Path $PortableDir 'SHA256SUMS'
 if (-not (Test-Path $sumsFile)) {
-    Add-Result 'FAIL' 'SHA256SUMS' 'Datei fehlt — Integritaet der Distribution nicht nachweisbar.'
+    Add-Result 'FAIL' 'SHA256SUMS' 'Datei fehlt - Integritaet der Distribution nicht nachweisbar.'
 } else {
-    $lines = Get-Content $sumsFile | Where-Object { $_.Trim() -ne '' }
+    $lines = @(Get-Content $sumsFile | Where-Object { $_.Trim() -ne '' })
     $bad = New-Object System.Collections.ArrayList
     foreach ($line in $lines) {
         if ($line -match '^([0-9a-fA-F]{64})\s+(.+)$') {
@@ -173,7 +180,7 @@ if (-not (Test-Path $sumsFile)) {
 # --- 6. Hygiene: keine persoenlichen Daten im Ordner -----------------------
 $personalConfig = Join-Path $PortableDir 'meeting-notes.config.json'
 if (Test-Path $personalConfig) {
-    Add-Result 'FAIL' 'Keine persoenliche Config' 'meeting-notes.config.json liegt im Ordner — nicht verteilen (enthaelt ggf. Credentials).'
+    Add-Result 'FAIL' 'Keine persoenliche Config' 'meeting-notes.config.json liegt im Ordner - nicht verteilen (enthaelt ggf. Credentials).'
 } else {
     Add-Result 'PASS' 'Keine persoenliche Config' 'meeting-notes.config.json ist nicht enthalten.'
 }
@@ -187,7 +194,7 @@ if (Test-Path $example) {
     if ($placeholder) {
         Add-Result 'PASS' 'Config-Template ohne Credentials' 'speechKey ist ein Platzhalter.'
     } else {
-        Add-Result 'FAIL' 'Config-Template ohne Credentials' 'speechKey enthaelt einen konkreten Wert — nicht verteilen.'
+        Add-Result 'FAIL' 'Config-Template ohne Credentials' 'speechKey enthaelt einen konkreten Wert - nicht verteilen.'
     }
 } else {
     Add-Result 'INFO' 'Config-Template' 'meeting-notes.config.example.json fehlt im Ordner.'
@@ -195,7 +202,7 @@ if (Test-Path $example) {
 
 # --- 7. Sidecar: device_list ------------------------------------------------
 if (-not (Test-Path $sidecarExe)) {
-    Add-Result 'FAIL' 'Sidecar-EXE' ("{0} fehlt — der Ordner muss vollstaendig kopiert werden." -f 'sidecar\MeetingNotes.Sidecar.exe')
+    Add-Result 'FAIL' 'Sidecar-EXE' 'sidecar\MeetingNotes.Sidecar.exe fehlt - der Ordner muss vollstaendig kopiert werden.'
 } else {
     $subsystem = Get-PeSubsystem $sidecarExe
     Add-Result 'PASS' 'Sidecar-EXE' ("{0:N2} MB, Subsystem {1} (3 = Konsole, erwartet)." -f ((Get-Item $sidecarExe).Length / 1MB), $subsystem)
@@ -207,7 +214,7 @@ if (-not (Test-Path $sidecarExe)) {
             if ($json.type -eq 'device_list') {
                 $inCount = @($json.payload.Inputs).Count
                 $outCount = @($json.payload.Outputs).Count
-                Add-Result 'PASS' 'Sidecar --list-devices' ("device_list empfangen — {0} Eingänge, {1} Ausgänge." -f $inCount, $outCount)
+                Add-Result 'PASS' 'Sidecar --list-devices' ("device_list empfangen - {0} Eingaenge, {1} Ausgaenge." -f $inCount, $outCount)
             } else {
                 Add-Result 'FAIL' 'Sidecar --list-devices' ("Unerwartetes Event: {0}" -f $json.type)
             }
@@ -228,7 +235,7 @@ if (-not (Test-Path $appExe)) {
     if ($subsystem -eq 2) {
         Add-Result 'PASS' 'Haupt-EXE ohne Konsolenfenster' 'PE-Subsystem 2 (Windows GUI).'
     } elseif ($subsystem -eq 3) {
-        Add-Result 'FAIL' 'Haupt-EXE ohne Konsolenfenster' 'PE-Subsystem 3 (Konsole) — beim Start erscheint ein Konsolenfenster.'
+        Add-Result 'FAIL' 'Haupt-EXE ohne Konsolenfenster' 'PE-Subsystem 3 (Konsole) - beim Start erscheint ein Konsolenfenster.'
     } else {
         Add-Result 'INFO' 'Haupt-EXE' ("PE-Subsystem {0}" -f $subsystem)
     }
@@ -255,11 +262,12 @@ if ($LaunchApp) {
 
 # --- Bericht ----------------------------------------------------------------
 Write-Host ''
-$results | Format-Table -AutoSize -Wrap Status, Check, Detail
+$results | Format-Table -AutoSize -Property Status, Check, Detail
 $failCount = @($results | Where-Object { $_.Status -eq 'FAIL' }).Count
 $passCount = @($results | Where-Object { $_.Status -eq 'PASS' }).Count
+$infoCount = @($results | Where-Object { $_.Status -eq 'INFO' -or $_.Status -eq 'MANUELL' }).Count
 Write-Host ''
-Write-Host ("PASS: {0} | FAIL: {1} | INFO/MANUELL: {2}" -f $passCount, $failCount, (@($results | Where-Object { $_.Status -in @('INFO', 'MANUELL') }).Count))
+Write-Host ("PASS: {0} | FAIL: {1} | INFO/MANUELL: {2}" -f $passCount, $failCount, $infoCount)
 if ($failCount -gt 0) {
     Write-Host 'Deployment-Nachweis fehlgeschlagen.' -ForegroundColor Red
     exit 1
