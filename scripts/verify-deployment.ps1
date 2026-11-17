@@ -128,8 +128,8 @@ foreach ($base in @('HKLM:\SOFTWARE\dotnet\Shared\Microsoft.WindowsDesktop.App')
     }
 }
 
-$sidecarExe = Join-Path $PortableDir 'sidecar\MeetingNotes.Sidecar.exe'
-$runtimeConfig = Join-Path $PortableDir 'sidecar\MeetingNotes.Sidecar.runtimeconfig.json'
+$sidecarExe = Join-Path $PortableDir 'MeetingNotes.Sidecar.exe'
+$runtimeConfig = Join-Path $PortableDir 'MeetingNotes.Sidecar.runtimeconfig.json'
 $requiredMajor = 10
 if (Test-Path $runtimeConfig) {
     try {
@@ -178,14 +178,15 @@ if (-not (Test-Path $sumsFile)) {
 }
 
 # --- 6. Hygiene: keine persoenlichen Daten im Ordner -----------------------
-$personalConfig = Join-Path $PortableDir 'meeting-notes.config.json'
-if (Test-Path $personalConfig) {
-    Add-Result 'FAIL' 'Keine persoenliche Config' 'meeting-notes.config.json liegt im Ordner - nicht verteilen (enthaelt ggf. Credentials).'
+$personalConfig = Join-Path $PortableDir 'MeetingNotes.config.json'
+$legacyConfig = Join-Path $PortableDir 'meeting-notes.config.json'
+if ((Test-Path $personalConfig) -or (Test-Path $legacyConfig)) {
+    Add-Result 'FAIL' 'Keine persoenliche Config' 'MeetingNotes.config.json oder die alte meeting-notes.config.json liegt im Ordner - nicht verteilen (enthaelt ggf. Credentials).'
 } else {
-    Add-Result 'PASS' 'Keine persoenliche Config' 'meeting-notes.config.json ist nicht enthalten.'
+    Add-Result 'PASS' 'Keine persoenliche Config' 'Weder MeetingNotes.config.json noch die alte meeting-notes.config.json ist enthalten.'
 }
 
-$example = Join-Path $PortableDir 'meeting-notes.config.example.json'
+$example = Join-Path $PortableDir 'MeetingNotes.config.example.json'
 if (Test-Path $example) {
     $raw = Get-Content $example -Raw
     # Der Platzhalter ist ein <...>-Marker; zusaetzlich gilt ein leerer Wert
@@ -197,12 +198,12 @@ if (Test-Path $example) {
         Add-Result 'FAIL' 'Config-Template ohne Credentials' 'speechKey enthaelt einen konkreten Wert - nicht verteilen.'
     }
 } else {
-    Add-Result 'INFO' 'Config-Template' 'meeting-notes.config.example.json fehlt im Ordner.'
+    Add-Result 'INFO' 'Config-Template' 'MeetingNotes.config.example.json fehlt im Ordner.'
 }
 
 # --- 7. Sidecar: device_list ------------------------------------------------
 if (-not (Test-Path $sidecarExe)) {
-    Add-Result 'FAIL' 'Sidecar-EXE' 'sidecar\MeetingNotes.Sidecar.exe fehlt - der Ordner muss vollstaendig kopiert werden.'
+    Add-Result 'FAIL' 'Sidecar-EXE' 'MeetingNotes.Sidecar.exe fehlt - der Ordner muss vollstaendig kopiert werden.'
 } else {
     $subsystem = Get-PeSubsystem $sidecarExe
     Add-Result 'PASS' 'Sidecar-EXE' ("{0:N2} MB, Subsystem {1} (3 = Konsole, erwartet)." -f ((Get-Item $sidecarExe).Length / 1MB), $subsystem)
@@ -227,9 +228,9 @@ if (-not (Test-Path $sidecarExe)) {
 }
 
 # --- 8. Haupt-EXE: kein Konsolenfenster ------------------------------------
-$appExe = Join-Path $PortableDir 'meeting-notes.exe'
+$appExe = Join-Path $PortableDir 'MeetingNotes.exe'
 if (-not (Test-Path $appExe)) {
-    Add-Result 'FAIL' 'Haupt-EXE' 'meeting-notes.exe fehlt.'
+    Add-Result 'FAIL' 'Haupt-EXE' 'MeetingNotes.exe fehlt.'
 } else {
     $subsystem = Get-PeSubsystem $appExe
     if ($subsystem -eq 2) {

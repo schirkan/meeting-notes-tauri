@@ -28,7 +28,7 @@ import { tmpdir } from 'node:os'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = join(__dirname, '..')
-const APP_EXE = join(PROJECT_ROOT, 'src-tauri', 'target', 'release', 'meeting-notes.exe')
+const APP_EXE = join(PROJECT_ROOT, 'src-tauri', 'target', 'release', 'MeetingNotes.exe')
 const DEFAULT_REPORT = join(PROJECT_ROOT, 'context', 'latency-report.md')
 const LOG_ENV = 'MEETING_NOTES_LATENCY_LOG'
 

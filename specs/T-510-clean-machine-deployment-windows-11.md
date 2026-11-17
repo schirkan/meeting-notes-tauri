@@ -26,14 +26,14 @@ Ein Punkt = eine Zeile im Skript-Output.
 - [x] WebView2 Runtime vorhanden — Version protokolliert. Beleg: scripts/verify-deployment.ps1 (WebView2-Version aus der Registry). Testnachweis: npm run verify:deployment - PASS 10 / FAIL 0 (2026-11-17).
 - [x] .NET-Runtime vorhanden (Version protokolliert) — Registry, Shared-Framework- Beleg: scripts/verify-deployment.ps1 (Registry, Shared-Framework-Verzeichnis und dotnet --list-runtimes). Testnachweis: npm run verify:deployment - PASS 10 / FAIL 0 (2026-11-17).
       Verzeichnis und `dotnet --list-runtimes` werden abgefragt.
-- [x] Portable-Ordner ohne `meeting-notes.config.json`; enthalten ist nur Beleg: scripts/verify-deployment.ps1 (prueft, dass keine persoenliche Config im Ordner liegt). Testnachweis: npm run verify:deployment - PASS 10 / FAIL 0 (2026-11-17).
-      `meeting-notes.config.example.json`.
-- [x] `SHA256SUMS` verifiziert — **23/23**. Beleg: scripts/dist-portable.mjs (SHA256SUMS) (geprueft).
-- [x] `sidecar\MeetingNotes.Sidecar.exe --list-devices` liefert ein valides Beleg: scripts/verify-deployment.ps1 (startet den Sidecar mit --list-devices und wertet das device_list-Event aus). Testnachweis: npm run verify:deployment - PASS 10 / FAIL 0 (2026-11-17).
+- [x] Portable-Ordner ohne `MeetingNotes.config.json`; enthalten ist nur Beleg: scripts/verify-deployment.ps1 (prueft, dass keine persoenliche Config im Ordner liegt). Testnachweis: npm run verify:deployment - PASS 10 / FAIL 0 (2026-11-17).
+      `MeetingNotes.config.example.json`.
+- [x] `SHA256SUMS` verifiziert — **3/3** im flachen Single-File-Portable. Beleg: scripts/dist-portable.mjs (SHA256SUMS) (geprueft).
+- [x] `MeetingNotes.Sidecar.exe --list-devices` liefert ein valides Beleg: scripts/verify-deployment.ps1 (startet den Sidecar mit --list-devices und wertet das device_list-Event aus). Testnachweis: npm run verify:deployment - PASS 10 / FAIL 0 (2026-11-17).
       `device_list`-JSON-Lines-Event.
-- [x] `meeting-notes.exe` ist eine GUI-Anwendung (PE-Subsystem 2) — **kein** Beleg: scripts/verify-deployment.ps1 (liest das PE-Subsystem der Haupt-EXE). Testnachweis: npm run verify:deployment - PASS 10 / FAIL 0 (2026-11-17).
+- [x] `MeetingNotes.exe` ist eine GUI-Anwendung (PE-Subsystem 2) — **kein** Beleg: scripts/verify-deployment.ps1 (liest das PE-Subsystem der Haupt-EXE). Testnachweis: npm run verify:deployment - PASS 10 / FAIL 0 (2026-11-17).
       Konsolenfenster beim Start.
-- [x] Config-Template enthaelt einen Platzhalter statt eines echten Keys. Beleg: meeting-notes.config.example.json (Platzhalter statt eines echten Keys); scripts/verify-deployment.ps1 prueft das. Testnachweis: npm run verify:deployment - PASS 10 / FAIL 0 (2026-11-17).
+- [x] Config-Template enthaelt einen Platzhalter statt eines echten Keys. Beleg: MeetingNotes.config.example.json (Platzhalter statt eines echten Keys); scripts/verify-deployment.ps1 prueft das. Testnachweis: npm run verify:deployment - PASS 10 / FAIL 0 (2026-11-17).
 - [ ] Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch - **offen**: Braucht die Ausfuehrung auf dem Zielsystem - das Pruefskript liegt bereit (npm run verify:deployment).
       (ohne Azure-Config), Config-Datei entsteht direkt neben der EXE, "Verbinden
       testen" meldet Netzwerk-/Proxy-Fehler verstaendlich.
@@ -64,7 +64,7 @@ Geprueft werden: Windows-11-Build, WebView2-Runtime (Registry), vorhandene .NET-
 (Registry **und** Shared-Framework-Verzeichnis **und** `dotnet --list-runtimes` —
 script-installierte Runtimes schreiben keinen Registry-Schlüssel), Integritaet aller Dateien
 gegen `SHA256SUMS`, Abwesenheit einer persoenlichen Config, Platzhalter statt Credentials im
-Template, `sidecar\\MeetingNotes.Sidecar.exe --list-devices` mit gueltigem `device_list`-Event
+Template, `MeetingNotes.Sidecar.exe --list-devices` mit gueltigem `device_list`-Event
 sowie die PE-Subsysteme (Haupt-EXE = GUI, also **kein** Konsolenfenster; Sidecar = Konsole).
 
 Rueckgabecode 0 = keine FAIL-Pruefung. Offen bleibende Punkte werden als `MANUELL`
@@ -86,7 +86,7 @@ brach den String. Das Skript ist deshalb **bewusst ASCII-only** und ohne BOM.
 Nach der Umstellung: PASS 9 / FAIL 0 unter Windows PowerShell 5.1 **und** unter
 PowerShell 7.
 1. **Vorbereitung (Entwicklerrechner):** `npm run dist:portable` erzeugt
-   `dist/portable/`. Persoenliche `meeting-notes.config.json` vor dem
+   `dist/portable/`. Persoenliche `MeetingNotes.config.json` vor dem
    Kopieren entfernen und die SHA256-Summenliste als Referenz mitnehmen.
 2. **Zielsystem protokollieren:** Windows-Version, Edge-/WebView2-Version,
    `dotnet --list-runtimes`, freier Speicher, Antivirautyp. Ergebnis in
@@ -102,7 +102,7 @@ PowerShell 7.
 - WebView2 Runtime fehlt auf entfernten oder stark abgespeckten Windows-11-Images.
 - .NET 10 Runtime muss **win-x64** sein (kein ARM-Build, keine .NET 8).
 - Kein persoenlicher Config-Transfer: Credentials gehoeren in die
-  `meeting-notes.config.json` neben der EXE und sind zu keinem Zeitpunkt Teil
+  `MeetingNotes.config.json` neben der EXE und sind zu keinem Zeitpunkt Teil
   der verteilten Dateien.
 - Der Sidecar-Pfad ist relativ zur EXE; der Ordner muss **vollstaendig**
   kopiert werden, nicht nur die Haupt-EXE.

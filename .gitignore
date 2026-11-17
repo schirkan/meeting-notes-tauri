@@ -16,6 +16,7 @@ sidecar/publish/
 
 # ===== Secrets / lokale Konfiguration (laut T-103) =====
 meeting-notes.config.json
+MeetingNotes.config.json
 *.config.local.json
 .env
 .env.local

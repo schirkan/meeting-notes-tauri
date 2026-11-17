@@ -78,13 +78,13 @@ gefunden.
 - `src-tauri/build.rs` und `npm run publish:sidecar`: beim Publish muss das TFM
   explizit mit `-f` benannt werden, sonst bricht der Publish bei Multi-Target
   mit NETSDK1047 ab. Standard ist `net10.0-windows`.
-- **Keine eigenen Publish-Skripte:** Beide Varianten laufen ueber Umgebungsvariablen
-  im `build.rs` und damit ueber den kompletten Bundle-Pfad (siehe unten).
+- **Keine eigenen Publish-Skripte:** Das TFM ist ueber eine Umgebungsvariable
+  im `build.rs` waehlbar; Single-File ist immer aktiviert.
 
-**Der Standard-Build bleibt unverändert:** net10.0-windows, framework-dependent,
-21 Dateien im `sidecar/`-Ordner. Single-File und net9 sind **Optionen**, kein
-Umbau des ausgelieferten Artefakts — der Portable-Build und die bestehende
-Verifikation bleiben damit unberührt.
+**Aktueller Standard-Build:** net10.0-windows, framework-dependent,
+eine `MeetingNotes.Sidecar.exe` direkt neben `MeetingNotes.exe`. Die Single-File-
+Umgebungsvariable ist entfernt; net9 bleibt optional. Die folgenden Messungen
+dokumentieren den zuvor geprueften Vergleich beider Layouts.
 
 ## Verifikation
 - Multi-Target-Build: beide TFMs bauen mit 0 Warnungen / 0 Fehler.
@@ -95,12 +95,10 @@ Verifikation bleiben damit unberührt.
   Diagnose-Schritte wie die 21-Dateien-Variante.
 
 ## Bundle-Pfad (Single-File end-to-end)
-Der Schalter `MEETING_NOTES_SIDECAR_SINGLE_FILE=1` in `src-tauri/build.rs` schaltet
-den Single-File-Publish für den **kompletten Tauri-Bundle-Pfad** zu, nicht nur für
-das Publish-Skript. Damit ist die Variante end-to-end testbar:
+`src-tauri/build.rs` aktiviert Single-File fest fuer den **kompletten
+Tauri-Bundle-Pfad**. Auch `npm run publish:sidecar` setzt die Publish-Flags:
 
 ```powershell
-$env:MEETING_NOTES_SIDECAR_SINGLE_FILE = '1'
 npm run tauri -- build --no-bundle
 npm run dist:portable
 npm run test:smoke
@@ -174,15 +172,14 @@ gleichzeitig gesetzt (`MEETING_NOTES_SIDECAR_TFM=net9.0-windows` **und**
 
 ### Findet der Rust-Main den Single-File-Sidecar?
 
-Der Sidecar wird als externe Datei gestartet, und `resolve_sidecar_path` sucht sie
-unter anderem unter `EXE-Ordner/sidecar/<exe>` (portable Layout) und
-`EXE-Ordner/<exe>` (Fallback). Beiderlei Pfade sind im Single-File-Portable
-vorhanden, weil die Datei `MeetingNotes.Sidecar.exe` **denselben Namen** behält —
-nur ihr Inhalt ist gebündelt. Gemessen am 2026-11-17:
+Der Sidecar wird als externe Datei gestartet. `resolve_sidecar_path` sucht
+`MeetingNotes.Sidecar.exe` direkt im EXE-Ordner bzw. Ressourcenverzeichnis;
+im Dev-Build weiterhin in `target/sidecar-publish/`. Die folgenden Messungen
+vom 2026-11-17 betreffen den zuvor verwendeten Sidecar-Unterordner:
 
 | | Ergebnis |
 |---|---|
-| `EXE-Ordner/sidecar/MeetingNotes.Sidecar.exe` | **existiert** (Rust-Pfad 3) |
+| `EXE-Ordner/MeetingNotes.Sidecar.exe` | **existiert** (Rust-Pfad 3) |
 | `EXE-Ordner/MeetingNotes.Sidecar.exe` | existiert nicht (Rust-Pfad 4, nicht nötig) |
 | App-Start mit Single-File-Sidecar | **PASS** (Prozess läuft nach 6 s) |
 | Regressionstest | `sidecar_candidates_cover_portable_and_single_file_layouts` (Rust) |
@@ -193,8 +190,9 @@ nur ihr Inhalt ist gebündelt. Gemessen am 2026-11-17:
 Die Dateiname-Kompatibilität war damit der entscheidende Punkt: `PublishSingleFile`
 ändert den Inhalt der EXE, nicht ihren Namen.
 
-Der `dist-portable.mjs`-Pfad und der Tauri-Resource-Glob
-(`target/sidecar-publish/*` → `sidecar/`) arbeiten mit beiden Layouts, ohne Änderung.
+Der `dist-portable.mjs`-Pfad und die Tauri-Ressourcenzuordnung kopieren jetzt
+gezielt `target/sidecar-publish/MeetingNotes.Sidecar.exe` neben die Haupt-EXE.
+Ein Publish mit weiteren Dateien wird vom Portable-Packing abgewiesen.
 
 Damit ist die offene Frage aus der ersten Fassung dieser Spec erledigt: Die
 Single-File-Variante war nicht nur technisch möglich, sondern ist über den

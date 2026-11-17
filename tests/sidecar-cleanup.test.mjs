@@ -25,9 +25,9 @@ for (const dryRun of [true, false]) {
       const preserved = [
         ['sidecar', 'Program.cs'],
         ['sidecar', 'Validation', 'Program.cs'],
-        ['src-tauri', 'target', 'release', 'meeting-notes.exe'],
+        ['src-tauri', 'target', 'release', 'MeetingNotes.exe'],
         ['src-tauri', 'target', 'debug', 'cache'],
-        ['dist', 'portable', 'meeting-notes.exe']
+        ['dist', 'portable', 'MeetingNotes.exe']
       ].map(parts => join(fixture, ...parts))
       for (const output of outputs) {
         mkdirSync(output, { recursive: true })

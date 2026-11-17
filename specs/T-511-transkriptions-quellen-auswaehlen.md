@@ -17,7 +17,7 @@ aufgenommen wird. Beide sind unabhängig voneinander.
 
 ## Datenfelder
 Zwei neue Bool-Felder unter `user.transcription` in der gemeinsamen
-Config-Datei `meeting-notes.config.json`:
+Config-Datei `MeetingNotes.config.json`:
 
 ```json
 "user": {
@@ -32,7 +32,7 @@ Config-Datei `meeting-notes.config.json`:
   gesendet und erzeugt weder ein Gerät noch einen Recognizer.
 
 ## Done When
-- [x] Zwei Bool-Felder in TS-Contract, Rust-Settings und Config-Template. Beleg: src/shared/config-contract.ts, src-tauri/src/settings.rs und meeting-notes.config.example.json. Testnachweis: Node-UI-Test "transcription sources default on, persist independently and keep the last source enabled".
+- [x] Zwei Bool-Felder in TS-Contract, Rust-Settings und Config-Template. Beleg: src/shared/config-contract.ts, src-tauri/src/settings.rs und MeetingNotes.config.example.json. Testnachweis: Node-UI-Test "transcription sources default on, persist independently and keep the last source enabled".
 - [x] Normalisierung in `normalizeUserSettings` (Default je Feld `true`, Beleg: src/renderer/src/use-app-state.ts (normalizeUserSettings) (geprueft).
       explizites `false` bleibt erhalten, unbrauchbare Werte werden nicht
       truthy).
@@ -59,7 +59,7 @@ Config-Datei `meeting-notes.config.json`:
   `speaker`, Teil von `UserSettings`, Default `{ mic: true, speaker: true }`.
 - `src-tauri/src/settings.rs`: `TranscriptionSettings` mit
   `#[serde(default)]` — fehlende Felder werden einzeln `true`.
-- `meeting-notes.config.example.json`: `transcription`-Block ergänzt.
+- `MeetingNotes.config.example.json`: `transcription`-Block ergänzt.
 
 ### Weitergabe an den Sidecar
 - `src-tauri/src/sidecar.rs`: `SidecarOptions.transcription` und

@@ -345,10 +345,8 @@ pub async fn get_devices(app: AppHandle) -> Result<DeviceSnapshot, String> {
 
     // Sidecar-EXE benötigt ihre DLLs im selben Verzeichnis. Wir
     // lassen `std::process::Command` das Arbeitsverzeichnis
-    // standardmäßig vom aktuellen Prozess erben — das ist im
-    // portable-Layout automatisch das EXE-Dir (Tauri startet von
-    // dort). resolve_sidecar_path liefert die EXE in
-    // `<exe_dir>/sidecar/<exe>`, und das EXE-Dir enthält die DLLs.
+    // standardmäßig vom aktuellen Prozess erben. Im Portable liegt
+    // der Single-File-Sidecar direkt neben der Haupt-EXE.
     // Wir setzen zusätzlich explizit das CWD auf das
     // Sidecar-EXE-Verzeichnis, falls resolve_sidecar_path mal einen
     // abweichenden Pfad liefern sollte.

@@ -14,7 +14,7 @@
     "build:sidecar": "dotnet build sidecar/MeetingNotes.Sidecar.csproj -c Release -r win-x64 --artifacts-path src-tauri/target/sidecar-artifacts",
     "test:sidecar": "dotnet run --project sidecar/Validation/MeetingNotes.Sidecar.Validation.csproj -c Release --artifacts-path src-tauri/target/sidecar-validation-artifacts",
     "clean:sidecar": "node scripts/clean-sidecar.mjs",
-    "publish:sidecar": "dotnet publish sidecar/MeetingNotes.Sidecar.csproj -c Release -r win-x64 --self-contained false -f net10.0-windows --artifacts-path src-tauri/target/sidecar-artifacts -o src-tauri/target/sidecar-publish",
+    "publish:sidecar": "dotnet publish sidecar/MeetingNotes.Sidecar.csproj -c Release -r win-x64 --self-contained false -f net10.0-windows --artifacts-path src-tauri/target/sidecar-artifacts -o src-tauri/target/sidecar-publish -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none",
     "dist:portable": "node scripts/dist-portable.mjs",
     "test:smoke": "node scripts/test-smoke.mjs",
     "measure:latency": "node scripts/measure-latency-tauri.mjs",

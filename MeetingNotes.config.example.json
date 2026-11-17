@@ -1,5 +1,5 @@
 {
-  "_comment": "Beispielkonfiguration. Diese Datei nach 'meeting-notes.config.json' kopieren und anpassen. Die echte Datei liegt direkt neben der EXE (Release) bzw. im Repository-Root (Dev) und ist in .gitignore. Quelle: src/shared/config-contract.ts -> AppConfig.",
+  "_comment": "Beispielkonfiguration. Diese Datei nach 'MeetingNotes.config.json' kopieren und anpassen. Die echte Datei liegt direkt neben der EXE (Release) bzw. im Repository-Root (Dev) und ist in .gitignore. Quelle: src/shared/config-contract.ts -> AppConfig.",
 
   "azure": {
     "endpoint": "wss://westeurope.stt.speech.microsoft.com/speech/universal/v2",

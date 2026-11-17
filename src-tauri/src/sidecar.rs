@@ -188,27 +188,14 @@ mod connectivity_tests {
 
     #[test]
     fn sidecar_candidates_cover_portable_and_single_file_layouts() {
-        // T-512: The sidecar is resolved by file name, not by content. Both
-        // layouts therefore share one candidate list: the 21-file portable
-        // (sidecar/<exe> + DLLs) and the single-file portable (just
-        // sidecar/<exe> with the bundled content).
         let dir = PathBuf::from("C:\\Apps\\MeetingNotes");
         let candidates = sidecar_candidates(&dir, "MeetingNotes.Sidecar.exe");
         assert_eq!(
             candidates,
-            vec![
-                dir.join("sidecar").join("MeetingNotes.Sidecar.exe"),
-                dir.join("MeetingNotes.Sidecar.exe")
-            ]
+            vec![dir.join("MeetingNotes.Sidecar.exe")]
         );
-        // The file name stays identical in both layouts — that is exactly
-        // what the resolution relies on.
         assert_eq!(
             candidates[0].file_name().and_then(|n| n.to_str()),
-            Some("MeetingNotes.Sidecar.exe")
-        );
-        assert_eq!(
-            candidates[1].file_name().and_then(|n| n.to_str()),
             Some("MeetingNotes.Sidecar.exe")
         );
     }
@@ -327,19 +314,15 @@ pub async fn stop(handle: SidecarHandle) -> Result<(), SidecarError> {
 
 /// Candidate locations for the sidecar EXE inside a directory, in order.
 ///
-/// The portable layout puts the sidecar in `sidecar/` next to the app EXE,
-/// the fallback is the EXE directory itself. Both layouts (the 21-file portable
-/// and the single-file bundle, T-512) use the same file name — only the content
-/// differs — so the same candidate list applies to both.
+/// The single-file sidecar lives directly next to the application EXE.
 fn sidecar_candidates(exe_dir: &Path, exe: &str) -> Vec<PathBuf> {
-    vec![exe_dir.join("sidecar").join(exe), exe_dir.join(exe)]
+    vec![exe_dir.join(exe)]
 }
 
 /// Locate the sidecar EXE. Search order:
 ///   1. Development publish path under `src-tauri/target/sidecar-publish/`
-///   2. Bundled resource dir (`app.path().resource_dir()/sidecar/`)
-///   3. Tauri-EXE directory + `sidecar/` (portable distribution layout)
-///   4. Tauri-EXE directory directly (fallback)
+///   2. Bundled resource dir (`app.path().resource_dir()`)
+///   3. Tauri-EXE directory (portable distribution layout)
 pub fn resolve_sidecar_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, SidecarError> {
     let exe = if cfg!(windows) { "MeetingNotes.Sidecar.exe" } else { "MeetingNotes.Sidecar" };
 
@@ -352,16 +335,15 @@ pub fn resolve_sidecar_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, S
         }
     }
 
-    // 2. Bundled resource dir (Tauri bundle's `resources/sidecar/<exe>`)
+    // 2. Bundled resource dir
     if let Ok(resource_dir) = app.path().resource_dir() {
-        let candidate = resource_dir.join("sidecar").join(exe);
+        let candidate = resource_dir.join(exe);
         if candidate.exists() {
             return Ok(candidate);
         }
     }
 
-    // 3./4. Tauri-EXE directory: `sidecar/<exe>` (portable dist layout) or
-    // directly next to it (fallback).
+    // 3. Tauri-EXE directory (portable dist layout).
     if let Ok(self_path) = std::env::current_exe() {
         if let Some(dir) = self_path.parent() {
             for candidate in sidecar_candidates(dir, exe) {

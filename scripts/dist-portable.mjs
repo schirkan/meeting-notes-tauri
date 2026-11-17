@@ -7,16 +7,13 @@
  *
  * Layout produced:
  *   dist/portable/
- *     meeting-notes.exe             (Tauri host)
- *     sidecar/                     (C# sidecar + deps)
- *       MeetingNotes.Sidecar.exe
- *       MeetingNotes.Sidecar.dll
- *       …                          (Azure Speech / NAudio / System.* DLLs)
- *     meeting-notes.config.example.json  (config template, optional)
+ *     MeetingNotes.exe             (Tauri host)
+ *     MeetingNotes.Sidecar.exe     (single-file C# sidecar)
+ *     MeetingNotes.config.example.json  (config template, optional)
  *     SHA256SUMS
  *
  * Pre-requisites:
- *   - `npm run tauri build`        → src-tauri/target/release/meeting-notes.exe
+ *   - `npm run tauri build`        → src-tauri/target/release/MeetingNotes.exe
  *   - Sidecar-Publish              → src-tauri/target/sidecar-publish/
  *                                    (lief automatisch via src-tauri/build.rs seit AD-009)
  */
@@ -27,13 +24,13 @@ import { basename, join, relative } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 
 const PROJECT_ROOT = process.cwd()
-const TAURI_EXE_SRC = join(PROJECT_ROOT, 'src-tauri', 'target', 'release', 'meeting-notes.exe')
+const TAURI_EXE_SRC = join(PROJECT_ROOT, 'src-tauri', 'target', 'release', 'MeetingNotes.exe')
 const SIDECAR_SRC = join(PROJECT_ROOT, 'src-tauri', 'target', 'sidecar-publish')
-const CONFIG_TEMPLATE = 'meeting-notes.config.example.json'
+const CONFIG_TEMPLATE = 'MeetingNotes.config.example.json'
 const CONFIG_TEMPLATE_SRC = join(PROJECT_ROOT, CONFIG_TEMPLATE)
 const PORTABLE_OUT = join(PROJECT_ROOT, 'dist', 'portable')
 
-const TAURI_EXE_NAME = 'meeting-notes.exe'
+const TAURI_EXE_NAME = 'MeetingNotes.exe'
 const SIDECAR_EXE_NAME = 'MeetingNotes.Sidecar.exe'
 const SHA256SUMS_NAME = 'SHA256SUMS'
 
@@ -73,6 +70,10 @@ function ensurePrereqs() {
   if (!existsSync(sidecarExe)) {
     fail(`Sidecar-EXE nicht gefunden: ${sidecarExe}`)
   }
+  const entries = readdirSync(SIDECAR_SRC)
+  if (entries.length !== 1 || entries[0] !== SIDECAR_EXE_NAME) {
+    fail(`Sidecar-Publish muss genau ${SIDECAR_EXE_NAME} enthalten; gefunden: ${entries.join(', ')}`)
+  }
 }
 
 function cleanOutputDir() {
@@ -80,19 +81,6 @@ function cleanOutputDir() {
     rmSync(PORTABLE_OUT, { recursive: true, force: true })
   }
   mkdirSync(PORTABLE_OUT, { recursive: true })
-}
-
-function copyDirContents(srcDir, dstDir) {
-  mkdirSync(dstDir, { recursive: true })
-  for (const entry of readdirSync(srcDir, { withFileTypes: true })) {
-    const src = join(srcDir, entry.name)
-    const dst = join(dstDir, entry.name)
-    if (entry.isDirectory()) {
-      copyDirContents(src, dst)
-    } else if (entry.isFile()) {
-      copyFileSync(src, dst)
-    }
-  }
 }
 
 function sha256OfFile(path) {
@@ -129,9 +117,8 @@ async function main() {
   info(`Kopiere ${TAURI_EXE_NAME} …`)
   copyFileSync(TAURI_EXE_SRC, join(PORTABLE_OUT, TAURI_EXE_NAME))
 
-  // 2. Sidecar-Verzeichnis
-  info(`Kopiere Sidecar (${SIDECAR_EXE_NAME} + DLLs) …`)
-  copyDirContents(SIDECAR_SRC, join(PORTABLE_OUT, 'sidecar'))
+  info(`Kopiere ${SIDECAR_EXE_NAME} …`)
+  copyFileSync(join(SIDECAR_SRC, SIDECAR_EXE_NAME), join(PORTABLE_OUT, SIDECAR_EXE_NAME))
 
   // 3. Config-Template (optional)
   let configTemplateCopied = false
@@ -153,15 +140,14 @@ async function main() {
   const totalBytes = allFiles.reduce((sum, p) => sum + statSync(p).size, 0)
   const sumsBytes = statSync(join(PORTABLE_OUT, SHA256SUMS_NAME)).size
   const tauriExeBytes = statSync(join(PORTABLE_OUT, TAURI_EXE_NAME)).size
-  const sidecarBytes = listFilesRecursive(join(PORTABLE_OUT, 'sidecar'))
-    .reduce((sum, p) => sum + statSync(p).size, 0)
+  const sidecarBytes = statSync(join(PORTABLE_OUT, SIDECAR_EXE_NAME)).size
   const sumsCount = sums.split('\n').filter(Boolean).length
 
   console.log('')
   console.log('=== Portable Build abgeschlossen ===')
   console.log(`Ausgabe:       ${PORTABLE_OUT}`)
   console.log(`Tauri-EXE:     ${formatBytes(tauriExeBytes)}  (${TAURI_EXE_NAME})`)
-  console.log(`Sidecar:       ${formatBytes(sidecarBytes)}  (${listFilesRecursive(join(PORTABLE_OUT, 'sidecar')).length} Dateien in sidecar/)`)
+  console.log(`Sidecar:       ${formatBytes(sidecarBytes)}  (${SIDECAR_EXE_NAME})`)
   console.log(`Config:        ${configTemplateCopied ? CONFIG_TEMPLATE : '— (übersprungen)'}`)
   console.log(`SHA256SUMS:    ${formatBytes(sumsBytes)}  (${sumsCount} Summen)`)
   console.log(`----------------------------------------`)

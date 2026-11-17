@@ -10,27 +10,28 @@ Portable Variante der Tauri-App, die ohne Installation läuft.
 
 Der unterstuetzte MSVC-Build linkt den WebView2-Loader statisch. Eine separate
 `WebView2Loader.dll` ist nicht Teil der Portable-Ausgabe; WebView2 Runtime und
-die externen Sidecar-Abhaengigkeiten bleiben erforderlich.
+die .NET Runtime bleiben erforderlich. Der Single-File-Sidecar buendelt seine Abhaengigkeiten.
 
 ## Done When
 - [x] `npm run dist:portable` erzeugt einen Ordner `dist/portable/` mit: Beleg: package.json (run) (geprueft).
-  - [x] `meeting-notes.exe` (App, unsigniert)
-  - [x] `sidecar/MeetingNotes.Sidecar.exe` + DLLs (framework-dependent)
-  - [x] `meeting-notes.config.example.json` — die Config-Vorlage wird mitgeliefert; keine persönlichen Configs oder Credentials.
+  - [x] `MeetingNotes.exe` (App, unsigniert)
+  - [x] `MeetingNotes.Sidecar.exe` (framework-dependent Single-File, direkt neben der App)
+  - [x] `MeetingNotes.config.example.json` — die Config-Vorlage wird mitgeliefert; keine persönlichen Configs oder Credentials.
 - [ ] Portable Build auf einem **frischen** Windows-11-System mit .NET 10 Runtime und WebView2 validiert. Bisherige native Tests erfolgten nur auf dem lokalen Entwicklungsrechner. **Verfahren und Nachweisschritte: [T-510](./T-510-clean-machine-deployment-windows-11.md)** (Vorbereitung, Ausfuehrung offen). - **offen**: Braucht ein frisches Windows-11-Zielsystem (T-510) - die lokale Pruefung laeuft auf dem Entwicklerrechner.
-- [x] SHA256SUMS-Datei wird erzeugt und geprüft. Stand 2026-11-16: **23 Summen** für 1 App-EXE + 21 Sidecar-Dateien + 1 Config-Template; **24 Dateien** inklusive SHA256SUMS. `npm run test:smoke` bestätigt 23/23 Hashes. Beleg: package.json (run) (geprueft).
+- [x] SHA256SUMS-Datei wird erzeugt und geprüft: **3 Summen** fuer App-EXE, Sidecar-EXE und Config-Template; **4 Dateien** inklusive SHA256SUMS. Beleg: scripts/dist-portable.mjs; Testnachweis: portable build packages consistently named files without a sidecar directory.
 - [x] Bundle-Größe wird im Build-Output geloggt (App-EXE / Sidecar / Config-Template / SHA256SUMS / Gesamt). Beleg: scripts/dist-portable.mjs (Ausgabe: Tauri-EXE, Sidecar, Config-Template, SHA256SUMS, Gesamtgroesse).
 
 ## Approach
-- `scripts/dist-portable.mjs` orchestriert: Prereq-Check → Clean → Copy (`meeting-notes.exe`, `sidecar/*`, optional `meeting-notes.config.example.json`) → SHA256-Summen via Streaming-Hash (`createReadStream` + `pipeline`) → Summary-Output.
+- `scripts/dist-portable.mjs` orchestriert: Prereq-Check → Clean → Copy (`MeetingNotes.exe`, `MeetingNotes.Sidecar.exe`, optional `MeetingNotes.config.example.json`) → SHA256-Summen via Streaming-Hash (`createReadStream` + `pipeline`) → Summary-Output. Mehr als eine Datei im Sidecar-Publish wird vor dem Clean abgewiesen.
 - Sidecar-Publish läuft automatisch via `src-tauri/build.rs` (siehe `DECISIONS.md → AD-009`); das portable Skript nimmt das Ergebnis aus `src-tauri/target/sidecar-publish/`.
-- **Gesamten Ordner verteilen**, nicht nur `meeting-notes.exe`: Sidecar-EXE und verwaltete/native DLLs liegen extern in `sidecar/` und sind nicht in die Haupt-EXE eingebettet. Zielsystem benötigt .NET 10 Runtime (win-x64) und WebView2.
-- Azure-/Benutzereinstellungen stehen in `meeting-notes.config.json` direkt neben der Release-EXE, unabhängig vom Start-Arbeitsverzeichnis; kein AppData-Fallback. Mit fehlender gültiger Azure-Konfiguration öffnen sich die Einstellungen automatisch.
+- **Gesamten Ordner verteilen**, nicht nur `MeetingNotes.exe`: `MeetingNotes.Sidecar.exe` liegt direkt daneben und buendelt ihre verwalteten/nativen Abhaengigkeiten. Zielsystem benötigt .NET 10 Runtime (win-x64) und WebView2.
+- Azure-/Benutzereinstellungen stehen in `MeetingNotes.config.json` direkt neben der Release-EXE, unabhängig vom Start-Arbeitsverzeichnis; kein AppData-Fallback. Mit fehlender gültiger Azure-Konfiguration öffnen sich die Einstellungen automatisch.
 - Bestehende VS-Code-Aufgabe **Build portable distribution** führt Installation gemäß Lockfile, `npm run tauri -- build --no-bundle` und `npm run dist:portable` aus. Das Packaging-Skript allein kompiliert keine aktualisierte EXE.
 - F12-DevTools sind auch im Release-/Portable-Build verfügbar (siehe [T-101](./T-101-tauri-2-scaffold-mit-react-und-vite.md)).
 - Tauri-Bundle-Konfiguration (`bundle.targets: ["nsis", "msi"]`) bleibt für Installer-Distribution aktiv und unabhängig vom portable-Pfad.
 
 ## Log
+- Flaches Single-File-Portable neu gebaut: `MeetingNotes.exe` (15,59 MB), `MeetingNotes.Sidecar.exe` (7,62 MB), `MeetingNotes.config.example.json` und `SHA256SUMS` direkt nebeneinander. Gesamt 23,20 MB / 4 Dateien; Smoke 3/3 Hashes, Deployment mit `-LaunchApp` 10 PASS / 0 FAIL. Regressionstests pruefen das Layout und die Ablehnung zusaetzlicher Sidecar-Dateien vor dem Clean.
 - 2026-11-16: Portable nach der T-511-Umstellung (auswählbare Transkriptions-Quelle) neu gebaut: Release-/Renderer-Build, Packaging und Smoke-Test erfolgreich. Haupt-EXE 15.48 MB, Sidecar 7.62 MB (21 Dateien), Gesamt 23.10 MB / 24 Dateien / 23 geprüfte Hashes. Native Geräteabfrage: 0 Eingänge, 0 Ausgänge. Keine persönlichen Configs mitgeliefert; keine Installer und kein Clean-Machine-Test.
 - 2026-11-16: Portable nach der T-509-Umstellung neu gebaut: Release-/Renderer-Build, Packaging und Smoke-Test erfolgreich. Haupt-EXE 15.47 MB, Sidecar 7.61 MB (21 Dateien), Gesamt 23.09 MB / 24 Dateien / 23 gepruefte Hashes. Native Geraeteabfrage: 0 Eingaenge, 0 Ausgaenge. Keine persoenlichen Configs mitgeliefert; keine Installer und kein Clean-Machine-Test.
 - 2026-11-16: Temporäre Browser-Vorschau beendet und beide Preview-Hilfsdateien entfernt. Portable mit aktuellem Settings-Footer, regulären Tab-Hintergründen und symmetrischem Settings-Zahnrad neu gebaut. 23.02 MB / 24 Distributionsdateien / 23 geprüfte Hashes; Smoke-Test erfolgreich. Persönliche lokale Konfiguration gesichert und unverändert wiederhergestellt, nicht Teil des Distributionsmanifests.

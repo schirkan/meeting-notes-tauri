@@ -3,7 +3,7 @@
 //! One configuration file directly next to the application EXE
 //! (portable/release), or in the repository root in development:
 //!
-//!   meeting-notes.config.json
+//!   MeetingNotes.config.json
 //!     azure: { endpoint, region, speechKey, interimResults, proxy? }
 //!     user:  { language, devices, transcription, diarization, transcript }
 //!
@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 /// Name of the single configuration file next to the EXE.
-pub const CONFIG_FILE_NAME: &str = "meeting-notes.config.json";
+pub const CONFIG_FILE_NAME: &str = "MeetingNotes.config.json";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -418,18 +418,18 @@ mod config_tests {
 
     #[test]
     fn config_file_sits_directly_next_to_the_exe() {
-        let exe = Path::new(r"D:\Portable\Meeting Notes\meeting-notes.exe");
+        let exe = Path::new(r"D:\Portable\Meeting Notes\MeetingNotes.exe");
         let dir = app_dir_for(exe, None);
         assert_eq!(dir, PathBuf::from(r"D:\Portable\Meeting Notes"));
-        assert_eq!(dir.join(CONFIG_FILE_NAME), PathBuf::from(r"D:\Portable\Meeting Notes\meeting-notes.config.json"));
+        assert_eq!(dir.join(CONFIG_FILE_NAME), PathBuf::from(r"D:\Portable\Meeting Notes\MeetingNotes.config.json"));
     }
 
     #[test]
     fn development_config_uses_the_repository_root() {
-        let exe = Path::new(r"D:\repo\src-tauri\target\debug\meeting-notes.exe");
+        let exe = Path::new(r"D:\repo\src-tauri\target\debug\MeetingNotes.exe");
         let dir = app_dir_for(exe, Some(Path::new(r"D:\repo")));
         assert_eq!(dir, PathBuf::from(r"D:\repo"));
-        assert_eq!(dir.join(CONFIG_FILE_NAME), PathBuf::from(r"D:\repo\meeting-notes.config.json"));
+        assert_eq!(dir.join(CONFIG_FILE_NAME), PathBuf::from(r"D:\repo\MeetingNotes.config.json"));
     }
 
     #[test]

@@ -470,6 +470,18 @@ Varianten nicht gemischt werden.
 
 Siehe [T-512](./specs/T-512-sidecar-targetframeworks-und-single-file.md).
 
+**Fortschreibung 2026-11-17:** Auf Nutzerwunsch ist Single-File jetzt fest im
+Tauri-Build und im direkten Publish aktiviert. Die Single-File-Umgebungsvariable
+entfaellt. Standard ist eine framework-dependent `MeetingNotes.Sidecar.exe`
+mit gebuendelten Abhaengigkeiten; der TFM-Schalter bleibt erhalten.
+
+**Portable-Fortschreibung 2026-11-17:** Der Sidecar liegt direkt neben der
+Haupt-EXE, ohne Unterordner. Die Namen sind vereinheitlicht: `MeetingNotes.exe`,
+`MeetingNotes.Sidecar.exe`, `MeetingNotes.config.json` und
+`MeetingNotes.config.example.json`. Portable-Packing, Tauri-Ressourcen,
+Pfadaufloesung und Nachweisskripte verwenden das flache Layout. Alte persoenliche
+`meeting-notes.config.json` beim Umstieg umbenennen; das Format bleibt gleich.
+
 ## Offene Fragen
 
 **Build-Fortschreibung 2026-11-15 (AD-009):** Der direkte `dotnet publish`-Aufruf

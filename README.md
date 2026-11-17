@@ -10,7 +10,7 @@ Dieses Projekt ist die **Tauri-Migration** des bestehenden Electron-Projekts `pr
 >
 > **Stand 2026-11-12:** Implementierung und lokaler Portable-Build vorhanden. Settings-/Diagnose-Regressionen und Build-Smoke sind geprüft; der Corporate-Proxy-/Azure-Test war am 2026-11-12 im Firmennetz erfolgreich (HTTPS und native Speech/WSS). **Offen:** Aufnahme-Latenz und Clean-Machine-Deployment. Die [Specs](./specs/) unterscheiden implementierte Funktionen von ausstehenden Akzeptanztests.
 >
-> **Änderung 2026-11-11:** Eine gemeinsame Konfigurationsdatei `meeting-notes.config.json` direkt neben der EXE, MIT-Lizenz und automatischer Transkript-Export als Markdown mit Frontmatter. Siehe [T-506](./specs/T-506-transkript-markdown-export-und-frontmatter.md).
+> **Änderung 2026-11-11:** Eine gemeinsame Konfigurationsdatei `MeetingNotes.config.json` direkt neben der EXE, MIT-Lizenz und automatischer Transkript-Export als Markdown mit Frontmatter. Siehe [T-506](./specs/T-506-transkript-markdown-export-und-frontmatter.md).
 
 ## Features (Ziel)
 - Start/Stop Recording im UI sowie **Pause**/**Weiter**: die Sitzung laeuft weiter, es wird aber kein Audio zugespeist
@@ -60,7 +60,7 @@ Anforderung direkt aus `package.json`; ein separates `check-node.mjs` gibt es
 nicht mehr.
 
 ### Azure konfigurieren
-1. `meeting-notes.config.example.json` → `meeting-notes.config.json` kopieren (direkt neben die EXE bzw. ins Repository-Root im Dev-Build)
+1. `MeetingNotes.config.example.json` → `MeetingNotes.config.json` kopieren (direkt neben die EXE bzw. ins Repository-Root im Dev-Build). Vorhandene `meeting-notes.config.json` beim Umstieg in `MeetingNotes.config.json` umbenennen; das Format bleibt unveraendert.
 2. Speech-Key direkt im Feld `azure.speechKey` eintragen
 3. Optional: Proxy unter `proxy.host`/`proxy.port` (+ optional `username`/`password`). Host ohne `http://` oder Pfad, Port 1–65535. Der HTTP-Proxy tunnelt HTTPS und Speech/WSS mittels CONNECT. Proxy-Zugangsdaten werden dem Sidecar über prozesslokale Umgebungsvariablen statt CLI-Argumenten übergeben.
 
@@ -76,7 +76,7 @@ Beim Start mit fehlender, nicht lesbarer oder unvollständiger Azure-Konfigurati
 - Der native Diagnoseprozess ist auf 45 Sekunden begrenzt; DNS-/TCP-/HTTPS-Proben haben jeweils 5 Sekunden Timeout. Dies ist keine garantierte 45-Sekunden-Obergrenze des gesamten UI-Aufrufs einschließlich Prozessstart. Einzelne Schritte erscheinen erst nach Abschluss, nicht live während der Prüfung. Der Test kann Azure-Verbindungen und gegebenenfalls Kosten verursachen, sendet aber keine aufgenommenen Audiodaten. Firmenproxy-Allowlisting, CONNECT-Unterstützung und Authentifizierung sind separat im Zielnetz zu prüfen.
 
 ### Benutzereinstellungen (optional)
-1. Im Abschnitt `user` derselben Datei `meeting-notes.config.json` bei Bedarf `language` (BCP-47, z. B. `de-DE`, `en-US`), `devices` und `diarization: { "mic": true, "speaker": true }` anpassen. Fehlende Diarization-Felder werden einzeln als `true` behandelt; ausdrücklich gespeichertes `false` bleibt erhalten. Im Settings-Bereich **Allgemein** stehen zwei unabhängige Checkboxen. Gespeicherte Änderungen gelten für die nächste Aufnahme; während einer Aufnahme sind beide Checkboxen deaktiviert.
+1. Im Abschnitt `user` derselben Datei `MeetingNotes.config.json` bei Bedarf `language` (BCP-47, z. B. `de-DE`, `en-US`), `devices` und `diarization: { "mic": true, "speaker": true }` anpassen. Fehlende Diarization-Felder werden einzeln als `true` behandelt; ausdrücklich gespeichertes `false` bleibt erhalten. Im Settings-Bereich **Allgemein** stehen zwei unabhängige Checkboxen. Gespeicherte Änderungen gelten für die nächste Aufnahme; während einer Aufnahme sind beide Checkboxen deaktiviert.
 2. Mit `transcription: { "mic": true, "speaker": true }` wird festgelegt, **welche Audioquelle transkribiert wird** — nur das Mikrofon, nur der Speaker-Loopback oder beides (Standard). Fehlende Felder werden einzeln als `true` behandelt; ausdrücklich gespeichertes `false` bleibt erhalten. Eine nicht transkribierte Quelle wird nicht aufgenommen, nicht an Azure gesendet und benötigt auch kein Gerät. Die Einstellung ist **unabhängig** von `diarization`: die Diarization entscheidet nur, ob für eine Quelle die Sprechererkennung verwendet wird. Im Settings-Bereich **Allgemein** stehen dafür zwei weitere Checkboxen; die Geräteauswahl und die Sprechererkennung der jeweiligen Quelle sind deaktiviert, wenn die Quelle nicht transkribiert wird. Mindestens eine Quelle muss transkribiert werden.
 3. Für den Markdown-Export stehen `transcript.markdownExport.enabled` (standardmäßig `true`) und `transcript.markdownExport.path` (optional). Ohne Pfad landet die Datei im Anwendungsverzeichnis; relative Pfade werden dort aufgelöst.
 4. Die Datei wird direkt neben der EXE gelesen und gespeichert: im Release-/Portable-Build neben der EXE, im Dev-Build im Repository-Root. Das Arbeitsverzeichnis des startenden Prozesses spielt keine Rolle. Es wird nichts nach AppData kopiert und keine AppData-Konfiguration als Fallback geladen. Bisher nur in AppData gespeicherte Werte bei Bedarf manuell übernehmen.
@@ -153,23 +153,21 @@ powershell -ExecutionPolicy Bypass -File .\verify-deployment.ps1 -PortableDir D:
 Rueckgabecode 0 = keine FAIL-Pruefung. Offen bleibende Punkte werden als `MANUELL`
 ausgegeben (App-Start, Settings-Dialog, Entstehung der Config neben der EXE).
 
-Fuer eine Portable-Ausgabe mit Single-File-Sidecar (1 Datei statt 21, 23,09 MB gesamt ueber 4 Dateien).
+Der Sidecar wird standardmaessig als Single-File-EXE veroeffentlicht (1 Datei statt 21).
 Die Variante wurde am 2026-11-17 end-to-end nachgefahren: `sidecar-publish/` mit genau
 1 Datei, Portable 23,09 MB / 4 Dateien / 3 Summen, Smoke bestanden, Deployment-Nachweis
 mit App-Start PASS 10 / FAIL 0 - der Sidecar wird im Single-File-Portable gefunden.
 
-Beide Schalter duerfen auch **gleichzeitig** gesetzt sein (`net9.0-windows` **und**
-Single-File). Diese Kombination ist ebenfalls end-to-end geprueft: Portable
+Auch `net9.0-windows` mit Single-File ist end-to-end geprueft: Portable
 23,08 MB / 4 Dateien / 3 Summen, Deployment-Nachweis PASS 10 / FAIL 0. Alle vier
 Kombinationen aus Ziel-Framework und Layout sind damit belegt.
 
 ```powershell
-$env:MEETING_NOTES_SIDECAR_SINGLE_FILE = '1'
 npm run tauri -- build --no-bundle
 npm run dist:portable
 ```
 
-Ohne die Variable bleibt der Standard: 21 Sidecar-Dateien, 23,19 MB ueber 24 Dateien. Der Schalter wirkt auf den kompletten Bundle-Pfad, Smoke-Test inklusive.
+Single-File ist fest im Build aktiviert; eine Umgebungsvariable dafuer gibt es nicht mehr.
 
 Fuer einen Sidecar, der auch auf .NET-9-Runtimes startet (statt zwingend .NET 10):
 
@@ -179,7 +177,7 @@ npm run tauri -- build --no-bundle
 npm run dist:portable
 ```
 
-Beide Schalter wirken auf den kompletten Bundle-Pfad. `net9.0-windows` und `net10.0-windows`
+Der TFM-Schalter wirkt auf den kompletten Bundle-Pfad. `net9.0-windows` und `net10.0-windows`
 sind moeglich, alles andere wird mit klarer Meldung abgewiesen.
 npm run test:sidecar   # C#-Validierung nach src-tauri/target/sidecar-validation-artifacts
 npm run clean:sidecar -- --dry-run  # Cleanup nur anzeigen
@@ -203,7 +201,7 @@ JSON-Lines und Fehlerausgaben verfuegbar.
 Beim unterstuetzten x64/MSVC-Build ist der WebView2-Loader statisch in der
 Haupt-EXE enthalten. Eine separate `WebView2Loader.dll` wird nicht verteilt.
 Die installierte WebView2 Runtime auf dem Zielsystem bleibt erforderlich;
-die Sidecar-DLLs im Unterordner `sidecar/` werden weiterhin benoetigt.
+der Single-File-Sidecar enthaelt seine verwalteten und nativen Abhaengigkeiten.
 
 Bestehende VS-Code-Aufgabe **Build portable distribution** verwenden oder nach dem Setup:
 ```powershell
@@ -214,9 +212,17 @@ npm run test:smoke
 ```
 `dist:portable` verpackt bereits gebaute Artefakte; es kompiliert keine aktualisierte EXE. Portable-Ausgabe: [dist/portable/](./dist/portable/). Installer entstehen separat durch `npm run tauri -- build`.
 
-**Den gesamten Portable-Ordner verteilen.** Sidecar-EXE und alle verwalteten/nativen DLLs liegen extern in `sidecar/`, nicht eingebettet in `meeting-notes.exe`. .NET 10 Runtime (win-x64) und WebView2 müssen auf dem Zielsystem vorhanden sein.
+**Den gesamten Portable-Ordner verteilen.** `MeetingNotes.exe`,
+`MeetingNotes.Sidecar.exe`, `MeetingNotes.config.example.json` und `SHA256SUMS`
+liegen direkt nebeneinander; es gibt keinen Sidecar-Unterordner. Die persoenliche
+`MeetingNotes.config.json` wird nicht verteilt. .NET 10 Runtime (win-x64) und
+WebView2 muessen auf dem Zielsystem vorhanden sein.
 
-Letzter verifizierter Portable-Build (2026-11-17, **T-201**): **23.19 MB gesamt**, davon Haupt-EXE `meeting-notes.exe` 15.56 MB und Sidecar 7.62 MB (21 Dateien); 24 Dateien einschließlich Config-Template und SHA256SUMS. Release-/Renderer-Build und `npm run test:smoke` erfolgreich: **23/23 Hashes**, native Sidecar-Geräteabfrage (0 Eingänge, 0 Ausgänge), Protokoll-Handshake des Sidecars geprüft (`protocol_version=1.0.0`). Gegenüber dem T-502-Stand (23.12 MB, Haupt-EXE 15.50 MB) ist die EXE um 60 KB gewachsen - das Protokollmodul `src-tauri/src/protocol.rs` und der Handshake-Pfad (T-201). Frühere verifizierte Messungen derselben Quelle: 23.09 MB nach T-509 (Aufnahme über `WasapiRecorderBuilder`), 23.02 MB für den Console-Design-Build, 23.10 MB nach T-511 und 23.12 MB nach T-502. Der T-201-Stand umfasst zusätzlich das Protokoll-Handshake mit Versionsabgleich. Keine persönliche Konfiguration enthalten; .NET 10 Runtime und WebView2 bleiben Voraussetzung. Kein neuer Live-Azure- oder Clean-Machine-Nachweis; MSI/NSIS wurden nicht gebaut.
+Flaches Single-File-Portable verifiziert: **23,20 MB / 4 Dateien / 3 von 3
+SHA256-Summen**, Smoke-Test und lokaler Deployment-Starttest bestanden
+(10 PASS / 0 FAIL).
+
+Letzter verifizierter Portable-Build (2026-11-17, **T-201**): **23.19 MB gesamt**, davon Haupt-EXE `MeetingNotes.exe` 15.56 MB und Sidecar 7.62 MB (21 Dateien); 24 Dateien einschließlich Config-Template und SHA256SUMS. Release-/Renderer-Build und `npm run test:smoke` erfolgreich: **23/23 Hashes**, native Sidecar-Geräteabfrage (0 Eingänge, 0 Ausgänge), Protokoll-Handshake des Sidecars geprüft (`protocol_version=1.0.0`). Gegenüber dem T-502-Stand (23.12 MB, Haupt-EXE 15.50 MB) ist die EXE um 60 KB gewachsen - das Protokollmodul `src-tauri/src/protocol.rs` und der Handshake-Pfad (T-201). Frühere verifizierte Messungen derselben Quelle: 23.09 MB nach T-509 (Aufnahme über `WasapiRecorderBuilder`), 23.02 MB für den Console-Design-Build, 23.10 MB nach T-511 und 23.12 MB nach T-502. Der T-201-Stand umfasst zusätzlich das Protokoll-Handshake mit Versionsabgleich. Keine persönliche Konfiguration enthalten; .NET 10 Runtime und WebView2 bleiben Voraussetzung. Kein neuer Live-Azure- oder Clean-Machine-Nachweis; MSI/NSIS wurden nicht gebaut.
 
 ## Lizenz
 
