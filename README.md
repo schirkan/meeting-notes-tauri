@@ -20,6 +20,7 @@ used on its own.
 - **Markdown export:** Save or copy finalized transcripts with timestamps, speakers, and session metadata.
 - **Portable app:** Extract the complete folder and run it without an installer. The .NET runtime ships with the app.
 - **Connection diagnostics:** Test Azure connectivity and an optional corporate proxy from the settings dialog.
+- **Optional auto-start:** Turn on "Aufnahme bei erkanntem Meeting automatisch starten" and the app watches the Windows audio session graph in the background. When a meeting application opens the microphone, recording starts on its own. Off by default.
 
 ## 📦 Installation
 
@@ -97,6 +98,11 @@ contains the Azure key and any proxy credentials **in plain text**. Do not
 commit it to a public repository or include it in a portable folder you share.
 Review transcripts and diagnostic output for confidential information before
 sharing them as well.
+
+With auto-start enabled, the app watches which applications open the
+microphone. That happens **locally** - no calendar is read and nothing leaves
+the machine. Still, an automatic recording starts without you pressing the
+button, so obtain the participants' agreement beforehand.
 
 ## 🛠️ Troubleshooting
 

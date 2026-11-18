@@ -25,6 +25,82 @@ using NAudio.Wave;
 // In Block 4 the Tauri-Main (Rust) spawns this EXE via tauri-plugin-shell
 // and reads stdout as JSON-Lines; commands flow back over stdin.
 
+/// <summary>
+/// T-513, Stufe 1: Erkennungsmodus. Beobachtet den Core-Audio-Session-
+/// Graph und meldet erkannte Meetings als JSON-Lines-Ereignis. Kein Azure,
+/// keine Aufnahme, keine Geraete werden geoeffnet.
+/// </summary>
+static async Task<int> RunDetectionModeAsync(Dictionary<string, string?> argsMap)
+{
+    var allowed = argsMap.TryGetValue("--meeting-processes", out var raw) && !string.IsNullOrWhiteSpace(raw)
+        ? raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        : null;
+
+    Logger.Event("handshake", new
+    {
+        protocol_version = ProtocolVersion.Current,
+        sidecar_version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0",
+        capabilities = new[] { "transcription", "diarization", "pause", "resume", "markdown_export", "meeting_detection" }
+    });
+
+    var cts = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) =>
+    {
+        e.Cancel = true;
+        cts.Cancel();
+    };
+
+    MeetingDetector? detector = null;
+    try
+    {
+        detector = new MeetingDetector(detection =>
+        {
+            Logger.Event("meeting_detected", new
+            {
+                process_name = detection.ProcessName,
+                process_id = detection.ProcessId,
+                signal = detection.Signal
+            });
+        }, allowed);
+    }
+    catch (Exception ex)
+    {
+        // Ohne Endpoint-Ueberwachung gibt es keine Erkennung - der
+        // Tauri-Main laeuft dann ohne Auto-Start weiter.
+        Logger.Error("MEETING_DETECTOR_UNAVAILABLE", ex.Message);
+        return 51;
+    }
+
+    try
+    {
+        while (!cts.Token.IsCancellationRequested)
+        {
+            var line = await Console.In.ReadLineAsync(cts.Token);
+            if (line is null) break;
+            var command = SidecarCommands.ReadType(line);
+            if (command == SidecarCommands.Shutdown)
+            {
+                Logger.Info("sidecar", "shutdown", "Shutdown-Kommando empfangen.");
+                cts.Cancel();
+                break;
+            }
+            if (command == SidecarCommands.HandshakeAck)
+            {
+                Logger.Info("sidecar", "handshake_ack", "Protokoll-Handshake bestätigt.");
+            }
+        }
+    }
+    catch (OperationCanceledException) { }
+    finally
+    {
+        detector.Dispose();
+        cts.Dispose();
+    }
+
+    Logger.Info("status", "stopped", "Erkennungsmodus beendet.");
+    return 0;
+}
+
 var argsMap = ArgsParser.Parse(args);
 Logger.ConfigureSecrets(
     argsMap.GetValueOrDefault("--speech-key"),
@@ -46,6 +122,15 @@ if (argsMap.ContainsKey("--list-devices"))
     var snapshot = DeviceResolver.ListDevices();
     Logger.Event("device_list", snapshot);
     return 0;
+}
+
+// T-513, Stufe 1: Erkennungsmodus. Der Sidecar beobachtet nur die
+// Audiositzungen und meldet erkannte Meetings - ohne Aufnahme, ohne
+// Azure, ohne Geraete zu oeffnen. Der Tauri-Main startet damit die
+// Aufnahme, sobald eine Erkennung hereinkommt.
+if (argsMap.ContainsKey("--detect-only"))
+{
+    return await RunDetectionModeAsync(argsMap);
 }
 
 // T-201: Handshake als erstes Event im Aufnahmemodus. Der Tauri-Main

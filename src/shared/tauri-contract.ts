@@ -32,7 +32,8 @@ export const TAURI_EVENTS = {
   debug: 'transcript:debug',
   sidecarCrashed: 'sidecar:crashed',
   fixedConfigStatus: 'transcript:fixed-config-status',
-  connectivityResult: 'transcript:connectivity-result'
+  connectivityResult: 'transcript:connectivity-result',
+  meetingDetected: 'transcript:meeting-detected'
 } as const
 
 export type TauriEventName = (typeof TAURI_EVENTS)[keyof typeof TAURI_EVENTS]

@@ -160,6 +160,14 @@ export const TRANSCRIPT_ERROR_CATALOG: Record<
   }
 }
 
+/** A detected meeting that can trigger an automatic recording start (T-513). */
+export interface MeetingDetected {
+  processName: string
+  processId: number
+  /** "mic" or "speaker". */
+  signal: string
+}
+
 export interface TranscriptApi {
   start: () => Promise<TranscriptStatus>
   stop: () => Promise<TranscriptStatus>
@@ -191,4 +199,5 @@ export interface TranscriptApi {
   onError: (cb: (error: TranscriptError) => void) => () => void
   onStatus: (cb: (status: TranscriptStatus) => void) => () => void
   onDebugLog: (cb: (entry: DebugLogEntry) => void) => () => void
+  onMeetingDetected: (cb: (detected: MeetingDetected) => void) => () => void
 }

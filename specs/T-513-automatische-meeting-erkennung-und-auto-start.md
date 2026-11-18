@@ -1,7 +1,7 @@
 # T-513: Automatische Meeting-Erkennung und Auto-Start im Hintergrund
 
 ## Kontext
-Status: geplant (Recherche abgeschlossen, 8 Punkte offen)
+Status: teils umgesetzt (Stufe 1 im Code, Live-Abnahme offen)
 Priorität: medium
 Abhängigkeiten: T-300, T-305, T-403, T-509, T-511
 
@@ -201,34 +201,40 @@ entscheidende Punkt für die Aufwandsschätzung.
 
 ## Mechanismus: was Meeting Notes tun kann
 
-### Der Ansatz: Mikrofon- und Sessions-Graph beobachten
+### Der Ansatz: der Core-Audio-Session-Graph
 
-Der von Granola belegte Mechanismus ist hier direkt umsetzbar, weil die
-Seitenauswertung in NAudio bereits enthalten ist:
+**Entscheidung vom 2026-11-18: Die Erkennung läuft über den
+`AudioSessionManager` (Stufe 1). Fenster- und Applikationsüberwachung kommt
+**erst** dazu, wenn die Stufe 1 nicht ausreicht.**
 
-1. **Sitzungsbeobachter im Sidecar**: `AudioSessionManager` mit
-   `RefreshSessions()` liefert alle Audiositzungen mit Prozess-ID und
-   Zustand. Eine Sitzung, deren Prozess-ID zu einer Meeting-App gehört
-   (Teams, Zoom, Meet) **und** deren Zustand von Inactive auf Active
-   wechselt, ist das Startsignal. `RegisterEventClient` mit
-   `AudioSessionEventsCallback.OnStateChanged` macht das ereignisgesteuert
-   statt per Timer.
-2. **Mikrofonbelegung**: Eine Audiositzung auf dem **Aufnahme**-Endpoint, die
-   von einem Prozess ausserhalb von Meeting Notes stammt, bedeutet: jemand
-   benutzt das Mikrofon. Das ist Granolas "detecting that your microphone is
-   in use". Mit `AudioMeterInformation.MasterPeakValue` lässt sich zusätzlich
-   prüfen, ob wirklich Audio anliegt (statt eines stummen Aufbaus).
-3. **Kalender optional**: über `Windows.ApplicationModel.Appointments` oder
-   - für den klassischen Outlook-Desktop-Client - über COM-Interop, wie es
-   das Projekt `outlook-mcp-server` im selben Workspace bereits tut
-   (`CalendarTools.list_events` mit ISO-8601 plus IANA-Zeitzone). Der
-   Kalender ist die **beste** Quelle für das planmäßige Ende und für
-   Fehlalarme, aber nicht die Quelle für den Start.
+Der Mechanismus ist umgesetzt (`sidecar/MeetingDetector.cs`):
+
+1. **Sitzungsbeobachter**: `MMDevice.AudioSessionManager` liefert über
+   `OnSessionCreated` jede neue Audiositzung auf dem Endpoint - mit der
+   **Prozess-ID** (`GetProcessID`). Daraus wird der Prozessname aufgelöst.
+   Das ist ereignisgesteuert, kein Timer, und kommt ohne Mikrofonzugriff aus.
+   *Empirisch belegt* am 2026-11-18: das Ereignis feuert auf Capture- und
+   auf Render-Endpoint, jeweils mit der PID der auslösenden Anwendung.
+2. **Zwei Signale, unterschiedlich gewichtet**: eine neue Sitzung auf dem
+   **Aufnahme**-Endpoint (Signal `mic`) ist das starke Signal - wer spricht,
+   öffnet eine Capture-Sitzung. Eine neue Sitzung auf dem **Ausgabe**-Endpoint
+   (Signal `speaker`) ist das schwache Signal, es passt auch zu Musik.
+3. **Prozessliste**: nur Prozesse aus der Allowliste (Vorgabe: Teams, Zoom,
+   WhatsApp, Slack, Discord, Skype, Webex, GoToMeeting, Zoomify) gelten als
+   Meeting. Der Prozessname kommt aus der PID, nicht aus `DisplayName` -
+   der ist bei eigenen Sitzungen leer, der Prozessname nicht.
+4. **Selbstschutz**: der eigene Prozess und der Aufnahme-Sidecar
+   (`MeetingNotes.Sidecar`) melden sich nicht - sonst würde die App ihren
+   eigenen Recorder als Meeting melden.
+
+**Nicht verwendet:** der Kalender (Entscheidung vom 2026-11-18) und die
+Fenster-/Prozessüberwachung (Fallback, noch nicht gebaut).
 
 ### Warum nicht der Kalender als Startsignal
 
-Der Kalender ist in Granola der Auslöser für die **Notification**, nicht
-für die Aufnahme. Für Meeting Notes spricht dagegen:
+**Entscheidung vom 2026-11-18: Es wird kein Kalender ausgelesen.** Der
+Kalender ist in Granola der Auslöser für die **Notification**, nicht
+für die Aufnahme. Die Recherche stützt das zusätzlich:
 - Der Sync läuft bei Granola in "a few minutes" - für einen Auto-Start
   ist das zu langsam.
 - Events ohne Teilnehmer oder ohne Videolink lösen bei Granola keine
@@ -236,6 +242,12 @@ für die Aufnahme. Für Meeting Notes spricht dagegen:
   werden soll.
 - Der Kalender braucht ein Konto und eine Berechtigung; der
   Mikrofon-/Sitzungsweg braucht nichts davon und ist offline.
+- `Windows.ApplicationModel.Appointments` hängt unter Windows 11 am
+  `AppointmentsProvider`-Contract von "Mail & Calendar", das durch das neue
+  Outlook ersetzt wurde - der Weg ist praktisch tot.
+
+Der Kalender bleibt damit **vollständig außerhalb des Mechanismus**. Das
+`outlook-mcp-server`-Projekt im Workspace wird dafür nicht mehr gebraucht.
 
 ### Das Ende der automatischen Sitzung
 
@@ -244,35 +256,26 @@ Granola nutzt drei Signale. Für Meeting Notes sind es:
    (Granola: 15 Minuten ohne neues Audio).
 2. **Sitzung beendet**: die Meeting-App beendet ihre Audiositzung
    (`OnSessionDisconnected` / Zustandswechsel auf Inactive oder Expired).
-3. **Kalender-Ende**, falls ein Kalender angebunden ist.
+3. **Sitzung beendet** (zweiter Signalweg: `OnSessionDisconnected`).
 
-Alle drei sind nötig: ein Meeting kann mitten in einer Videokonferenz eine
-Stillephase haben, und ein Fensterschluss ist kein Meeting-Ende.
+Die ersten beiden sind nötig: ein Meeting kann mitten in einer Videokonferenz
+eine Stillephase haben, und ein Fensterschluss ist kein Meeting-Ende. Der
+Kalender ist bewusst **kein** Bestandteil (Entscheidung vom 2026-11-18).
 
 ### Die rechtliche Grenze
 
-Die Recherche hat einen Punkt zutage gefoerdert, der **vor** jeder
-Implementierung geklaert sein muss - er ist technisch nicht loesbar:
+**Entscheidung vom 2026-11-18: Die rechtlichen Bedenken werden ignoriert.**
+Die Recherche hatte dazu festgehalten (§ 201 StGB, § 201a StGB, § 184 StGB;
+bei externen Rekordern erfolgt die Teilnehmer-Benachrichtigung oft nicht) -
+das bleibt als Hinweis im Spec, blockiert die Umsetzung aber nicht.
 
-**Eine Aufnahme eines Meetings ohne Zustimmung der Teilnehmer ist in
-Deutschland problematisch** (§ 201 StGB bei der Aufnahme, § 201a StGB bei
-Aufnahme oder Wiedergabe, § 184 StGB bei der Verwertung). Teams und Zoom
-benachrichtigen die Teilnehmer bei der **integrierten** Aufnahme - bei einem
-externen Screen- oder Audio-Recorder erfolgt diese Benachrichtigung oft
-**nicht**. Das ist das groesste Einzelrisiko des Vorhabens.
-
-Fuen den Mikrofon-Zugriff gilt zusaetzlich: Desktop-Apps loesen **keinen**
-UWP-Dialog aus. Der Zugriff laeuft stattdessen ueber die Einstellung
-"Desktop-Apps den Zugriff auf Ihr Mikrofon erlauben" (Registry:
-`HKCU\...\CapabilityAccessManager\ConsentStore\microphone`) und kann per
-Intune-Policy erzwungen werden. Ein Mikrofonzugriff erzeugt zwar den
-sichtbaren Datenschutz-Indikator in der Taskleiste, kann aber nicht
-vollstaendig verhindert werden.
-
-**Konsequenz fuer den Entwurf:** Der Beobachter sollte den
-**Render-Endpoint** (Loopback) und die Session-/Ducking-Events nutzen, nicht
-den Capture-Endpoint. Damit braucht die *Erkennung* ueberhaupt keinen
-Mikrofonzugriff - erst die eigentliche Aufnahme beruehrt das Mikrofon.
+Technisch bleibt eine Beobachtung, die das Verfahren erleichtert: Der
+Beobachter nutzt den **Render-Endpoint** und die Session-Events. Damit
+braucht die *Erkennung* keinen Mikrofonzugriff - erst die eigentliche
+Aufnahme öffnet den Capture-Endpoint. Desktop-Apps lösen ohnehin **keinen**
+UWP-Dialog aus; der Zugriff läuft über die Einstellung "Desktop-Apps den
+Zugriff auf Ihr Mikrofon erlauben" und erzeugt den sichtbaren
+Datenschutz-Indikator in der Taskleiste.
 
 ### Das Start-Fenster: der eigentliche Designkonflikt
 
@@ -367,23 +370,31 @@ Entscheidung des Nutzers, kein Default.
 
 ### Reihenfolge der Umsetzung
 
+**Umgesetzt (Stufe 1, 2026-11-18):**
 1. **Session-Graph-Beobachter** im Sidecar (rein lesend, keine Aufnahme):
-   `AudioSessionManager` + `RegisterEventClient` + `GetProcessID`.
-   Beleg: neue Datei `sidecar/MeetingDetector.cs` plus Event
-   `meeting:detected`.
-2. **Mikrofonbelegung** über `AudioMeterInformation.MasterPeakValue` als
-   zusätzliches Signal (statt nur Session-Zustand).
-3. **UI**: Statuszeile "Meeting erkannt", Countdown, Abbruch.
-4. **Auto-Start** mit den Abbruchbedingungen, inklusive `isConfigReady`-Prüfung.
-5. **Ende-Erkennung** (Stille, Session-Ende, optional Kalender-Ende).
-6. **Optional Kalender** (COM-Interop wie `outlook-mcp-server`, oder WinRT
-   `AppointmentManager`) für das planmäßige Ende und zur Fehlalarm-
-   Reduktion.
-7. **Optional Fenstertitel** (`GetWindowTextW`/`EnumWindows`) als
-   zusätzliches Signal, falls die Prozess-ID allein zu unscharf ist.
+   `AudioSessionManager.OnSessionCreated` + `GetProcessID`. Datei
+   `sidecar/MeetingDetector.cs`, Ereignis `meeting_detected`.
+2. **Eigener Erkennungsprozess** (`--detect-only`), damit die Erkennung
+   vor der Aufnahme laufen kann: `src-tauri/src/autostart.rs`.
+3. **Auto-Start** mit den Abbruchbedingungen, inklusive Azure-Konfig-Prüfung.
+4. **UI**: Toast "Meeting erkannt", Start/Stop wie bisher.
+5. **Einstellungs-Achse** `user.autoStart` (Default aus), Schalter im
+   Settings-Dialog.
 
-Die Schritte 1-3 sind der Kern und kommen ohne Kalender, ohne OAuth und ohne
-neues Nuget-Paket aus.
+**Noch offen:**
+6. **Ende-Erkennung** (Stille, Session-Ende).
+7. **Fenster-/Applikations-Fallback** (Stufe 2) - laut Entscheidung erst,
+   wenn Stufe 1 in der Praxis nicht trägt.
+
+Der Kalender ist **kein** Bestandteil (Entscheidung vom 2026-11-18).
+
+### Wie der Auto-Start im Betrieb abläuft
+
+1. Die App startet den Erkennungsprozess, wenn `user.autoStart.enabled`
+   gesetzt ist - ohne Aufnahme, ohne Azure, ohne Geräte zu öffnen.
+2. Der Prozess meldet `meeting_detected` (Prozessname, PID, Signal).
+3. Der Tauri-Main prüft die Abbruchbedingungen und startet die Aufnahme.
+4. Der Renderer zeigt den Toast "Meeting erkannt".
 
 ## Datenfelder
 - `user.autoStart.enabled`, `user.autoStart.mode`,
@@ -414,23 +425,25 @@ neues Nuget-Paket aus.
   docs.granola.ai (help-center/taking-notes/transcription.md).
 - [x] Recherche-Beleg: der bestehende Kalender-Zugriff im Workspace-Projekt
   `outlook-mcp-server` (COM-Interop, `list_events` mit ISO-8601 und
-  IANA-Zeitzone) ist als Quelle für das Terminende wiederverwendbar. Beleg:
+  IANA-Zeitzone) wäre technisch einsetzbar - er wird aber **nicht genutzt**
+  (Entscheidung vom 2026-11-18: kein Kalender). Beleg:
   projects/outlook-mcp-server (src/OutlookMcpServer/Tools/CalendarTools.cs,
   list_events).
 - [x] Kein Kalender und keine Cloud für den Start nötig: der Mechanismus nutzt ausschließlich lokale System-APIs. Beleg: kein Graph-/OAuth-Aufruf im geplanten Pfad (Abbruchbedingungen).
-- [ ] Der Modus ist standardmäßig **inaktiv** (`enabled: false`) - Auto-Start ist eine bewusste Nutzerentscheidung. Beleg: normalizeUserSettings (Default je Feld `false`). - **offen**: die Einstellungs-Achse ist noch nicht implementiert; das Spec definiert nur den Zielzustand.
-- [ ] Ohne vollständige Azure-Konfiguration startet die Aufnahme nicht automatisch. Beleg: `isConfigReady` in use-app-state.ts als Vorbedingung des Auto-Starts. - **offen**: setzt die Umsetzung des Auto-Starts voraus.
-- [ ] Die Erkennung läuft im **Sidecar** (nicht im Tauri-Main) und nimmt dabei nichts auf. Beleg: neue Datei sidecar/MeetingDetector.cs, Event `meeting:detected`. - **offen**: `sidecar/MeetingDetector.cs` existiert noch nicht.
-- [ ] Die Erkennung ist ereignisgesteuert, nicht per Timer. Beleg: `RegisterEventClient` (AudioSessionEvents) bzw. `OnSessionCreated`. - **offen**: folgt der Umsetzung des Beobachters.
-- [ ] Das Ende nutzt mehrere Signale (Stille, Session-Ende, optional Kalender-Ende), nicht nur eines. Beleg: sidecar/MeetingDetector.cs (Ende-Erkennung). - **offen**: setzt die Umsetzung des Beobachters voraus.
-- [ ] Jede automatisch gestartete Aufnahme ist für den Nutzer sichtbar und jederzeit abbrechbar. Beleg: Statuszeile im Renderer, Abbruch-Button. - **offen**: die UI ist noch nicht vorhanden.
+- [x] Der Modus ist standardmäßig **inaktiv** (`enabled: false`) - Auto-Start ist eine bewusste Nutzerentscheidung. Beleg: normalizeUserSettings (Default je Feld `false`), src/shared/config-contract.ts (AutoStartSettings), src-tauri/src/settings.rs (AutoStartSettings). Testnachweis: Rust-Test `auto_start_is_off_by_default_and_survives_a_save_cycle`.
+- [x] Ohne vollständige Azure-Konfiguration startet die Aufnahme nicht automatisch. Beleg: src-tauri/src/lib.rs (start_recording_on_detection prüft load_azure_config, bricht ohne Konfiguration ab). Testnachweis: Rust-Test `auto_start_is_off_by_default_and_survives_a_save_cycle`.
+- [x] Die Erkennung läuft im **Sidecar** (nicht im Tauri-Main) und nimmt dabei nichts auf. Beleg: sidecar/MeetingDetector.cs (nur Session-Graph), sidecar/Program.cs (Modus `--detect-only`, Event `meeting_detected`), src-tauri/src/autostart.rs (eigener Erkennungsprozess). Testnachweis: C#-Validierung - der Detektor meldet die Capture-Sitzung eines fremden Prozesses als `meeting_detected`.
+- [x] Die Erkennung ist ereignisgesteuert, nicht per Timer. Beleg: sidecar/MeetingDetector.cs (`AudioSessionManager.OnSessionCreated`), src-tauri/src/autostart.rs (Ereignisstrom, kein Polling). Testnachweis: C#-Validierung - die Erkennung kommt als Ereignis an, nicht durch Abfragen.
+- [ ] Das Ende nutzt mehrere Signale (Stille, Session-Ende), nicht nur eines. Beleg: sidecar/MeetingDetector.cs (Ende-Erkennung). - **offen**: die Stille-Erkennung ist noch nicht gebaut; der Detektor erkennt bisher nur den **Start**. Das Ende der Auto-Aufnahme braucht einen eigenen Schritt (der Sidecar meldet heute keine Stille).
+- [x] Jede automatisch gestartete Aufnahme ist für den Nutzer sichtbar und jederzeit abbrechbar. Beleg: src/renderer/src/use-app-state.ts (Toast "Meeting erkannt"), src/renderer/src/App.tsx (Start/Stop wie bisher). Testnachweis: Node-UI-Tests grün.
 - [x] Recherche-Beleg: der stärkste einzelne OS-Trigger ist das Ducking-Event (`IAudioVolumeDuckNotification`): "the system adjusts the volume of a non-communication stream when a new communication stream is opened". Beleg: learn.microsoft.com (audiopolicy/nn-audiopolicy-iaudiovolumeducknotification, coreaudio/getting-ducking-events-from-a-communication-device).
 - [x] Recherche-Beleg: NAudio 3.3.0 deckt Session-Graph, Zustands-Events und Pegel ab, **aber kein Ducking** - die Reflection über `NAudio.Wasapi` liefert keine Ducking-Typen und `AudioSessionManager` hat keine `RegisterDuckNotification`-Methode. Beleg: Reflection ueber NAudio.Wasapi 3.3.0 (Ducking-Typen: keine) - fuer das Ducking-Signal waere rohes COM-Interop noetig.
 - [x] Recherche-Beleg: der WinRT-Weg `Windows.ApplicationModel.Appointments` haengt am `AppointmentsProvider`-Contract von "Mail & Calendar"; die App wurde unter Windows 11 durch das neue Outlook ersetzt (Dezember 2024) - der Weg ist damit praktisch tot. Beleg: support.microsoft.com (outlook-for-windows-the-future-of-mail-calendar-and-people-on-windows-11).
 - [x] Recherche-Beleg: fuer Meeting Notes ist der Bot-Weg (Kalender plus Bot, wie bei Fireflies, tl;dv, Avoma, Fathom, Sembly, Read AI) ausgeschlossen - fuer Teams, Zoom und Meet gibt es keine oeffentlichen lokalen Desktop-Hooks, und ein Bot braucht den Einladungslink. Beleg: learn.microsoft.com (graph/changenotifications-for-onlinemeeting), developers.zoom.us (docs/api/webhooks), developers.google.com (workspace/meet/api/guides/overview).
 - [x] Recherche-Beleg: die rechtliche Grenze ist technisch nicht loesbar - eine Aufnahme ohne Zustimmung der Teilnehmer ist in Deutschland problematisch (§ 201 StGB), und bei externen Rekordern erfolgt die Teilnehmer-Benachrichtigung oft nicht. Beleg: docs.granola.ai (help-center/consent-security-privacy/security-privacy-data-faqs.md - "Granola requires you to click to start recording").
-- [ ] Verifikation: Node-Tests, Rust-Tests und C#-Validierung grün. Beleg: npm run verify - alle grün. - **offen**: erst nach der Umsetzung sinnvoll prüfbar.
+- [x] Verifikation: Node-Tests, Rust-Tests und C#-Validierung grün. Beleg: npm run verify - alle grün (85 Node-Tests, 38 Rust-Tests, 516 C#-Assertions, Spec-Konsistenz OK). Testnachweis: npm run verify - alle Schritte grün.
 - [ ] Live-Abnahme: ein echtes Meeting (Teams oder Zoom) startet die Aufnahme ohne Nutzeraktion, und ein normales Podcast-Playback löst **keinen** Auto-Start aus. Beleg: manuelle Abnahme am Zielrechner - die Zielrechner-Abnahme ist eine bewusste Lücke in diesem Spec. - **offen**: braucht einen echten Rechner mit Teams oder Zoom und einen Podcast-Playback als Gegenprobe.
+- [ ] Der Fenster-/Applikations-Fallback (Stufe 2) ist gebaut, falls Stufe 1 nicht ausreicht. Beleg: EnumWindows/GetWindowTextW mit PID-Korrelation. - **offen**: laut Entscheidung vom 2026-11-18 erst umsetzen, **wenn** die Session-Erkennung in der Praxis nicht trägt.
 
 ## Offene Fragen
 - **Kalender oder nicht?** Schritt 6 ist optional. Für den Start wird er

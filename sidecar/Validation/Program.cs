@@ -131,6 +131,93 @@ try
             finally { foreach (var json in events) json.Dispose(); }
         }
     }
+    // T-513: Erkennungsmodus. Der Sidecar beobachtet den Core-Audio-
+    // Session-Graph. Der Test oeffnet in einem FREMDEN Prozess eine
+    // Capture-Sitzung - der Detektor schliesst den eigenen Prozess aus,
+    // ein zweiter Prozess muss deshalb als Meeting durchkommen.
+    {
+        var start = new ProcessStartInfo(sidecar)
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        // Der Prozessname des Validierungslaufs wird erlaubt, damit die
+        // eigene Capture-Sitzung als Meeting-Signal durchkommt.
+        var ownProcessName = System.Diagnostics.Process.GetCurrentProcess().ProcessName;
+        start.ArgumentList.Add("--detect-only");
+        start.ArgumentList.Add("--meeting-processes");
+        start.ArgumentList.Add(ownProcessName);
+        foreach (var variable in variables) start.Environment[variable] = "";
+        ProbeSelfContained(start);
+        using var process = Process.Start(start)!;
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        try
+        {
+            await process.StandardInput.WriteLineAsync("{\"type\":\"handshake-ack\"}");
+            await process.StandardInput.FlushAsync();
+            // Warten, bis der Detektor bereit ist, dann eine Capture-Sitzung
+            // im Validierungsprozess oeffnen (fremder Prozess fuer den Detektor).
+            await Task.Delay(TimeSpan.FromSeconds(3));
+            var detectorReady = false;
+            var captured = false;
+            using (var enumerator = new NAudio.CoreAudioApi.MMDeviceEnumerator())
+            {
+                var mic = enumerator.GetDefaultAudioEndpoint(NAudio.CoreAudioApi.DataFlow.Capture, NAudio.CoreAudioApi.Role.Multimedia);
+                var recorder = new NAudio.Wave.WasapiRecorderBuilder()
+                    .WithDevice(mic)
+                    .WithSharedMode()
+                    .WithEventSync()
+                    .WithFormat(new NAudio.Wave.WaveFormat(8000, 16, 1))
+                    .Build();
+                recorder.StartRecording();
+                captured = true;
+                await Task.Delay(TimeSpan.FromSeconds(4));
+                recorder.StopRecording();
+                recorder.Dispose();
+            }
+            Check(captured, "Detection probe opened a capture session");
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            await process.StandardInput.WriteLineAsync("{\"type\":\"shutdown\"}");
+            await process.StandardInput.FlushAsync();
+            try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(8)); }
+            catch { process.Kill(true); }
+            var detectorOutput = await stdout;
+            var documents = detectorOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => JsonDocument.Parse(line))
+                .ToArray();
+            var events = documents.Select(d => d.RootElement.Clone()).ToArray();
+            try
+            {
+                Check(events.Length > 0 && events[0].GetProperty("type").GetString() == "handshake",
+                    "Detection mode sends the handshake first");
+                var capabilities = events[0].GetProperty("payload").GetProperty("capabilities");
+                Check(capabilities.EnumerateArray().Any(c => c.GetString() == "meeting_detection"),
+                    "Detection mode announces the meeting_detection capability");
+                var detection = events.FirstOrDefault(e =>
+                    e.TryGetProperty("type", out var type) && type.GetString() == "meeting_detected");
+                Check(detection.ValueKind == JsonValueKind.Object,
+                    "Detection mode reports the foreign capture session as meeting_detected");
+                var payload = detection.GetProperty("payload");
+                Check(payload.GetProperty("process_name").GetString() == ownProcessName,
+                    "Meeting detection resolves the process name from the session PID");
+                Check(payload.GetProperty("signal").GetString() == "mic",
+                    "Meeting detection reports the microphone signal");
+                detectorReady = true;
+            }
+            finally { foreach (var document in documents) document.Dispose(); }
+            Check(detectorReady, "Detection mode reported a meeting");
+            Check(string.IsNullOrEmpty(await stderr), "Detection mode has no stderr failure");
+        }
+        catch
+        {
+            try { process.Kill(true); } catch { }
+            throw;
+        }
+    }
     Check(ProxyOptions.Parse(Parse()) is null, "Direct transport by default");
     var proxy = ProxyOptions.Parse(Parse("--proxy-host", "localhost", "--proxy-port", "8080", "--proxy-username", "cli-user", "--proxy-password", "cli-password"));
     Check(proxy is { Host: "localhost", Port: 8080, Username: "cli-user", Password: "cli-password" }, "CLI proxy fallback");

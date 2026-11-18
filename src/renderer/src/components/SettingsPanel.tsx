@@ -180,6 +180,22 @@ export function SettingsPanel(props: SettingsPanelProps) {
           <span>Transkript automatisch als Markdown speichern</span>
         </label>
 
+        <label className="checkbox-field full-field">
+          <input
+            type="checkbox"
+            checked={settings.autoStart.enabled}
+            onChange={(event) => {
+              const enabled = event.currentTarget.checked
+              setSettings((prev) => ({
+                ...prev,
+                autoStart: { ...prev.autoStart, enabled }
+              }))
+            }}
+            disabled={statusRunning}
+          />
+          <span>Aufnahme bei erkanntem Meeting automatisch starten</span>
+        </label>
+
         <div className="full-field directory-field">
           <label htmlFor="transcript-export-path">Speicherpfad (optional)</label>
           <div className="directory-control">

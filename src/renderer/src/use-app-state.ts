@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_USER_SETTINGS, normalizeUserSettings, type AppConfigState, type UserSettings } from '@shared/config-contract'
+import type { MeetingDetected } from '@shared/transcript-contract'
 import { buildTranscriptMarkdown } from '@shared/transcript-markdown'
 import {
   formatSpeakerIdentity,
@@ -66,6 +67,7 @@ export function useAppState() {
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false)
   const [debugOpen, setDebugOpen] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
+  const [meetingDetected, setMeetingDetected] = useState<MeetingDetected | null>(null)
   const [configState, setConfigState] = useState<AppConfigState | null>(null)
   const [configDraft, setConfigDraft] = useState<ConfigDraft>(() => toConfigDraft(null))
   const [speakerAliases, setSpeakerAliases] = useState<Record<string, string>>({})
@@ -194,6 +196,18 @@ export function useAppState() {
 
     const unsubDebugLog = transcriptApi.onDebugLog((entry) => {
       setDebugLog((prev) => [entry, ...prev].slice(0, 300))
+    })
+
+    // T-513: Eine Meeting-Erkennung wird angezeigt. Die Aufnahme startet
+    // der Rust-Main - der Renderer muss sie nur melden.
+    const unsubMeetingDetected = transcriptApi.onMeetingDetected((detected) => {
+      setMeetingDetected(detected)
+      setToast({
+        message:
+          `Meeting erkannt (${detected.processName}). Die Aufnahme startet automatisch.`,
+        variant: 'info',
+        persistent: false
+      })
     })
 
     // T-300: Ein abgestuerzter Sidecar muss fuer den Nutzer sichtbar sein.

@@ -33,6 +33,10 @@
         "enabled": true,
         "path": null
       }
+    },
+    "autoStart": {
+      "enabled": false,
+      "processes": []
     }
   }
 }

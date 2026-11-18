@@ -16,6 +16,7 @@ pub const EVENT_DEBUG: &str = "transcript:debug";
 pub const EVENT_SIDECAR_CRASHED: &str = "sidecar:crashed";
 pub const EVENT_FIXED_CONFIG_STATUS: &str = "transcript:fixed-config-status";
 pub const EVENT_CONNECTIVITY_RESULT: &str = "transcript:connectivity-result";
+pub const EVENT_MEETING_DETECTED: &str = "transcript:meeting-detected";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -73,4 +74,9 @@ pub fn emit_fixed_config_status(app: &AppHandle, status: &FixedConfigStatus) {
 
 pub fn emit_connectivity_result<T: Serialize + Clone>(app: &AppHandle, payload: &T) {
   let _ = app.emit(EVENT_CONNECTIVITY_RESULT, payload);
+}
+
+/// Meldet eine Meeting-Erkennung an den Renderer (T-513).
+pub fn emit_meeting_detected<T: Serialize + Clone>(app: &AppHandle, payload: &T) {
+  let _ = app.emit(EVENT_MEETING_DETECTED, payload);
 }

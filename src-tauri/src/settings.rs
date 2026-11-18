@@ -57,6 +57,31 @@ pub struct UserSettings {
     pub diarization: DiarizationSettings,
     #[serde(default)]
     pub transcript: TranscriptSettings,
+    #[serde(default)]
+    pub auto_start: AutoStartSettings,
+}
+
+/// Automatischer Aufnahmestart bei erkanntem Meeting (T-513).
+///
+/// Der Modus ist bewusst standardmaessig **aus**: Auto-Start nimmt Mikrofon
+/// und Systemton ohne Zutun des Nutzers auf, das ist eine bewusste
+/// Entscheidung und keine Voreinstellung.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct AutoStartSettings {
+    /// Erkennungsmodus aktiv (Sidecar beobachtet den Audio-Session-Graph).
+    pub enabled: bool,
+    /// Prozessnamen, die als Meeting gelten. Leer: die Standardliste.
+    pub processes: Vec<String>,
+}
+
+impl Default for AutoStartSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            processes: Vec::new(),
+        }
+    }
 }
 
 /// Which audio sources are transcribed.
@@ -325,6 +350,7 @@ pub fn default_user_settings() -> UserSettings {
         transcription: TranscriptionSettings::default(),
         diarization: DiarizationSettings::default(),
         transcript: TranscriptSettings::default(),
+        auto_start: AutoStartSettings::default(),
     }
 }
 
@@ -461,6 +487,26 @@ mod config_tests {
     }
 
     #[test]
+    fn auto_start_is_off_by_default_and_survives_a_save_cycle() {
+        let defaults = default_user_settings();
+        assert!(!defaults.auto_start.enabled, "Auto-Start ist standardmaessig aus");
+        assert!(defaults.auto_start.processes.is_empty(), "Keine feste Prozessliste im Default");
+
+        let mut settings = defaults.clone();
+        settings.auto_start.enabled = true;
+        settings.auto_start.processes = vec!["teams".into(), "zoom".into()];
+        let encoded = serde_json::to_string(&settings).expect("settings serialisieren");
+        let decoded: UserSettings = serde_json::from_str(&encoded).expect("settings lesen");
+        assert!(decoded.auto_start.enabled, "Auto-Start bleibt erhalten");
+        assert_eq!(decoded.auto_start.processes, vec!["teams".to_string(), "zoom".to_string()]);
+
+        // Fehlt der Abschnitt, greifen die Defaults.
+        let without_auto_start: UserSettings =
+            serde_json::from_str(r#"{"language":"de-DE"}"#).expect("teilweise Settings lesen");
+        assert!(!without_auto_start.auto_start.enabled);
+        assert!(without_auto_start.auto_start.processes.is_empty());
+    }
+
     fn markdown_export_defaults_to_the_application_directory() {
         let dir = Path::new(r"D:\Portable\Meeting Notes");
         let settings = MarkdownExportSettings::default();

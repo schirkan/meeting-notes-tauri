@@ -37,6 +37,19 @@ export interface TranscriptSettings {
   markdownExport: MarkdownExportSettings
 }
 
+/**
+ * Automatic recording start when a meeting is detected (T-513).
+ *
+ * The mode is off by default: an automatic start records microphone and
+ * system audio without the user asking for it, so it has to be an explicit
+ * decision.
+ */
+export interface AutoStartSettings {
+  enabled: boolean
+  /** Process names that count as a meeting. Empty: the built-in default list. */
+  processes: string[]
+}
+
 export interface UserSettings {
   language: string
   transcription: TranscriptionSettings
@@ -46,6 +59,7 @@ export interface UserSettings {
     speakerLoopbackId: string | null
   }
   transcript: TranscriptSettings
+  autoStart: AutoStartSettings
 }
 
 /** Shape of the single on-disk configuration file. */
@@ -70,7 +84,8 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   },
   transcript: {
     markdownExport: { enabled: true, path: null }
-  }
+  },
+  autoStart: { enabled: false, processes: [] }
 }
 
 const BCP47_PATTERN = /^[a-z]{2,3}-[A-Z]{2}$/
@@ -79,13 +94,14 @@ export function isValidBcp47Language(input: unknown): input is string {
   return typeof input === 'string' && BCP47_PATTERN.test(input.trim())
 }
 
-type UserSettingsInput = Partial<Omit<UserSettings, 'devices' | 'transcription' | 'diarization' | 'transcript'>> & {
+type UserSettingsInput = Partial<Omit<UserSettings, 'devices' | 'transcription' | 'diarization' | 'transcript' | 'autoStart'>> & {
   devices?: Partial<UserSettings['devices']> | null
   transcription?: Partial<TranscriptionSettings> | null
   diarization?: Partial<DiarizationSettings> | null
   transcript?: Partial<TranscriptSettings> & {
     markdownExport?: Partial<MarkdownExportSettings> | null
   } | null
+  autoStart?: Partial<AutoStartSettings> | null
 }
 
 export function normalizeUserSettings(input: UserSettingsInput | null | undefined): UserSettings {
@@ -124,6 +140,18 @@ export function normalizeUserSettings(input: UserSettingsInput | null | undefine
             ? input.transcript.markdownExport.path.trim()
             : null
       }
+    },
+    autoStart: {
+      enabled:
+        typeof input?.autoStart?.enabled === 'boolean'
+          ? input.autoStart.enabled
+          : DEFAULT_USER_SETTINGS.autoStart.enabled,
+      processes: Array.isArray(input?.autoStart?.processes)
+        ? input.autoStart.processes
+            .filter((name): name is string => typeof name === 'string')
+            .map((name) => name.trim())
+            .filter((name) => name.length > 0)
+        : DEFAULT_USER_SETTINGS.autoStart.processes
     }
   }
 }

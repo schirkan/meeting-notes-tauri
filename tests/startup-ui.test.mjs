@@ -56,7 +56,8 @@ async function openApp(options) {
           devices: {},
           transcription: input.transcription,
           diarization: input.diarization,
-          transcript: input.transcript
+          transcript: input.transcript,
+          autoStart: input.autoStart ?? { enabled: false, processes: [] }
         }),
       saveSettings: async (settings) => {
         window.settingsSaveCalls ??= []
@@ -111,7 +112,8 @@ async function openApp(options) {
       },
       onError: noSubscription,
       onStatus: (callback) => { window.emitStatus = (value) => { currentStatus = value; callback(value) }; return () => { delete window.emitStatus } },
-      onDebugLog: (callback) => { window.emitDebugLog = callback; return () => { delete window.emitDebugLog } }
+      onDebugLog: (callback) => { window.emitDebugLog = callback; return () => { delete window.emitDebugLog } },
+      onMeetingDetected: (callback) => { window.emitMeetingDetected = callback; return () => { delete window.emitMeetingDetected } }
     }
     window.transcriptSidecar = {
       onCrashed: (callback) => { window.emitCrashed = callback; return () => { delete window.emitCrashed } }

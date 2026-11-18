@@ -18,6 +18,7 @@ import {
 import type {
   AudioDeviceSnapshot,
   DebugLogEntry,
+  MeetingDetected,
   TranscriptApi,
   TranscriptError,
   TranscriptSegment,
@@ -84,7 +85,9 @@ const api: TranscriptApi = {
   onSegment: (cb) => subscribe<TranscriptSegment>(TAURI_EVENTS.segment, cb),
   onError: (cb) => subscribe<TranscriptError>(TAURI_EVENTS.error, cb),
   onStatus: (cb) => subscribe<TranscriptStatus>(TAURI_EVENTS.status, cb),
-  onDebugLog: (cb) => subscribe<DebugLogEntry>(TAURI_EVENTS.debug, cb)
+  onDebugLog: (cb) => subscribe<DebugLogEntry>(TAURI_EVENTS.debug, cb),
+  onMeetingDetected: (cb) =>
+    subscribe<MeetingDetected>(TAURI_EVENTS.meetingDetected, cb)
 }
 
   // Sidecar crash event is not part of TranscriptApi (it's a Tauri-internal
