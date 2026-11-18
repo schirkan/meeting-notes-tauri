@@ -32,6 +32,9 @@
   <ItemGroup>
     <TrimmerRootAssembly Include="MeetingNotes.Sidecar" />
     <TrimmerRootAssembly Include="Microsoft.CognitiveServices.Speech.csharp" />
+    <!-- Core Audio calls managed session-event callbacks through COM, not a
+         statically visible call path. Preserve the WASAPI callback metadata. -->
+    <TrimmerRootAssembly Include="NAudio.Wasapi" />
   </ItemGroup>
 
   <ItemGroup>

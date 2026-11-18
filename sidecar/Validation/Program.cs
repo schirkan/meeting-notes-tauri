@@ -75,6 +75,7 @@ if (args.Contains("--loopback-hardware"))
     }
     return;
 }
+MeetingDetectionValidation.Run(Check);
 DiarizationValidation.Run(Check);
 TranscriptionValidation.Run(Check);
 ResamplingValidation.Run(Check);
@@ -180,7 +181,7 @@ try
                 recorder.Dispose();
             }
             Check(captured, "Detection probe opened a capture session");
-            await Task.Delay(TimeSpan.FromSeconds(2));
+            await Task.Delay(TimeSpan.FromSeconds(5));
             await process.StandardInput.WriteLineAsync("{\"type\":\"shutdown\"}");
             await process.StandardInput.FlushAsync();
             try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(8)); }
@@ -206,6 +207,17 @@ try
                     "Meeting detection resolves the process name from the session PID");
                 Check(payload.GetProperty("signal").GetString() == "mic",
                     "Meeting detection reports the microphone signal");
+                var ended = events.SingleOrDefault(e =>
+                    e.TryGetProperty("type", out var type) && type.GetString() == "meeting_ended");
+                Check(ended.ValueKind == JsonValueKind.Object, "Detection mode reports one debounced meeting_ended event");
+                var endPayload = ended.GetProperty("payload");
+                Check(endPayload.GetProperty("process_name").GetString() == ownProcessName &&
+                    endPayload.GetProperty("process_id").GetUInt32() == (uint)Environment.ProcessId,
+                    "End event retains exact process identity");
+                Check(endPayload.GetProperty("signal").GetString() == "mic", "End event retains initiating signal");
+                Check(Array.FindIndex(events, e => e.GetProperty("type").GetString() == "meeting_detected") <
+                    Array.FindIndex(events, e => e.GetProperty("type").GetString() == "meeting_ended"),
+                    "Detection precedes the corresponding end event");
                 detectorReady = true;
             }
             finally { foreach (var document in documents) document.Dispose(); }
@@ -218,6 +230,7 @@ try
             throw;
         }
     }
+    await MeetingDetectionValidation.RunExistingSessionAsync(sidecar, Check);
     Check(ProxyOptions.Parse(Parse()) is null, "Direct transport by default");
     var proxy = ProxyOptions.Parse(Parse("--proxy-host", "localhost", "--proxy-port", "8080", "--proxy-username", "cli-user", "--proxy-password", "cli-password"));
     Check(proxy is { Host: "localhost", Port: 8080, Username: "cli-user", Password: "cli-password" }, "CLI proxy fallback");
@@ -328,7 +341,7 @@ try
             Check(result[0].status == "error" && result[0].detail.Contains("Timed out", StringComparison.Ordinal), "SessionStarted alone cannot make an unconnected WSS socket reachable");
     }
     finally { silentListener.Stop(); }
-    Console.WriteLine($"PASS: {assertions} sidecar assertions (loopback proxy only; no audio capture or Azure credentials).");
+    Console.WriteLine($"PASS: {assertions} sidecar assertions (local proxy and foreign microphone-session probe; no Azure credentials or audio files).");
 }
 finally
 {

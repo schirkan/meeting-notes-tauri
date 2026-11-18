@@ -594,6 +594,29 @@ ist).
 
 Siehe [T-502](./specs/T-502-latency-messung.md).
 
+## AD-020 - Automatischer Stop ueber Audio-Session-Ende (18.11.2026)
+
+**Kontext:** Martin fragt nach dem Gegenstueck zum Audio-Erkennungsereignis.
+`IAudioSessionEventsHandler.OnStateChanged` liefert Active/Inactive/Expired;
+`OnSessionDisconnected` meldet eine getrennte Sitzung. Der Mikrofon-Test
+bestaetigt Active -> Inactive. Das ist ein Session-Signal, kein sicherer Call-Status.
+
+**Umsetzung:** Core-Audio-Session-Instanzen werden pro Prozess zusammengefasst,
+auch wenn sie vor dem Detektorstart existieren. Start erst bei Active; Ende
+nur, wenn alle Capture-/Render-Sessions des Prozesses inaktiv sind. Als
+reversibler Implementierungsdefault gilt eine **3-s-Schonfrist** (keine von
+Martin vorgegebene Zeit). Neue Aktivitaet entwertet den Ende-Kandidaten.
+Manuelle Aufnahmen bleiben unangetastet; der normale Stop-/Export-Pfad wird
+nur fuer den passenden automatischen Ursprung aufgerufen. Start/Stop/Pause/
+Resume teilen eine Lifecycle-Sperre; Detektor-Events werden geordnet verarbeitet.
+
+**Grenzen:** Keine Pegel-/Stille-Erkennung, kein Kalender, kein Fenster-Fallback.
+Echte Teams-/Zoom-Streams koennen nach Meeting-Ende aktiv bleiben oder mitten
+im Meeting laenger unterbrochen werden. Zielrechner-Abnahme bleibt offen.
+COM-Callback-Metadaten von NAudio.Wasapi werden beim Trimming konservativ erhalten.
+
+Siehe [T-513](./specs/T-513-automatische-meeting-erkennung-und-auto-start.md).
+
 | # | Frage | Status |
 |---|---|---|
 | OQ-1 | Soll der Sidecar-EXE-Name gleich bleiben (`MeetingNotes.Sidecar.exe`) oder umbenannt werden (`MeetingNotes.AudioService.exe` o. ä.)? | offen — wird in `specs/T-201` entschieden |

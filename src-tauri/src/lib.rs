@@ -29,6 +29,7 @@ pub fn run() {
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_dialog::init())
     .manage(AppState::default())
+    .manage(Mutex::new(autostart::RecordingLifecycle::default()))
     .manage(Arc::new(Mutex::new(None::<SidecarHandle>)) as SidecarCache)
     .setup(|app| {
       let handle = app.handle().clone();
@@ -130,17 +131,56 @@ async fn start_detector_if_enabled(app: &tauri::AppHandle) -> Result<(), String>
         return Ok(());
     }
 
-    let handle = app.clone();
-    let detector = autostart::start_detector(app, &user.auto_start.processes, move |payload| {
-        let handle = handle.clone();
-        tauri::async_runtime::spawn(async move {
-            start_recording_on_detection(&handle, payload).await;
-        });
-    })
-    .await?;
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let end_tx = tx.clone();
+    let detector = autostart::start_detector(
+        app,
+        &user.auto_start.processes,
+        move |payload| { let _ = tx.send(autostart::DetectionEvent::Started(payload)); },
+        move |payload| { let _ = end_tx.send(autostart::DetectionEvent::Ended(payload)); },
+    ).await?;
 
+    // Preserve detector event order: an old end must not overtake a new start.
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            match event {
+                autostart::DetectionEvent::Started(payload) => start_recording_on_detection(&handle, payload).await,
+                autostart::DetectionEvent::Ended(payload) => stop_recording_on_meeting_end(&handle, payload).await,
+            }
+        }
+    });
     app.manage(detector);
     Ok(())
+}
+
+/// Beendet die automatisch gestartete Aufnahme, weil das Meeting
+/// vorbei ist. Das Ende kommt aus dem Session-Graph: die Audiositzung des
+/// Meeting-Prozesses wechselt auf Inactive.
+async fn stop_recording_on_meeting_end(
+    app: &tauri::AppHandle,
+    payload: autostart::MeetingEndedPayload,
+) {
+    match commands::stop_recording_for_meeting(app, &payload).await {
+        Ok(true) => {
+            let entry = app.state::<AppState>().push_debug(
+                state::DebugLogEntrySource::Main,
+                state::DebugLogEntryLevel::Info,
+                format!("Audiositzungen von {} beendet; automatische Aufnahme gestoppt.", payload.process_name),
+            );
+            events::emit_debug(app, &entry);
+            events::emit_meeting_ended(app, &payload);
+        }
+        Ok(false) => {} // Manual recording, another process, or disabled automation.
+        Err(error) => {
+            let entry = app.state::<AppState>().push_debug(
+                state::DebugLogEntrySource::Main,
+                state::DebugLogEntryLevel::Error,
+                format!("Automatischer Aufnahmestopp fehlgeschlagen: {error}"),
+            );
+            events::emit_debug(app, &entry);
+        }
+    }
 }
 
 /// Startet die Aufnahme, weil ein Meeting erkannt wurde.
@@ -196,7 +236,7 @@ async fn start_recording_on_detection(
     events::emit_meeting_detected(app, &payload);
 
     let state = app.state::<AppState>();
-    if let Err(error) = commands::start_recording(app.clone(), state).await {
+    if let Err(error) = commands::start_recording_with_origin(app.clone(), state, Some(payload)).await {
         let entry = app.state::<AppState>().push_debug(
             state::DebugLogEntrySource::Main,
             state::DebugLogEntryLevel::Error,

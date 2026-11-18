@@ -48,7 +48,7 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-401 | Mock-Implementierung für Unit-Tests (siehe T-500) | Die Unit-Tests laufen gegen die echte App (Playwright-CLI-Browserlauf), nicht gegen einen Mock. |
 | T-501 | Voller End-to-End-Test mit WebDriver + App-Start + `start_recording()… | WebDriver-Setup für Tauri 2 ist aufwendig; die headless Smoke-Stufen 1–5 decken die kritischen Artefakt-Invarianten ab. |
 | T-503 | `npm run lint` (sofern konfiguriert) ist grün | kein Lint-Setup im Projekt. |
-| T-513 | Das Ende nutzt mehrere Signale (Stille, Session-Ende), nicht nur eine… | die Stille-Erkennung ist noch nicht gebaut; der Detektor erkennt bisher nur den **Start**. Das Ende der Auto-Aufnahme braucht ein… |
+| T-513 | Das Ende nutzt mehrere Signale (Stille, Session-Ende), nicht nur eine… | Session-Ende ist umgesetzt, Pegel-/Stille-Erkennung hingegen nicht. Der Detektor beobachtet Session-Metadaten, keine Audiodaten. |
 | T-513 | Live-Abnahme: ein echtes Meeting (Teams oder Zoom) startet die Aufnah… | braucht einen echten Rechner mit Teams oder Zoom und einen Podcast-Playback als Gegenprobe. |
 | T-513 | Der Fenster-/Applikations-Fallback (Stufe 2) ist gebaut, falls Stufe… | laut Entscheidung vom 2026-11-18 erst umsetzen, **wenn** die Session-Erkennung in der Praxis nicht trägt. |
 
@@ -132,7 +132,7 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 ## 3.1 Technische Architektur
 
 - **App-Container:** Tauri 2 (Rust). Verantwortlich für Fenster/WebView2-Lifecycle, Sidecar-Spawn, Settings-Persistenz, UI-Bridge.
-- **Meeting-Erkennung:** Der Core-Audio-Session-Graph (`AudioSessionManager.OnSessionCreated` in `sidecar/MeetingDetector.cs`) erkennt im Hintergrund, wenn eine Meeting-Anwendung das Mikrofon oeffnet. Der separate Erkennungsprozess (`--detect-only`) laeuft ohne Aufnahme und ohne Azure; er loest ueber `src-tauri/src/autostart.rs` den Auto-Start aus. Standardmaessig **aus** (`user.autoStart.enabled`). Kein Kalenderzugriff (T-513).
+- **Meeting-Erkennung:** Der Core-Audio-Session-Graph (`OnSessionCreated` plus `OnStateChanged` in `sidecar/MeetingDetector.cs`) erkennt aktive Audio-Sessions erlaubter Meeting-Prozesse. Der separate Erkennungsprozess (`--detect-only`) laeuft ohne Audio-Capture-Stream und ohne Azure. Wenn alle Capture-/Render-Sessions des ausloesenden Prozesses 3 s inaktiv bleiben, meldet er `meeting_ended`. Nur seine automatisch gestartete Aufnahme wird ueber den normalen Stop-/Export-Pfad beendet; manuelle Aufnahmen sind geschuetzt, Start/Stop serialisiert und Detektor-Ereignisse geordnet. Standardmaessig **aus** (`user.autoStart.enabled`). Kein Kalenderzugriff. Session-Ende ist eine Heuristik; Live-Abnahme Teams/Zoom und Pegel-/Stille-Erkennung bleiben offen (T-513).
 - **Backend:** C#/.NET 10 als Sidecar (`MeetingNotes.Sidecar.exe`, self-contained, komprimiert und konservativ getrimmt). Verantwortlich für Audio-Capture, Audio-Resampling, Azure-Speech-Transkription, Speaker-Diarization und Event-Streaming.
 - **Frontend:** React 19 + TypeScript 6 + Vite 8 (im Tauri-Renderer-WebView2).
 - **IPC Sidecar ↔ App:** `stdin/stdout` über `tauri-plugin-shell` mit JSON-Lines (siehe `DECISIONS.md → AD-008`). Named Pipe entfällt.

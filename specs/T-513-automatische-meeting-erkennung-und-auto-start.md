@@ -212,7 +212,9 @@ Der Mechanismus ist umgesetzt (`sidecar/MeetingDetector.cs`):
 1. **Sitzungsbeobachter**: `MMDevice.AudioSessionManager` liefert über
    `OnSessionCreated` jede neue Audiositzung auf dem Endpoint - mit der
    **Prozess-ID** (`GetProcessID`). Daraus wird der Prozessname aufgelöst.
-   Das ist ereignisgesteuert, kein Timer, und kommt ohne Mikrofonzugriff aus.
+   Das ist ereignisgesteuert und oeffnet keinen Audio-Capture-Stream.
+   `OnSessionCreated` meldet nur die Existenz; erst `OnStateChanged=Active`
+   (oder der bereits aktive Initialzustand) loest eine Erkennung aus.
    *Empirisch belegt* am 2026-11-18: das Ereignis feuert auf Capture- und
    auf Render-Endpoint, jeweils mit der PID der auslösenden Anwendung.
 2. **Zwei Signale, unterschiedlich gewichtet**: eine neue Sitzung auf dem
@@ -251,16 +253,30 @@ Der Kalender bleibt damit **vollständig außerhalb des Mechanismus**. Das
 
 ### Das Ende der automatischen Sitzung
 
-Granola nutzt drei Signale. Für Meeting Notes sind es:
-1. **Stille**: kein neues Audio über einen konfigurierbaren Zeitraum
-   (Granola: 15 Minuten ohne neues Audio).
-2. **Sitzung beendet**: die Meeting-App beendet ihre Audiositzung
-   (`OnSessionDisconnected` / Zustandswechsel auf Inactive oder Expired).
-3. **Sitzung beendet** (zweiter Signalweg: `OnSessionDisconnected`).
+Umgesetzt am 18.11.2026: `RegisterEventClient(IAudioSessionEventsHandler)`
+liefert `OnStateChanged=Inactive/Expired`; `OnSessionDisconnected` ist ein
+weiterer Endpfad. Der lokale Mikrofon-Test belegt Active -> Inactive.
 
-Die ersten beiden sind nötig: ein Meeting kann mitten in einer Videokonferenz
-eine Stillephase haben, und ein Fensterschluss ist kein Meeting-Ende. Der
-Kalender ist bewusst **kein** Bestandteil (Entscheidung vom 2026-11-18).
+Jeder Handler speichert die konkrete Session-Identitaet; PID, Prozessname und
+Startsignal werden nicht aus einer zuletzt gesehenen Sitzung geraten.
+Alle Capture-/Render-Sessions desselben Prozesses werden zusammengefasst.
+Bereits beim Detektorstart vorhandene Sessions werden nach der Event-Anmeldung
+eingelesen und ueber Endpoint + Session-Instanz-ID dedupliziert. Expired und
+Disconnection geben die COM-Subscription ausserhalb des Callbacks frei.
+Erst wenn alle **3 Sekunden inaktiv** bleiben, meldet der Detektor
+`meeting_ended`. Reaktivierung oder eine neue aktive Sitzung entwertet den
+Ende-Kandidaten; ein wiederverwendeter Stream kann einen neuen Start melden.
+
+Der Tauri-Main stoppt nur die vom passenden Prozess automatisch gestartete
+Aufnahme. Manuelle Aufnahmen, fremde Prozesse und deaktivierter Auto-Start
+sind geschuetzt. Start/Stop/Pause/Resume sind serialisiert; der normale Stop-Pfad bleibt
+fuer Status und Export erhalten. Detektor-Start/Ende-Ereignisse werden in
+Eingangsreihenfolge verarbeitet, nicht als unabhaengige Async-Tasks.
+
+**Grenze:** Audio-Sitzungsende ist kein definitives Meeting-Ende. Teams/Zoom
+koennen Streams laenger als 3 Sekunden schliessen oder nach Call-Ende offen
+halten. Live-Abnahme steht aus. Pegel-/Stille-Erkennung wird nicht behauptet
+und ist weiterhin unimplementiert. Kein Kalender oder Fenster-Fallback.
 
 ### Die rechtliche Grenze
 
@@ -299,10 +315,12 @@ es dort keine Auto-Start-Diskussion.
    (T-509) - dieser teilt sich mit anderen Anwendungen, sperrt das Gerät
    aber nicht exklusiv.
 
-### Vorschlag: zweistufig, mit Bestätigung im Hintergrund
+### Historischer Vorschlag: Bestaetigungsfrist (nicht umgesetzt)
 
-Vorschlag, der die Konflikte 1 und 2 entschärft, ohne die Produktidee
-(Grenzen) aufzugeben:
+Der folgende Recherchevorschlag ist **nicht der aktuelle Betrieb**:
+Die Implementierung startet unmittelbar nach aktiver Session-Erkennung,
+sofern `enabled` gesetzt ist. Es gibt weder Countdown noch `mode` oder
+`confirmSeconds`. Der urspruengliche Vorschlag war:
 
 - **Stufe 1 (Erkennung ohne Aufnahme):** Der Beobachter meldet eine
   **Verdachtserkennung** ("Meeting-Apps aktiv, Mikrofon belegt"). Es wird
@@ -345,12 +363,13 @@ Der Beobachter gehört **in den Sidecar**, nicht in den Tauri-Main:
 
 Der Sidecar meldet die Verdachtserkennung als **neues JSON-Lines-Event**
 über den bestehenden Kanal (das Muster steht in T-201):
-`{"type":"meeting:detected","payload":{"source":"session","processId":1234,"confidence":"session"}}`.
+`{"type":"meeting_detected","payload":{"process_name":"teams","process_id":1234,"signal":"mic"}}`.
+Das zugehoerige Ende meldet `meeting_ended` mit denselben Identitaetsfeldern.
 Der Tauri-Main leitet es als `transcript:meeting-detected` weiter
 (Tauri-Events in `TAURI_EVENTS` in `src/shared/tauri-contract.ts`), der
-Renderer reagiert darauf mit dem Start- oder Countdown-Pfad.
+Renderer zeigt die Erkennung; den Start und Stop orchestriert der Main.
 
-Für den Fenster-Titel- oder Kalender-Weg käme ein **zweiter** Mechanismus
+Nur fuer den Fenster-/Applikations-Weg kaeme ein **zweiter** Mechanismus
 hinzu, der in einem eigenen Schritt nach dem Audio-Mechanismus gebaut wird
 (siehe "Reihenfolge").
 
@@ -361,8 +380,7 @@ in `normalizeUserSettings`, Persistenz in `src-tauri/src/settings.rs`):
 
     export interface AutoStartSettings {
       enabled: boolean          // Default: false
-      mode: 'notify' | 'record' // Default: 'notify'
-      confirmSeconds: number    // Default: 30
+      processes: string[]       // konfigurierbare Prozess-Allowlist
     }
 
 Der Default `enabled: false` ist bewusst: Auto-Start ist eine bewusste
@@ -382,7 +400,9 @@ Entscheidung des Nutzers, kein Default.
    Settings-Dialog.
 
 **Noch offen:**
-6. **Ende-Erkennung** (Stille, Session-Ende).
+6. **Pegel-/Stille-Erkennung**. Session-Ende ist bereits umgesetzt:
+   `OnStateChanged`/Disconnection, prozessweise Aggregation, 3 s Schonfrist,
+   Auto-Stopp nur fuer die automatisch gestartete Aufnahme.
 7. **Fenster-/Applikations-Fallback** (Stufe 2) - laut Entscheidung erst,
    wenn Stufe 1 in der Praxis nicht trägt.
 
@@ -397,11 +417,10 @@ Der Kalender ist **kein** Bestandteil (Entscheidung vom 2026-11-18).
 4. Der Renderer zeigt den Toast "Meeting erkannt".
 
 ## Datenfelder
-- `user.autoStart.enabled`, `user.autoStart.mode`,
-  `user.autoStart.confirmSeconds` (in `UserSettings`)
-- `user.autoStart.allowedProcesses` (Liste von Prozessnamen, Default:
-  Teams, Zoom, Meet) - erste Iteration auf einen fixen Satz, später
-  konfigurierbar
+- `user.autoStart.enabled` (Default `false`)
+- `user.autoStart.processes` (konfigurierbare Prozess-Allowlist; Defaults:
+  Teams, Zoom, WhatsApp, Slack, Discord, Skype, Webex, GoToMeeting, Zoomify)
+- Keine Felder `mode`, `confirmSeconds` oder `allowedProcesses`.
 
 ## Done When
 - [x] Recherche-Beleg: Granola startet **nicht** automatisch, sondern per
@@ -434,21 +453,20 @@ Der Kalender ist **kein** Bestandteil (Entscheidung vom 2026-11-18).
 - [x] Ohne vollständige Azure-Konfiguration startet die Aufnahme nicht automatisch. Beleg: src-tauri/src/lib.rs (start_recording_on_detection prüft load_azure_config, bricht ohne Konfiguration ab). Testnachweis: Rust-Test `auto_start_is_off_by_default_and_survives_a_save_cycle`.
 - [x] Die Erkennung läuft im **Sidecar** (nicht im Tauri-Main) und nimmt dabei nichts auf. Beleg: sidecar/MeetingDetector.cs (nur Session-Graph), sidecar/Program.cs (Modus `--detect-only`, Event `meeting_detected`), src-tauri/src/autostart.rs (eigener Erkennungsprozess). Testnachweis: C#-Validierung - der Detektor meldet die Capture-Sitzung eines fremden Prozesses als `meeting_detected`.
 - [x] Die Erkennung ist ereignisgesteuert, nicht per Timer. Beleg: sidecar/MeetingDetector.cs (`AudioSessionManager.OnSessionCreated`), src-tauri/src/autostart.rs (Ereignisstrom, kein Polling). Testnachweis: C#-Validierung - die Erkennung kommt als Ereignis an, nicht durch Abfragen.
-- [ ] Das Ende nutzt mehrere Signale (Stille, Session-Ende), nicht nur eines. Beleg: sidecar/MeetingDetector.cs (Ende-Erkennung). - **offen**: die Stille-Erkennung ist noch nicht gebaut; der Detektor erkennt bisher nur den **Start**. Das Ende der Auto-Aufnahme braucht einen eigenen Schritt (der Sidecar meldet heute keine Stille).
+- [ ] Das Ende nutzt mehrere Signale (Stille, Session-Ende), nicht nur eines. Beleg: sidecar/MeetingDetector.cs (Session-Ende mit Aggregation und 3 s Schonfrist). - **offen**: Session-Ende ist umgesetzt, Pegel-/Stille-Erkennung hingegen nicht. Der Detektor beobachtet Session-Metadaten, keine Audiodaten.
+- [x] Session-Ende ist identitaetsgebunden, entprellt und stoppt keine manuellen Aufnahmen. Beleg: sidecar/MeetingSessionTracker.cs, src-tauri/src/commands.rs (RecordingLifecycle). Testnachweis: MeetingDetectionValidation (bestehende/reaktivierte Sessions, Terminal-Cleanup), C# Fremdprozess-Probe und Rust-Tests `manual_recordings_and_foreign_end_events_are_protected`, `pause_waiting_for_automatic_stop_cannot_revive_the_recording`.
 - [x] Jede automatisch gestartete Aufnahme ist für den Nutzer sichtbar und jederzeit abbrechbar. Beleg: src/renderer/src/use-app-state.ts (Toast "Meeting erkannt"), src/renderer/src/App.tsx (Start/Stop wie bisher). Testnachweis: Node-UI-Tests grün.
 - [x] Recherche-Beleg: der stärkste einzelne OS-Trigger ist das Ducking-Event (`IAudioVolumeDuckNotification`): "the system adjusts the volume of a non-communication stream when a new communication stream is opened". Beleg: learn.microsoft.com (audiopolicy/nn-audiopolicy-iaudiovolumeducknotification, coreaudio/getting-ducking-events-from-a-communication-device).
 - [x] Recherche-Beleg: NAudio 3.3.0 deckt Session-Graph, Zustands-Events und Pegel ab, **aber kein Ducking** - die Reflection über `NAudio.Wasapi` liefert keine Ducking-Typen und `AudioSessionManager` hat keine `RegisterDuckNotification`-Methode. Beleg: Reflection ueber NAudio.Wasapi 3.3.0 (Ducking-Typen: keine) - fuer das Ducking-Signal waere rohes COM-Interop noetig.
 - [x] Recherche-Beleg: der WinRT-Weg `Windows.ApplicationModel.Appointments` haengt am `AppointmentsProvider`-Contract von "Mail & Calendar"; die App wurde unter Windows 11 durch das neue Outlook ersetzt (Dezember 2024) - der Weg ist damit praktisch tot. Beleg: support.microsoft.com (outlook-for-windows-the-future-of-mail-calendar-and-people-on-windows-11).
 - [x] Recherche-Beleg: fuer Meeting Notes ist der Bot-Weg (Kalender plus Bot, wie bei Fireflies, tl;dv, Avoma, Fathom, Sembly, Read AI) ausgeschlossen - fuer Teams, Zoom und Meet gibt es keine oeffentlichen lokalen Desktop-Hooks, und ein Bot braucht den Einladungslink. Beleg: learn.microsoft.com (graph/changenotifications-for-onlinemeeting), developers.zoom.us (docs/api/webhooks), developers.google.com (workspace/meet/api/guides/overview).
 - [x] Recherche-Beleg: die rechtliche Grenze ist technisch nicht loesbar - eine Aufnahme ohne Zustimmung der Teilnehmer ist in Deutschland problematisch (§ 201 StGB), und bei externen Rekordern erfolgt die Teilnehmer-Benachrichtigung oft nicht. Beleg: docs.granola.ai (help-center/consent-security-privacy/security-privacy-data-faqs.md - "Granola requires you to click to start recording").
-- [x] Verifikation: Node-Tests, Rust-Tests und C#-Validierung grün. Beleg: npm run verify - alle grün (85 Node-Tests, 38 Rust-Tests, 516 C#-Assertions, Spec-Konsistenz OK). Testnachweis: npm run verify - alle Schritte grün.
+- [x] Verifikation: Node-Tests, Rust-Tests und C#-Validierung gruen. Beleg: Typecheck, 85 Node-Tests, 41 Rust-Tests, 539 C#-Assertions gegen Quellen und 552 gegen den publizierten/getrimmten Sidecar (18.11.2026); bekannte MF-Stichprobe SKIPPED, neue Session-Proben bestanden. Testnachweis: npm run typecheck, npm run test:unit, cargo test --manifest-path src-tauri/Cargo.toml, npm run test:sidecar, npm run test:sidecar:published, npm run check:specs.
 - [ ] Live-Abnahme: ein echtes Meeting (Teams oder Zoom) startet die Aufnahme ohne Nutzeraktion, und ein normales Podcast-Playback löst **keinen** Auto-Start aus. Beleg: manuelle Abnahme am Zielrechner - die Zielrechner-Abnahme ist eine bewusste Lücke in diesem Spec. - **offen**: braucht einen echten Rechner mit Teams oder Zoom und einen Podcast-Playback als Gegenprobe.
 - [ ] Der Fenster-/Applikations-Fallback (Stufe 2) ist gebaut, falls Stufe 1 nicht ausreicht. Beleg: EnumWindows/GetWindowTextW mit PID-Korrelation. - **offen**: laut Entscheidung vom 2026-11-18 erst umsetzen, **wenn** die Session-Erkennung in der Praxis nicht trägt.
 
 ## Offene Fragen
-- **Kalender oder nicht?** Schritt 6 ist optional. Für den Start wird er
-  nicht gebraucht; für das Ende und gegen Fehlalarme hilft er. Die
-  Entscheidung fällt bei der Umsetzung von Schritt 5.
+- **Kalender:** entschieden am 18.11.2026, wird weder fuer Start noch Ende ausgelesen.
 - **Prozessliste.** Eine feste Liste (Teams, Zoom, Meet) ist der
   Startpunkt. Eine konfigurierbare Liste ist wahrscheinlich nötig, weil
   Firmen andere Tools nutzen (z. B. Slack-Huddles - Granola erkennt diese

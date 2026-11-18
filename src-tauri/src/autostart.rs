@@ -35,6 +35,39 @@ pub struct MeetingDetectedPayload {
     pub signal: String,
 }
 
+/// Ereignis des Erkennungsmodus: eine Meeting-Sitzung wurde beendet.
+///
+/// Gegenstueck zu `MeetingDetectedPayload`: der Sidecar meldet
+/// den Wechsel der Audiositzung auf Inactive.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeetingEndedPayload {
+    pub process_name: String,
+    pub process_id: u32,
+    /// "mic" oder "speaker".
+    pub signal: String,
+}
+
+pub enum DetectionEvent {
+    Started(MeetingDetectedPayload),
+    Ended(MeetingEndedPayload),
+}
+
+/// Serializes manual/automatic starts and stops and records who owns the recording.
+#[derive(Default)]
+pub struct RecordingLifecycle {
+    pub auto_origin: Option<MeetingDetectedPayload>,
+}
+
+impl RecordingLifecycle {
+    pub fn matches_end(&self, ended: &MeetingEndedPayload) -> bool {
+        self.auto_origin.as_ref().is_some_and(|origin|
+            origin.process_id == ended.process_id &&
+            origin.process_name.eq_ignore_ascii_case(&ended.process_name) &&
+            origin.signal == ended.signal)
+    }
+}
+
 /// Handle auf den laufenden Erkennungsprozess.
 #[derive(Clone)]
 pub struct DetectorHandle {
@@ -49,6 +82,7 @@ pub async fn start_detector(
     app: &AppHandle,
     processes: &[String],
     on_detected: impl Fn(MeetingDetectedPayload) + Send + Sync + 'static,
+    on_ended: impl Fn(MeetingEndedPayload) + Send + Sync + 'static,
 ) -> Result<DetectorHandle, String> {
     let exe_path = crate::sidecar::resolve_sidecar_path(app).map_err(|e| e.to_string())?;
     let mut command = app
@@ -64,6 +98,7 @@ pub async fn start_detector(
     let (mut rx, child) = command.spawn().map_err(|e| e.to_string())?;
 
     let handler = Arc::new(on_detected);
+    let end_handler = Arc::new(on_ended);
     // Der App-Handle wandert in den Task - er muss deshalb eigenstaendig
     // (owned) vorliegen, sonst entkommt die Referenz dem Task.
     let app = app.clone();
@@ -78,6 +113,8 @@ pub async fn start_detector(
                         }
                         if let Some(payload) = parse_meeting_detected(entry) {
                             handler(payload);
+                        } else if let Some(payload) = parse_meeting_ended(entry) {
+                            end_handler(payload);
                         }
                     }
                 }
@@ -140,6 +177,20 @@ pub fn parse_meeting_detected(line: &str) -> Option<MeetingDetectedPayload> {
     })
 }
 
+/// Erkennt das `meeting_ended`-Event des Sidecars.
+pub fn parse_meeting_ended(line: &str) -> Option<MeetingEndedPayload> {
+    let parsed: serde_json::Value = serde_json::from_str(line).ok()?;
+    if parsed.get("type")?.as_str()? != "meeting_ended" {
+        return None;
+    }
+    let payload = parsed.get("payload")?;
+    Some(MeetingEndedPayload {
+        process_name: payload.get("process_name")?.as_str()?.to_string(),
+        process_id: payload.get("process_id")?.as_u64()? as u32,
+        signal: payload.get("signal")?.as_str()?.to_string(),
+    })
+}
+
 /// Meldet den Prozessnamen der Aufnahme-Anwendung, die der Erkennung
 /// zugrunde liegt. Wird fuer die Statusanzeige im Renderer gebraucht.
 pub fn describe_detection(payload: &MeetingDetectedPayload) -> String {
@@ -163,10 +214,37 @@ mod detection_tests {
     }
 
     #[test]
+    fn parses_meeting_ended_events() {
+        let line = r#"{"type":"meeting_ended","payload":{"process_name":"teams","process_id":99,"signal":"mic"}}"#;
+        let payload = parse_meeting_ended(line).expect("payload");
+        assert_eq!(payload.process_name, "teams");
+        assert_eq!(payload.process_id, 99);
+        assert_eq!(payload.signal, "mic");
+        assert!(parse_meeting_ended(r#"{"type":"meeting_detected","payload":{}}"#).is_none());
+        assert!(parse_meeting_ended("not json").is_none());
+    }
+
+    #[test]
     fn ignores_other_events() {
         assert!(parse_meeting_detected(r#"{"type":"handshake","payload":{}}"#).is_none());
         assert!(parse_meeting_detected(r#"{"type":"meeting_detected","payload":{}}"#).is_none());
         assert!(parse_meeting_detected("not json").is_none());
+    }
+
+    #[test]
+    fn manual_recordings_and_foreign_end_events_are_protected() {
+        let ended = MeetingEndedPayload { process_name: "teams".into(), process_id: 100, signal: "mic".into() };
+        let mut lifecycle = RecordingLifecycle::default();
+        assert!(!lifecycle.matches_end(&ended), "manual recording has no automatic owner");
+        lifecycle.auto_origin = Some(MeetingDetectedPayload {
+            process_name: "teams".into(), process_id: 100, signal: "mic".into(),
+        });
+        assert!(lifecycle.matches_end(&ended));
+        assert!(!lifecycle.matches_end(&MeetingEndedPayload { process_id: 200, ..ended.clone() }));
+        assert!(!lifecycle.matches_end(&MeetingEndedPayload { process_name: "zoom".into(), ..ended.clone() }));
+        assert!(!lifecycle.matches_end(&MeetingEndedPayload { signal: "speaker".into(), ..ended.clone() }));
+        lifecycle.auto_origin = None; // Stop, then a new manually started recording.
+        assert!(!lifecycle.matches_end(&ended), "late end cannot stop the next manual recording");
     }
 
     #[test]

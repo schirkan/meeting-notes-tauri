@@ -76,6 +76,23 @@ pub async fn start_recording(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<events::TranscriptStatus, String> {
+    start_recording_with_origin(app, state, None).await
+}
+
+pub async fn start_recording_with_origin(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    origin: Option<crate::autostart::MeetingDetectedPayload>,
+) -> Result<events::TranscriptStatus, String> {
+    let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
+    let mut lifecycle = lifecycle.lock().await;
+    if state.snapshot_status().running {
+        return Err("Es laeuft bereits eine Aufnahme.".into());
+    }
+    lifecycle.auto_origin = None;
+    if origin.is_some() && !settings::load_user_settings().await.map_err(|e| e.to_string())?.auto_start.enabled {
+        return Err("Automatischer Aufnahmestart ist deaktiviert.".into());
+    }
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "start_recording aufgerufen.");
 
     let azure = settings::load_azure_config().await.map_err(|e| e.to_string())?;
@@ -117,6 +134,7 @@ pub async fn start_recording(
         });
     }
 
+    lifecycle.auto_origin = origin;
     let status = state.mark_started();
     spawn_event_forwarder(app.clone(), handle.events_rx, Arc::clone(&handle.child));
 
@@ -133,6 +151,35 @@ pub async fn start_recording(
 pub async fn stop_recording(
     app: AppHandle,
     state: State<'_, AppState>,
+) -> Result<events::TranscriptStatus, String> {
+    let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
+    let mut lifecycle = lifecycle.lock().await;
+    lifecycle.auto_origin = None;
+    stop_recording_inner(&app, &state).await
+}
+
+/// Only the process that automatically started this recording can end it.
+pub async fn stop_recording_for_meeting(
+    app: &AppHandle,
+    ended: &crate::autostart::MeetingEndedPayload,
+) -> Result<bool, String> {
+    let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
+    let mut lifecycle = lifecycle.lock().await;
+    let state = app.state::<AppState>();
+    if !lifecycle.matches_end(ended) || !state.snapshot_status().running {
+        return Ok(false);
+    }
+    if !settings::load_user_settings().await.map_err(|e| e.to_string())?.auto_start.enabled {
+        return Ok(false);
+    }
+    lifecycle.auto_origin = None;
+    stop_recording_inner(app, &state).await?;
+    Ok(true)
+}
+
+async fn stop_recording_inner(
+    app: &AppHandle,
+    state: &AppState,
 ) -> Result<events::TranscriptStatus, String> {
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "stop_recording aufgerufen.");
 
@@ -151,6 +198,37 @@ pub async fn stop_recording(
     Ok(status)
 }
 
+fn require_running_recording(state: &AppState) -> Result<(), String> {
+    if state.snapshot_status().running { Ok(()) }
+    else { Err("Es laeuft keine Aufnahme.".into()) }
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn pause_waiting_for_automatic_stop_cannot_revive_the_recording() {
+        let gate = Arc::new(Mutex::new(crate::autostart::RecordingLifecycle::default()));
+        let state = Arc::new(AppState::default());
+        state.mark_started();
+        let stop_guard = gate.lock().await;
+        let pause_state = state.clone();
+        let pause_gate = gate.clone();
+        let pause = tokio::spawn(async move {
+            let _guard = pause_gate.lock().await;
+            require_running_recording(&pause_state)?;
+            pause_state.mark_paused();
+            Ok::<_, String>(())
+        });
+        state.mark_stopped();
+        drop(stop_guard);
+        assert!(pause.await.unwrap().is_err());
+        assert!(!state.snapshot_status().running);
+        assert!(require_running_recording(&state).is_err(), "resume uses the same guard");
+    }
+}
+
 /// Pause (T-507): der Sidecar behaelt die Azure-Sitzung, speist aber
 /// kein weiteres Audio zu. Die Sprecher-IDs der Sitzung bleiben damit
 /// gueltig, und der pausierte Abschnitt wird nicht transkribiert.
@@ -159,6 +237,9 @@ pub async fn pause_recording(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<events::TranscriptStatus, String> {
+    let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
+    let _lifecycle = lifecycle.lock().await;
+    require_running_recording(&state)?;
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "pause_recording aufgerufen.");
 
     let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
@@ -188,6 +269,7 @@ pub async fn pause_recording(
             DebugLogEntryLevel::Warn,
             "Pause angefordert, aber es laeuft kein Sidecar.",
         );
+        return Err("Es laeuft kein Sidecar.".into());
     }
 
     let status = state.mark_paused();
@@ -202,6 +284,9 @@ pub async fn resume_recording(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<events::TranscriptStatus, String> {
+    let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
+    let _lifecycle = lifecycle.lock().await;
+    require_running_recording(&state)?;
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "resume_recording aufgerufen.");
 
     let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
@@ -231,6 +316,7 @@ pub async fn resume_recording(
             DebugLogEntryLevel::Warn,
             "Fortsetzen angefordert, aber es laeuft kein Sidecar.",
         );
+        return Err("Es laeuft kein Sidecar.".into());
     }
 
     let status = state.mark_resumed();

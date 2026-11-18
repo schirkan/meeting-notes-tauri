@@ -61,6 +61,16 @@ static async Task<int> RunDetectionModeAsync(Dictionary<string, string?> argsMap
                 process_id = detection.ProcessId,
                 signal = detection.Signal
             });
+        }, ended =>
+        {
+            // Das Gegenstueck zum Start-Ereignis: die Audiositzung wurde
+            // beendet (OnStateChanged auf Inactive).
+            Logger.Event("meeting_ended", new
+            {
+                process_name = ended.ProcessName,
+                process_id = ended.ProcessId,
+                signal = ended.Signal
+            });
         }, allowed);
     }
     catch (Exception ex)
