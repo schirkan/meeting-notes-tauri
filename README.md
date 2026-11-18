@@ -59,9 +59,13 @@ See [docs/README.md](./docs/README.md) for the details of both sets.
 
 ![Debug log dock](docs/native/08-debug-log.png)
 
-### System tray
+### Taskbar
 
 ![Windows taskbar with the Meeting Notes app icon](docs/native/11-taskbar-mit-app-icon.png)
+
+The icon in the notification area is confirmed separately through UI Automation
+(name `Meeting Notes`, class `SystemTray.NormalButton`); opening its context menu
+still needs a machine with an attached display.
 
 ## 📦 Installation
 

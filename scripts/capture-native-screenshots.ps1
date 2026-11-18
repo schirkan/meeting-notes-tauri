@@ -97,7 +97,20 @@ L ('session=' + (Get-Process -Id $PID).SessionId + ' interactive=' + [Environmen
 # isConfigComplete() fail and forces the settings dialog open at startup.
 # Written without BOM: PowerShell 5.1 Set-Content -Encoding UTF8 adds one and the
 # Rust config loader then rejects the file.
-$configPath = Join-Path (Split-Path $ExePath) 'MeetingNotes.config.json'
+# Run from a scratch copy so the shipped build folder stays untouched and the
+# dummy configuration never lands next to the real EXE.
+$sourceDir = Split-Path $ExePath
+$workDir = Join-Path ([System.IO.Path]::GetTempPath()) 'meeting-notes-native-capture'
+if (Test-Path $workDir) { Remove-Item $workDir -Recurse -Force }
+New-Item -ItemType Directory -Path $workDir -Force | Out-Null
+foreach ($file in @('MeetingNotes.exe', 'MeetingNotes.Sidecar.exe')) {
+  $src = Join-Path $sourceDir $file
+  if (Test-Path $src) { Copy-Item $src $workDir -Force }
+}
+$ExePath = Join-Path $workDir 'MeetingNotes.exe'
+L ('work copy: ' + $workDir)
+
+$configPath = Join-Path $workDir 'MeetingNotes.config.json'
 $cfg = @{
   azure = @{ endpoint = 'wss://westeurope.stt.speech.microsoft.com/speech/universal/v2'; region = 'westeurope'; speechKey = 'dummy-key-for-screenshot-capture'; interimResults = $true }
   user = @{ language = 'de-DE'; transcription = @{ mic = $true; speaker = $true }; diarization = @{ mic = $true; speaker = $true }; devices = @{ micId = $null; speakerLoopbackId = $null }; transcript = @{ markdownExport = @{ enabled = $true; path = $null } }; autoStart = @{ enabled = $true; processes = @() }; window = @{ minimizeToTrayOnClose = $true } }
@@ -109,7 +122,7 @@ Get-Process MeetingNotes -ErrorAction SilentlyContinue | ForEach-Object { Stop-P
 Start-Sleep -Seconds 2
 
 if (-not (Test-Path $ExePath)) { L ('EXE missing: ' + $ExePath); $lines | Set-Content -Path $LogPath -Encoding UTF8; exit 4 }
-$app = Start-Process $ExePath -WorkingDirectory (Split-Path $ExePath) -PassThru
+$app = Start-Process $ExePath -WorkingDirectory $workDir -PassThru
 L ('app pid=' + $app.Id)
 
 $script:tops = New-Object System.Collections.ArrayList
