@@ -47,6 +47,26 @@ async function compileAndImport() {
 
 const { contract, utils, speakers, markdown } = await compileAndImport()
 
+test('close-to-tray defaults off for legacy and malformed settings', () => {
+  for (const input of [null, undefined, {}, { window: null }, { window: {} },
+    { window: { minimizeToTrayOnClose: 'true' } }, { window: { minimizeToTrayOnClose: 1 } }]) {
+    assert.deepEqual(contract.normalizeUserSettings(input).window, { minimizeToTrayOnClose: false })
+  }
+})
+
+test('close-to-tray preserves explicit true and false without changing audio settings', () => {
+  for (const enabled of [false, true]) {
+    const result = contract.normalizeUserSettings({
+      window: { minimizeToTrayOnClose: enabled },
+      transcription: { mic: false, speaker: true },
+      autoStart: { enabled: true, processes: ['teams'] }
+    })
+    assert.equal(result.window.minimizeToTrayOnClose, enabled)
+    assert.deepEqual(result.transcription, { mic: false, speaker: true })
+    assert.equal(result.autoStart.enabled, true)
+  }
+})
+
 test('isValidBcp47Language accepts canonical codes', () => {
   assert.equal(contract.isValidBcp47Language('de-DE'), true)
   assert.equal(contract.isValidBcp47Language('en-US'), true)

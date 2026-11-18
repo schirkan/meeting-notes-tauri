@@ -14,6 +14,7 @@ mod protocol;
 mod settings;
 mod sidecar;
 mod state;
+mod tray;
 
 use std::sync::Arc;
 
@@ -29,6 +30,8 @@ pub fn run() {
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_dialog::init())
     .manage(AppState::default())
+    .manage(tray::WindowBehavior::default())
+    .on_window_event(tray::on_window_event)
     .manage(Mutex::new(autostart::RecordingLifecycle::default()))
     .manage(Arc::new(Mutex::new(None::<SidecarHandle>)) as SidecarCache)
     .setup(|app| {
@@ -56,6 +59,19 @@ pub fn run() {
         }
       });
       events::emit_fixed_config_status(&handle, &config_status);
+
+      // Load the persisted close policy once; successful saves update it live.
+      if let Ok(user) = tauri::async_runtime::block_on(settings::load_user_settings()) {
+        handle.state::<tray::WindowBehavior>().update(&user.window);
+      }
+      if let Err(error) = tray::init(&handle) {
+        let entry = state.push_debug(
+          state::DebugLogEntrySource::Main,
+          state::DebugLogEntryLevel::Warn,
+          format!("Systray nicht verfuegbar; Schliessen beendet die App: {error}"),
+        );
+        events::emit_debug(&handle, &entry);
+      }
 
       // T-513: Erkennungsmodus starten, wenn der Auto-Start aktiviert
       // ist. Der Prozess beobachtet nur die Audiositzungen und startet

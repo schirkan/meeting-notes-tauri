@@ -37,6 +37,9 @@
     "autoStart": {
       "enabled": false,
       "processes": []
+    },
+    "window": {
+      "minimizeToTrayOnClose": false
     }
   }
 }

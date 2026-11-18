@@ -196,6 +196,22 @@ export function SettingsPanel(props: SettingsPanelProps) {
           <span>Aufnahme bei erkanntem Meeting automatisch starten</span>
         </label>
 
+        <label className="checkbox-field full-field">
+          <input
+            type="checkbox"
+            checked={settings.window.minimizeToTrayOnClose}
+            onChange={(event) => {
+              const minimizeToTrayOnClose = event.currentTarget.checked
+              setSettings((prev) => ({
+                ...prev,
+                window: { ...prev.window, minimizeToTrayOnClose }
+              }))
+            }}
+            disabled={statusRunning}
+          />
+          <span>Beim Schließen in den Systray minimieren</span>
+        </label>
+
         <div className="full-field directory-field">
           <label htmlFor="transcript-export-path">Speicherpfad (optional)</label>
           <div className="directory-control">

@@ -50,6 +50,11 @@ export interface AutoStartSettings {
   processes: string[]
 }
 
+export interface WindowSettings {
+  /** Hide the main window on close; explicit tray Quit always exits. Default false. */
+  minimizeToTrayOnClose: boolean
+}
+
 export interface UserSettings {
   language: string
   transcription: TranscriptionSettings
@@ -60,6 +65,7 @@ export interface UserSettings {
   }
   transcript: TranscriptSettings
   autoStart: AutoStartSettings
+  window: WindowSettings
 }
 
 /** Shape of the single on-disk configuration file. */
@@ -85,7 +91,8 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   transcript: {
     markdownExport: { enabled: true, path: null }
   },
-  autoStart: { enabled: false, processes: [] }
+  autoStart: { enabled: false, processes: [] },
+  window: { minimizeToTrayOnClose: false }
 }
 
 const BCP47_PATTERN = /^[a-z]{2,3}-[A-Z]{2}$/
@@ -94,7 +101,7 @@ export function isValidBcp47Language(input: unknown): input is string {
   return typeof input === 'string' && BCP47_PATTERN.test(input.trim())
 }
 
-type UserSettingsInput = Partial<Omit<UserSettings, 'devices' | 'transcription' | 'diarization' | 'transcript' | 'autoStart'>> & {
+type UserSettingsInput = Partial<Omit<UserSettings, 'devices' | 'transcription' | 'diarization' | 'transcript' | 'autoStart' | 'window'>> & {
   devices?: Partial<UserSettings['devices']> | null
   transcription?: Partial<TranscriptionSettings> | null
   diarization?: Partial<DiarizationSettings> | null
@@ -102,6 +109,7 @@ type UserSettingsInput = Partial<Omit<UserSettings, 'devices' | 'transcription' 
     markdownExport?: Partial<MarkdownExportSettings> | null
   } | null
   autoStart?: Partial<AutoStartSettings> | null
+  window?: Partial<WindowSettings> | null
 }
 
 export function normalizeUserSettings(input: UserSettingsInput | null | undefined): UserSettings {
@@ -152,6 +160,11 @@ export function normalizeUserSettings(input: UserSettingsInput | null | undefine
             .map((name) => name.trim())
             .filter((name) => name.length > 0)
         : DEFAULT_USER_SETTINGS.autoStart.processes
+    },
+    window: {
+      minimizeToTrayOnClose: typeof input?.window?.minimizeToTrayOnClose === 'boolean'
+        ? input.window.minimizeToTrayOnClose
+        : DEFAULT_USER_SETTINGS.window.minimizeToTrayOnClose
     }
   }
 }

@@ -23,7 +23,8 @@
     "check:specs": "node scripts/check-spec-consistency.mjs",
     "verify": "node scripts/verify.mjs",
     "verify:deployment": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-deployment.ps1 -PortableDir dist/portable",
-    "test:unit": "node --test tests/*.test.mjs"
+    "test:unit": "node --test tests/*.test.mjs",
+    "test:tray": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-tray.ps1"
   },
   "dependencies": {
     "react": "^19.3.1",

@@ -59,6 +59,14 @@ pub struct UserSettings {
     pub transcript: TranscriptSettings,
     #[serde(default)]
     pub auto_start: AutoStartSettings,
+    #[serde(default)]
+    pub window: WindowSettings,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct WindowSettings {
+    pub minimize_to_tray_on_close: bool,
 }
 
 /// Automatischer Aufnahmestart bei erkanntem Meeting (T-513).
@@ -351,6 +359,7 @@ pub fn default_user_settings() -> UserSettings {
         diarization: DiarizationSettings::default(),
         transcript: TranscriptSettings::default(),
         auto_start: AutoStartSettings::default(),
+        window: WindowSettings::default(),
     }
 }
 
@@ -484,6 +493,23 @@ mod config_tests {
         assert!(parsed.azure.is_none());
         assert_eq!(parsed.user.language, DEFAULT_LANGUAGE);
         assert_eq!(parsed.user.diarization, DiarizationSettings::default());
+    }
+
+    #[test]
+    fn close_to_tray_defaults_off_and_persists_both_boolean_values() {
+        let legacy: UserSettings = serde_json::from_str(r#"{"language":"de-DE"}"#).unwrap();
+        assert!(!legacy.window.minimize_to_tray_on_close);
+        let partial: UserSettings = serde_json::from_str(r#"{"window":{}}"#).unwrap();
+        assert!(!partial.window.minimize_to_tray_on_close);
+        for enabled in [false, true] {
+            let mut config = default_app_config();
+            config.user.window.minimize_to_tray_on_close = enabled;
+            let encoded = serde_json::to_string(&config).unwrap();
+            let saved: AppConfig = serde_json::from_str(&encoded).unwrap();
+            assert_eq!(saved.user.window.minimize_to_tray_on_close, enabled);
+            assert_eq!(saved.user.transcription, config.user.transcription);
+            assert_eq!(saved.user.auto_start, config.user.auto_start);
+        }
     }
 
     #[test]

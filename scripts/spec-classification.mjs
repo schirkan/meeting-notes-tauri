@@ -20,5 +20,6 @@ export const NEEDS_TARGET_MACHINE = new Set([
   'T-502-latency-messung.md',
   'T-504-portable-build.md',
   'T-509-audio-capture-auf-wasapirecorderbuilder-umstellen.md',
-  'T-510-clean-machine-deployment-windows-11.md'
+  'T-510-clean-machine-deployment-windows-11.md',
+  'T-514-systray-und-schliessen-verhalten.md'
 ])

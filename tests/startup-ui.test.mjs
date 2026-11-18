@@ -57,7 +57,8 @@ async function openApp(options) {
           transcription: input.transcription,
           diarization: input.diarization,
           transcript: input.transcript,
-          autoStart: input.autoStart ?? { enabled: false, processes: [] }
+          autoStart: input.autoStart ?? { enabled: false, processes: [] },
+          window: input.windowSettings
         }),
       saveSettings: async (settings) => {
         window.settingsSaveCalls ??= []
@@ -565,6 +566,37 @@ test('transcription sources default on, persist independently and keep the last 
   }
 })
 
+
+test('close-to-tray checkbox defaults off and saves both states via the existing footer', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+    const checkbox = page.getByRole('checkbox', { name: 'Beim Schließen in den Systray minimieren', exact: true })
+    assert.equal(await checkbox.isChecked(), false)
+    for (const enabled of [true, false]) {
+      await checkbox.setChecked(enabled)
+      await page.getByRole('button', { name: 'Speichern', exact: true }).click()
+      await page.waitForFunction(value => window.lastSavedSettings?.window.minimizeToTrayOnClose === value, enabled)
+      assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), validConfig)
+      await reopenSettings(page)
+      assert.equal(await checkbox.isChecked(), enabled)
+      assert.equal(await page.getByRole('button', { name: 'Speichern', exact: true }).count(), 1)
+    }
+  } finally { await page.close() }
+})
+
+test('saved close-to-tray preference loads and is disabled during recording', async () => {
+  const page = await openApp({
+    configState: { exists: true, path: 'test-config', config: validConfig },
+    windowSettings: { minimizeToTrayOnClose: true }, running: true
+  })
+  try {
+    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+    const checkbox = page.getByRole('checkbox', { name: 'Beim Schließen in den Systray minimieren', exact: true })
+    assert.equal(await checkbox.isChecked(), true)
+    assert.equal(await checkbox.isDisabled(), true)
+  } finally { await page.close() }
+})
 
 test('saved disabled diarization options remain disabled on startup', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, diarization: { mic: false, speaker: false } })

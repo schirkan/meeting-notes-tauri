@@ -20,6 +20,7 @@ used on its own.
 - **Markdown export:** Save or copy finalized transcripts with timestamps, speakers, and session metadata.
 - **Portable app:** Extract the complete folder and run it without an installer. The .NET runtime ships with the app.
 - **Connection diagnostics:** Test Azure connectivity and an optional corporate proxy from the settings dialog.
+- **System tray:** Right-click the Meeting Notes tray icon for **Anzeigen** or **Beenden**. **Anzeigen** and a left double-click restore and focus the main window. Enable **Beim Schließen in den Systray minimieren** under **Allgemein** to keep the app, recording and meeting detection running when closing the window. Off by default; **Beenden** always exits. The preference applies after saving, without restarting.
 - **Optional automatic recording:** Turn on "Aufnahme bei erkanntem Meeting automatisch starten" and the app watches the Windows audio session graph in the background. An active audio session from an allowed meeting application starts recording. When all of that process's microphone/output sessions remain inactive for 3 seconds, its automatically started recording stops via the normal stop/export path. Manual recordings are never stopped by the detector. Off by default. This is an audio-session heuristic, not a definitive meeting signal; real Teams/Zoom acceptance remains open.
 
 ## 📦 Installation
@@ -167,6 +168,8 @@ npm run verify
 npm run test:sidecar:published
 npm run verify:deployment
 ```
+
+For the native tray callback/menu/exit probe, run `npm run test:tray` on an interactive Windows desktop with Explorer. It uses an isolated portable copy and no personal configuration. This is not a substitute for checking the visible icon, physical double-click and Alt+F4 yourself; headless execution reports SKIPPED. See [T-514](./specs/T-514-systray-und-schliessen-verhalten.md).
 
 For technical details and outstanding checks, see the [specification](./SPEC.md),
 [architecture decisions](./DECISIONS.md), and [individual specs](./specs/).

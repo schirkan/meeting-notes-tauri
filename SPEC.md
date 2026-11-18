@@ -13,15 +13,15 @@ Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1
 
 Die Checkboxen wurden gegen den **Code** geprueft, nicht gegen den Spec-Status:
 jeder abgehakte Punkt traegt den Beleg im Klartext (`Beleg: …`), jeder offene
-Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **38 Specs** als
-`umgesetzt` bzw. `teils umgesetzt` markiert, **21 offene Punkte in 14 Specs**.
+Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **39 Specs** als
+`umgesetzt` bzw. `teils umgesetzt` markiert, **22 offene Punkte in 15 Specs**.
 Vorher waren ueber 70 Checkboxen offen, obwohl die Funktion ueberwiegend fertig
 und verifiziert war - die Specs sind jetzt mit dem Stand der Implementierung
 deckungsgleich.
 
 _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 
-### Offen und braucht deinen Rechner (11 Punkte)
+### Offen und braucht deinen Rechner (12 Punkte)
 
 | Spec | Punkt |
 |---|---|
@@ -36,6 +36,7 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-509 | Latenz und Ausgabequalitaet sind auf echter Hardware gegen die |
 | T-510 | Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch |
 | T-510 | Befunde sind in `T-504`, `T-500`, `SPEC.md` und `AGENTS.md` nachgezogen. |
+| T-514 | Native Windows-Abnahme: sichtbares Icon, Kontextmenue, Doppelklick, X und Alt+F4 bei beiden Op… |
 
 ### Offen als bewusste Entscheidung (10 Punkte)
 
@@ -132,6 +133,7 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 ## 3.1 Technische Architektur
 
 - **App-Container:** Tauri 2 (Rust). Verantwortlich für Fenster/WebView2-Lifecycle, Sidecar-Spawn, Settings-Persistenz, UI-Bridge.
+- **Systray (T-514):** natives Tray-Icon, Kontextmenue `Anzeigen`/`Beenden`, linker Doppelklick stellt das Hauptfenster wieder her und fokussiert es. `user.window.minimizeToTrayOnClose` (Default false) verbirgt beim Schliessen nur das Fenster; Aufnahme und Detektor bleiben unveraendert. Explizites Tray-Beenden umgeht CloseRequested und nutzt das vorhandene Sidecar-Cleanup. Gespeicherte Aenderungen gelten sofort. Bei fehlendem/unerreichbarem Tray oder Hide-Fehler bleibt regulaeres Schliessen erhalten.
 - **Meeting-Erkennung:** Der Core-Audio-Session-Graph (`OnSessionCreated` plus `OnStateChanged` in `sidecar/MeetingDetector.cs`) erkennt aktive Audio-Sessions erlaubter Meeting-Prozesse. Der separate Erkennungsprozess (`--detect-only`) laeuft ohne Audio-Capture-Stream und ohne Azure. Wenn alle Capture-/Render-Sessions des ausloesenden Prozesses 3 s inaktiv bleiben, meldet er `meeting_ended`. Nur seine automatisch gestartete Aufnahme wird ueber den normalen Stop-/Export-Pfad beendet; manuelle Aufnahmen sind geschuetzt, Start/Stop serialisiert und Detektor-Ereignisse geordnet. Standardmaessig **aus** (`user.autoStart.enabled`). Kein Kalenderzugriff. Session-Ende ist eine Heuristik; Live-Abnahme Teams/Zoom und Pegel-/Stille-Erkennung bleiben offen (T-513).
 - **Backend:** C#/.NET 10 als Sidecar (`MeetingNotes.Sidecar.exe`, self-contained, komprimiert und konservativ getrimmt). Verantwortlich für Audio-Capture, Audio-Resampling, Azure-Speech-Transkription, Speaker-Diarization und Event-Streaming.
 - **Frontend:** React 19 + TypeScript 6 + Vite 8 (im Tauri-Renderer-WebView2).

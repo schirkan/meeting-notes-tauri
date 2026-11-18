@@ -682,6 +682,7 @@ pub async fn save_user_settings(
 ) -> Result<UserSettings, String> {
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "save_user_settings aufgerufen.");
     let saved = settings::save_user_settings(settings).await.map_err(|e| e.to_string())?;
+    app.state::<crate::tray::WindowBehavior>().update(&saved.window);
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Main, DebugLogEntryLevel::Info, "User-Settings gespeichert.");
     Ok(saved)
 }
