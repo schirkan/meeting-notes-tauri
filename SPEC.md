@@ -1,9 +1,9 @@
 # Spezifikation v0.1 — Meeting Notes
 
-Stand: 17.11.2026
+Stand: 18.11.2026
 Status: Implementierungsstand fortgeschrieben; Corporate-Netz-/Proxy-Akzeptanz am 2026-11-12 erfolgreich. Offen bleiben Latenz- und Clean-Machine-Akzeptanz.
 
-Lokaler Stand: Portable-Build 23.18 MB (4 Dateien, 3 geprüfte Hashes; Rebuild nach `ff47039` vom 2026-11-17 - flaches Layout mit `MeetingNotes.exe` und Single-File-Sidecar) mit der EXE `MeetingNotes.exe`, dem gemeinsamen Config-Template, der unabhängigen Mic-/Speaker-Diarization und der auswählbaren Transkriptions-Quelle (`user.transcription`, Mic/Speaker/beides); `npm run verify` (4 Schritte grün), Build-Smoke inklusive Sidecar-Geräteabfrage und Deployment-Nachweis (PASS 10 / FAIL 0) erfolgreich. Dafür sind TypeScript, 77 Node-Tests, 31 Rust-Tests und 508 C#-Assertions erfolgreich; die Node-/UI-Tests laufen im CLI-Browserlauf grün. Nicht jede ursprüngliche Audio-/Protokoll-Anforderung ist als abgenommen bestätigt; Einzelstatus siehe [Specs](./specs/).
+Lokaler Stand: Portable-Build **30,74 MB** (4 Dateien, 3 geprüfte Hashes; Rebuild nach `1f22adc` vom 2026-11-18 - flaches Layout mit `MeetingNotes.exe` und **self-contained** Single-File-Sidecar) mit der EXE `MeetingNotes.exe`, dem gemeinsamen Config-Template, der unabhängigen Mic-/Speaker-Diarization und der auswählbaren Transkriptions-Quelle (`user.transcription`, Mic/Speaker/beides); `npm run verify -- --full` (**9 Schritte grün**), Build-Smoke inklusive Sidecar-Geräteabfrage und Deployment-Nachweis (**PASS 9 / FAIL 0**) erfolgreich. Dafür sind TypeScript, **85 Node-Tests**, **35 Rust-Tests** und **508 C#-Assertions** (davon **521** gegen die publizierte, getrimmte Sidecar-EXE) erfolgreich; die Node-/UI-Tests laufen im CLI-Browserlauf grün. Nicht jede ursprüngliche Audio-/Protokoll-Anforderung ist als abgenommen bestätigt; Einzelstatus siehe [Specs](./specs/).
 
 Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1.md` (Electron-Projekt, unveränderte Referenz). Architekturziel: Tauri 2 + React + C#-Sidecar (mit Azure Speech SDK in NuGet-Form). Die Anwendung selbst heißt *Meeting Notes*; „Tauri" ist die Container-Technik, nicht Teil des Produktnamens.
 
@@ -228,9 +228,9 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - Zielsystem: keine .NET-Runtime oder SDK erforderlich; die .NET-10-Runtime ist im komprimierten, getrimmten Single-File-Sidecar enthalten. Native Bibliotheken werden beim Start extrahiert. Sidecar-/Speech-SDK-Metadaten bleiben fuer Reflection erhalten; Trim-Warnungen bleiben sichtbar. Nur `net10.0-windows` wird gebaut — siehe [T-512](./specs/T-512-sidecar-targetframeworks-und-single-file.md).
 - Build-/Start-Flow:
   - Dev: `build.rs` publiziert Sidecar automatisch, danach Start durch Tauri.
-  - Installer: `npm run tauri -- build` bündelt Sidecar-EXE **und DLLs** als externe Resources.
+  - Installer: `npm run tauri -- build` bündelt die **self-contained** Sidecar-EXE als externe Resource; separate DLLs werden nicht mehr ausgeliefert.
   - Portable: `npm run tauri -- build --no-bundle`, nach Erfolg `npm run dist:portable` und `npm run test:smoke`; gesamter Ordner erforderlich, nicht nur Haupt-EXE.
-  - Lokaler letzter Portable-Build: 20.79 MB, alle 26 Hashes geprüft. Aktuelle MSI/NSIS- und Clean-Machine-Validierung nicht erneut durchgeführt.
+  - Lokaler letzter Portable-Build: **30,74 MB / 4 Dateien**, 3 von 3 Hashes geprüft (Rebuild vom 2026-11-18 nach `1f22adc`). Aktuelle MSI/NSIS- und Clean-Machine-Validierung nicht erneut durchgeführt.
 
 ## 9. Nicht-Ziele
 - Code-Signing

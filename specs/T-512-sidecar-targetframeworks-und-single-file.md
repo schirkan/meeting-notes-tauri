@@ -27,7 +27,8 @@ werden beim Start extrahiert. JSON-Reflection ist aktiviert, Sidecar und Speech-
 werden als `TrimmerRootAssembly` vollstaendig erhalten. Trimming betrifft den
 uebrigen Code; IL2026/IL2075/IL2104 werden nicht unterdrueckt.
 
-Gemessen: Sidecar **14,74 MiB**, Portable **30,22 MiB / 4 Dateien / 3 Summen**.
+Gemessen (2026-11-17): Sidecar **14,74 MiB**, Portable **30,22 MiB / 4 Dateien / 3 Summen**.
+Nachgemessen am 2026-11-18 nach `1f22adc`: Sidecar **14,74 MiB**, Portable **30,74 MiB / 4 Dateien / 3 Summen** (Haupt-EXE 16,00 MiB statt 15,48 MiB - Build-Varianz, beide Werte sind gemessen).
 `npm run test:sidecar:published`: **521 Assertions**, inklusive JSON-Events,
 Handshake und beiden nativen Speech-Clients gegen einen lokalen CONNECT-Proxy.
 Smoke und Deployment **9 PASS / 0 FAIL** pruefen den Start mit ungueltigen
@@ -106,10 +107,11 @@ gefunden.
 
 **Damals geltender Standard-Build:** net10.0-windows, framework-dependent,
 eine `MeetingNotes.Sidecar.exe` direkt neben `MeetingNotes.exe`. Die Single-File-
-Umgebungsvariable ist entfernt; net9 bleibt optional. Die folgenden Messungen
+Umgebungsvariable ist entfernt; Single-File ist der Standard. Als TFM-Option
+entfallen ist net9 (siehe "TFM-Schalter" unten). Die folgenden Messungen
 dokumentieren den zuvor geprueften Vergleich beider Layouts.
 
-## Verifikation
+## Verifikation (historisch, 2026-11-17 vor dem NuGet-Update)
 - Multi-Target-Build: beide TFMs bauen mit 0 Warnungen / 0 Fehler.
 - net9.0-Publish: 21 Dateien / 7,61 MB, `runtimeconfig.json` mit
   `"rollForward": "Major"`, `--list-devices` Exit 0.
@@ -135,17 +137,19 @@ Gemessen (2026-11-17):
 | Portable gesamt | 23,10 MB / 24 Dateien / 23 Summen | **23,09 MB / 4 Dateien / 3 Summen** |
 | Smoke-Test | bestanden (23/23) | **bestanden (3/3)** |
 
-### TFM-Schalter
-Der zweite Schalter `MEETING_NOTES_SIDECAR_TFM` (zulaessig: `net9.0-windows` und
-`net10.0-windows`, Standard `net10.0-windows`) waehlt das Ziel-Framework des
-Bundle-Builds. Damit ist auch die net9.0-Variante end-to-end erreichbar. Vorher war
-sie nur ueber ein eigenes Publish-Skript erreichbar und kam deshalb **nie im
-Artefakt** an — eine Inkonsistenz, die die Umgebungsvariable behebt.
+### TFM-Schalter (net9.0 ist nicht mehr waehlbar)
+Der Schalter `MEETING_NOTES_SIDECAR_TFM` waehlte frueher das Ziel-Framework des
+Bundle-Builds; `net9.0-windows` und `net10.0-windows` waren zulaessig. Seit dem
+NuGet-Update vom 2026-11-17 ist **nur noch `net10.0-windows`** erlaubt: die
+System-Pakete 11.0.0 unterstuetzen .NET 9 nicht mehr, und `build.rs` weist
+`MEETING_NOTES_SIDECAR_TFM=net9.0-windows` mit klarer Meldung ab, statt still
+ einen anderen TFM zu bauen. Vorher war die net9.0-Variante nur ueber ein eigenes
+Publish-Skript erreichbar und kam deshalb **nie im Artefakt** an.
 
-Gemessen: net9.0 durch den Bundle-Pfad ergibt 21 Dateien mit `tfm=net9.0`,
-`rollForward=Major`, Portable 23,09 MB / 24 Dateien / 23 Summen, Smoke-Test bestanden.
-Ungueltige Werte werden mit klarer Meldung abgewiesen, statt still zu einem
-anderen TFM zu fuehren.
+Historisch gemessen (2026-11-17, vor dem NuGet-Update): net9.0 durch den
+Bundle-Pfad ergibt 21 Dateien mit `tfm=net9.0`, `rollForward=Major`, Portable
+23,09 MB / 24 Dateien / 23 Summen, Smoke-Test bestanden. Unzulaessige Werte werden
+mit klarer Meldung abgewiesen, statt still zu einem anderen TFM zu fuehren.
 
 ### Re-Verifikation nach dem Rust-Refactoring
 
