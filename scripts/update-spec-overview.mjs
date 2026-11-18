@@ -18,20 +18,13 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { NEEDS_TARGET_MACHINE } from './spec-classification.mjs'
+
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = join(__dirname, '..')
 const SPECS_DIR = join(PROJECT_ROOT, 'specs')
 const SPEC_MD = join(PROJECT_ROOT, 'SPEC.md')
 
-// Specs, deren offene Punkte eine Messung auf einem echten Rechner brauchen.
-const NEEDS_TARGET_MACHINE = new Set([
-  'T-205-continuous-lid-und-diarization-in-c-sharp.md',
-  'T-500-qualitaetssicherung-und-akzeptanztests.md',
-  'T-502-latency-messung.md',
-  'T-504-portable-build.md',
-  'T-509-audio-capture-auf-wasapirecorderbuilder-umstellen.md',
-  'T-510-clean-machine-deployment-windows-11.md'
-])
 
 const OPEN_MARKER = ' - **offen**: '
 const BACKTICK = String.fromCharCode(96)
@@ -76,7 +69,7 @@ function build({ hardware, deliberate, marked }) {
   const specsWithOpen = new Set([...hardware, ...deliberate].map((e) => e.id)).size
 
   const lines = [
-    '## Stand der Specs (Abgleich 2026-11-17)',
+    '## Stand der Specs (Abgleich ' + new Date().toLocaleDateString('de-DE') + ')',
     '',
     'Die Checkboxen wurden gegen den **Code** geprueft, nicht gegen den Spec-Status:',
     'jeder abgehakte Punkt traegt den Beleg im Klartext (' + TICK + '), jeder offene',

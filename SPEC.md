@@ -9,12 +9,12 @@ Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1
 
 ---
 
-## Stand der Specs (Abgleich 2026-11-17)
+## Stand der Specs (Abgleich 18.11.2026)
 
 Die Checkboxen wurden gegen den **Code** geprueft, nicht gegen den Spec-Status:
 jeder abgehakte Punkt traegt den Beleg im Klartext (`Beleg: …`), jeder offene
 Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **37 Specs** als
-`umgesetzt` bzw. `teils umgesetzt` markiert, **18 offene Punkte in 13 Specs**.
+`umgesetzt` bzw. `teils umgesetzt` markiert, **26 offene Punkte in 14 Specs**.
 Vorher waren ueber 70 Checkboxen offen, obwohl die Funktion ueberwiegend fertig
 und verifiziert war - die Specs sind jetzt mit dem Stand der Implementierung
 deckungsgleich.
@@ -37,7 +37,7 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-510 | Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch |
 | T-510 | Befunde sind in `T-504`, `T-500`, `SPEC.md` und `AGENTS.md` nachgezogen. |
 
-### Offen als bewusste Entscheidung (7 Punkte)
+### Offen als bewusste Entscheidung (15 Punkte)
 
 | Spec | Punkt | Warum offen |
 |---|---|---|
@@ -48,6 +48,14 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-401 | Mock-Implementierung für Unit-Tests (siehe T-500) | Die Unit-Tests laufen gegen die echte App (Playwright-CLI-Browserlauf), nicht gegen einen Mock. |
 | T-501 | Voller End-to-End-Test mit WebDriver + App-Start + `start_recording()… | WebDriver-Setup für Tauri 2 ist aufwendig; die headless Smoke-Stufen 1–5 decken die kritischen Artefakt-Invarianten ab. |
 | T-503 | `npm run lint` (sofern konfiguriert) ist grün | kein Lint-Setup im Projekt. |
+| T-513 | Der Modus ist standardmäßig **inaktiv** (`enabled: false`) - Auto-Sta… | die Einstellungs-Achse ist noch nicht implementiert; das Spec definiert nur den Zielzustand. |
+| T-513 | Ohne vollständige Azure-Konfiguration startet die Aufnahme nicht auto… | setzt die Umsetzung des Auto-Starts voraus. |
+| T-513 | Die Erkennung läuft im **Sidecar** (nicht im Tauri-Main) und nimmt da… | `sidecar/MeetingDetector.cs` existiert noch nicht. |
+| T-513 | Die Erkennung ist ereignisgesteuert, nicht per Timer. Beleg: `Registe… | folgt der Umsetzung des Beobachters. |
+| T-513 | Das Ende nutzt mehrere Signale (Stille, Session-Ende, optional Kalend… | setzt die Umsetzung des Beobachters voraus. |
+| T-513 | Jede automatisch gestartete Aufnahme ist für den Nutzer sichtbar und… | die UI ist noch nicht vorhanden. |
+| T-513 | Verifikation: Node-Tests, Rust-Tests und C#-Validierung grün. Beleg:… | erst nach der Umsetzung sinnvoll prüfbar. |
+| T-513 | Live-Abnahme: ein echtes Meeting (Teams oder Zoom) startet die Aufnah… | braucht einen echten Rechner mit Teams oder Zoom und einen Podcast-Playback als Gegenprobe. |
 
 ### Nächste Schritte auf deinem Rechner (die 11 offenen Punkte)
 
