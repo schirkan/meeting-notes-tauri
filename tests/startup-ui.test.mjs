@@ -57,7 +57,7 @@ async function openApp(options) {
           transcription: input.transcription,
           diarization: input.diarization,
           transcript: input.transcript,
-          autoStart: input.autoStart ?? { enabled: false, processes: [] },
+          autoStart: input.autoStart,
           window: input.windowSettings
         }),
       saveSettings: async (settings) => {
@@ -567,13 +567,13 @@ test('transcription sources default on, persist independently and keep the last 
 })
 
 
-test('close-to-tray checkbox defaults off and saves both states via the existing footer', async () => {
+test('close-to-tray checkbox defaults on and saves both states via the existing footer', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
   try {
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
     const checkbox = page.getByRole('checkbox', { name: 'Beim Schließen in den Systray minimieren', exact: true })
-    assert.equal(await checkbox.isChecked(), false)
-    for (const enabled of [true, false]) {
+    assert.equal(await checkbox.isChecked(), true)
+    for (const enabled of [false, true]) {
       await checkbox.setChecked(enabled)
       await page.getByRole('button', { name: 'Speichern', exact: true }).click()
       await page.waitForFunction(value => window.lastSavedSettings?.window.minimizeToTrayOnClose === value, enabled)
@@ -583,6 +583,21 @@ test('close-to-tray checkbox defaults off and saves both states via the existing
       assert.equal(await page.getByRole('button', { name: 'Speichern', exact: true }).count(), 1)
     }
   } finally { await page.close() }
+})
+
+test('automatic recording default on and explicitly disabled preferences are shown correctly', async () => {
+  for (const explicitFalse of [false, true]) {
+    const page = await openApp({
+      configState: { exists: true, path: 'test-config', config: validConfig },
+      autoStart: explicitFalse ? { enabled: false, processes: [] } : undefined,
+      windowSettings: explicitFalse ? { minimizeToTrayOnClose: false } : undefined
+    })
+    try {
+      await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+      assert.equal(await page.getByRole('checkbox', { name: 'Aufnahme bei erkanntem Meeting automatisch starten', exact: true }).isChecked(), !explicitFalse)
+      assert.equal(await page.getByRole('checkbox', { name: 'Beim Schließen in den Systray minimieren', exact: true }).isChecked(), !explicitFalse)
+    } finally { await page.close() }
+  }
 })
 
 test('saved close-to-tray preference loads and is disabled during recording', async () => {

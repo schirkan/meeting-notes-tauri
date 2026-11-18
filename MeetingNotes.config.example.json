@@ -35,11 +35,11 @@
       }
     },
     "autoStart": {
-      "enabled": false,
+      "enabled": true,
       "processes": []
     },
     "window": {
-      "minimizeToTrayOnClose": false
+      "minimizeToTrayOnClose": true
     }
   }
 }

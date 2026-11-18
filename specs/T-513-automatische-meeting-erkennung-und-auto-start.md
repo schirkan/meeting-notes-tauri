@@ -16,8 +16,9 @@ Der Umfang dieses Specs ist bewusst zweigeteilt:
    "Mechanismus"), inklusive der Entscheidung, welche Erkennung hier
    überhaupt taugt.
 
-Es wird **nichts implementiert**. Das Spec beschreibt den Zielzustand; die
-Umsetzung ist eine eigene Karte.
+Urspruenglich war dies ein reines Recherche-Spec. Die Session-Erkennung,
+Auto-Aufnahme und der identitaetsgebundene Auto-Stop sind inzwischen umgesetzt;
+Live-Abnahme und weitere Signalwege bleiben offen (siehe Done When).
 
 ## Recherche: wie machen es andere Produkte?
 
@@ -293,7 +294,11 @@ UWP-Dialog aus; der Zugriff läuft über die Einstellung "Desktop-Apps den
 Zugriff auf Ihr Mikrofon erlauben" und erzeugt den sichtbaren
 Datenschutz-Indikator in der Taskleiste.
 
-### Das Start-Fenster: der eigentliche Designkonflikt
+### Historische Recherche: das Start-Fenster und der Designkonflikt
+
+Die folgende urspruengliche Abwaegung erklaert den damaligen Default aus.
+Martin hat am 18.11.2026 entschieden: Ab v0.1.2 standardmaessig an; explizites
+false wird weiterhin respektiert. Countdown/Bestaetigungsfrist bleiben unimplementiert.
 
 Auto-Start heißt: die App nimmt **auf**, ohne dass der Nutzer das verlangt
 hat. Das erzeugt drei Konflikte, die in Granola durch die **Nutzer-geste**
@@ -379,12 +384,14 @@ Neue Achse in `UserSettings` (in `src/shared/config-contract.ts`, Default
 in `normalizeUserSettings`, Persistenz in `src-tauri/src/settings.rs`):
 
     export interface AutoStartSettings {
-      enabled: boolean          // Default: false
+      enabled: boolean          // Default: true ab v0.1.2
       processes: string[]       // konfigurierbare Prozess-Allowlist
     }
 
-Der Default `enabled: false` ist bewusst: Auto-Start ist eine bewusste
-Entscheidung des Nutzers, kein Default.
+Entscheidung von Martin am 18.11.2026: Ab v0.1.2 ist `enabled: true`
+Standard fuer Auto-Aufnahme **und** deren Session-Ende-Stop. Beide nutzen
+weiterhin dieselbe Einstellungsachse, keinen separaten Auto-Stop-Schalter.
+Explizit gespeichertes `false` bleibt erhalten; fehlende Felder erhalten `true`.
 
 ### Reihenfolge der Umsetzung
 
@@ -396,7 +403,7 @@ Entscheidung des Nutzers, kein Default.
    vor der Aufnahme laufen kann: `src-tauri/src/autostart.rs`.
 3. **Auto-Start** mit den Abbruchbedingungen, inklusive Azure-Konfig-Prüfung.
 4. **UI**: Toast "Meeting erkannt", Start/Stop wie bisher.
-5. **Einstellungs-Achse** `user.autoStart` (Default aus), Schalter im
+5. **Einstellungs-Achse** `user.autoStart` (urspruenglich aus, ab v0.1.2 an), Schalter im
    Settings-Dialog.
 
 **Noch offen:**
@@ -417,7 +424,7 @@ Der Kalender ist **kein** Bestandteil (Entscheidung vom 2026-11-18).
 4. Der Renderer zeigt den Toast "Meeting erkannt".
 
 ## Datenfelder
-- `user.autoStart.enabled` (Default `false`)
+- `user.autoStart.enabled` (Default `true` ab v0.1.2, steuert Start und passenden Stop)
 - `user.autoStart.processes` (konfigurierbare Prozess-Allowlist; Defaults:
   Teams, Zoom, WhatsApp, Slack, Discord, Skype, Webex, GoToMeeting, Zoomify)
 - Keine Felder `mode`, `confirmSeconds` oder `allowedProcesses`.
@@ -449,8 +456,8 @@ Der Kalender ist **kein** Bestandteil (Entscheidung vom 2026-11-18).
   projects/outlook-mcp-server (src/OutlookMcpServer/Tools/CalendarTools.cs,
   list_events).
 - [x] Kein Kalender und keine Cloud für den Start nötig: der Mechanismus nutzt ausschließlich lokale System-APIs. Beleg: kein Graph-/OAuth-Aufruf im geplanten Pfad (Abbruchbedingungen).
-- [x] Der Modus ist standardmäßig **inaktiv** (`enabled: false`) - Auto-Start ist eine bewusste Nutzerentscheidung. Beleg: normalizeUserSettings (Default je Feld `false`), src/shared/config-contract.ts (AutoStartSettings), src-tauri/src/settings.rs (AutoStartSettings). Testnachweis: Rust-Test `auto_start_is_off_by_default_and_survives_a_save_cycle`.
-- [x] Ohne vollständige Azure-Konfiguration startet die Aufnahme nicht automatisch. Beleg: src-tauri/src/lib.rs (start_recording_on_detection prüft load_azure_config, bricht ohne Konfiguration ab). Testnachweis: Rust-Test `auto_start_is_off_by_default_and_survives_a_save_cycle`.
+- [x] Auto-Aufnahme und passender Auto-Stop sind ab v0.1.2 standardmaessig **aktiv** (`enabled: true`), explizites false bleibt erhalten. Beleg: normalizeUserSettings, TS/Rust AutoStartSettings und Beispielconfig; Entscheidung Martin 18.11.2026. Testnachweis: `auto_start_is_on_by_default_and_explicit_false_survives_a_save_cycle` sowie Node-Test fuer Default an und explizites false.
+- [x] Ohne vollstaendige Azure-Konfiguration startet die Aufnahme nicht automatisch. Beleg: src-tauri/src/lib.rs (start_recording_on_detection prueft load_azure_config, bricht ohne Konfiguration ab). Formnachweis: Code-Guard; der Settings-Default-Test ist kein Wirkungsnachweis dieses Guards.
 - [x] Die Erkennung läuft im **Sidecar** (nicht im Tauri-Main) und nimmt dabei nichts auf. Beleg: sidecar/MeetingDetector.cs (nur Session-Graph), sidecar/Program.cs (Modus `--detect-only`, Event `meeting_detected`), src-tauri/src/autostart.rs (eigener Erkennungsprozess). Testnachweis: C#-Validierung - der Detektor meldet die Capture-Sitzung eines fremden Prozesses als `meeting_detected`.
 - [x] Die Erkennung ist ereignisgesteuert, nicht per Timer. Beleg: sidecar/MeetingDetector.cs (`AudioSessionManager.OnSessionCreated`), src-tauri/src/autostart.rs (Ereignisstrom, kein Polling). Testnachweis: C#-Validierung - die Erkennung kommt als Ereignis an, nicht durch Abfragen.
 - [ ] Das Ende nutzt mehrere Signale (Stille, Session-Ende), nicht nur eines. Beleg: sidecar/MeetingDetector.cs (Session-Ende mit Aggregation und 3 s Schonfrist). - **offen**: Session-Ende ist umgesetzt, Pegel-/Stille-Erkennung hingegen nicht. Der Detektor beobachtet Session-Metadaten, keine Audiodaten.
@@ -464,6 +471,15 @@ Der Kalender ist **kein** Bestandteil (Entscheidung vom 2026-11-18).
 - [x] Verifikation: Node-Tests, Rust-Tests und C#-Validierung gruen. Beleg: Typecheck, 85 Node-Tests, 41 Rust-Tests, 539 C#-Assertions gegen Quellen und 552 gegen den publizierten/getrimmten Sidecar (18.11.2026); bekannte MF-Stichprobe SKIPPED, neue Session-Proben bestanden. Testnachweis: npm run typecheck, npm run test:unit, cargo test --manifest-path src-tauri/Cargo.toml, npm run test:sidecar, npm run test:sidecar:published, npm run check:specs.
 - [ ] Live-Abnahme: ein echtes Meeting (Teams oder Zoom) startet die Aufnahme ohne Nutzeraktion, und ein normales Podcast-Playback löst **keinen** Auto-Start aus. Beleg: manuelle Abnahme am Zielrechner - die Zielrechner-Abnahme ist eine bewusste Lücke in diesem Spec. - **offen**: braucht einen echten Rechner mit Teams oder Zoom und einen Podcast-Playback als Gegenprobe.
 - [ ] Der Fenster-/Applikations-Fallback (Stufe 2) ist gebaut, falls Stufe 1 nicht ausreicht. Beleg: EnumWindows/GetWindowTextW mit PID-Korrelation. - **offen**: laut Entscheidung vom 2026-11-18 erst umsetzen, **wenn** die Session-Erkennung in der Praxis nicht trägt.
+
+## Aktualisierung v0.1.2 (18.11.2026)
+Auto-Aufnahme samt passendem Auto-Stop ist jetzt standardmaessig an.
+Explizit gespeichertes false bleibt erhalten; die Umsetzung nutzt weiterhin
+keinen Kalender und keinen Fenster-Fallback. Neuer Verifikationslauf:
+92 Node-Tests, 44 Rust-Tests, 539/552 C#-Assertions und alle 9 Schritte von
+`npm run verify -- --full` bestanden. Die oben dokumentierten frueheren
+T-513-Testzahlen bleiben ein historischer Nachweis der Erstimplementierung.
+Live-Teams-/Zoom-Abnahme und Podcast-Gegenprobe bleiben offen.
 
 ## Offene Fragen
 - **Kalender:** entschieden am 18.11.2026, wird weder fuer Start noch Ende ausgelesen.

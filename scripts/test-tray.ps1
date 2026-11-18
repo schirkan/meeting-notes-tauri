@@ -94,8 +94,8 @@ try {
             Check ($tray -ne [IntPtr]::Zero) ('Native tray exists (setting ' + $enabled + ')')
             if (-not $enabled) {
                 [TrayProbeNative]::PostMessage($main, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
-                Wait-For { $app.Refresh(); $app.HasExited } 'default close exits'
-                Check $app.HasExited 'Default false: close exits app'
+                Wait-For { $app.Refresh(); $app.HasExited } 'explicitly disabled close-to-tray exits'
+                Check $app.HasExited 'Explicit false: close exits app'
                 continue
             }
             Wait-For {

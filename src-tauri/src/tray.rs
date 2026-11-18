@@ -100,8 +100,8 @@ mod tests {
         behavior.tray_available.store(true, Ordering::Relaxed);
         assert!(behavior.should_hide("main"));
         assert!(!behavior.should_hide("other"));
-        behavior.update(&settings::WindowSettings::default());
-        assert!(!behavior.should_hide("main"), "saved change applies immediately");
+        behavior.update(&settings::WindowSettings { minimize_to_tray_on_close: false });
+        assert!(!behavior.should_hide("main"), "explicitly saved false applies immediately");
     }
 
     #[test]

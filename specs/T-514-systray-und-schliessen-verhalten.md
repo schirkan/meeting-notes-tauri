@@ -16,8 +16,9 @@ Einstellung bestimmt, ob Schliessen die App beendet oder nur im Tray verbirgt.
 - Rechtsklick zeigt genau zwei Eintraege in dieser Reihenfolge: `Anzeigen`, `Beenden`.
 - `Anzeigen` und linker Doppelklick machen das vorhandene Hauptfenster sichtbar,
   stellen es aus minimiertem Zustand wieder her und fokussieren es. Kein zweites Fenster.
-- Neue Settings-Achse: `user.window.minimizeToTrayOnClose: boolean`, Default **false**.
-  Alte/teilweise Configs behalten damit das bisherige Schliessen-Verhalten.
+- Neue Settings-Achse: `user.window.minimizeToTrayOnClose: boolean`, Default **true**
+  ab v0.1.2 (Entscheidung Martin, 18.11.2026). Fehlende Felder erhalten true;
+  ausdruecklich gespeichertes false bleibt false. Urspruenglich war der Default false.
 - Checkbox unter **Allgemein**: `Beim Schließen in den Systray minimieren`.
   Aenderung wird ueber den vorhandenen Speichern-Pfad persistiert und gilt sofort
   nach erfolgreichem Speichern, ohne Neustart. Kein eigener Speichern-Button.
@@ -46,11 +47,17 @@ TS/Rust-Contracts und Beispielconfig enthalten dieselbe Settings-Achse.
 - [x] Anzeigen und linker Doppelklick verwenden denselben Show/Unminimize/Focus-Pfad. Beleg: src-tauri/src/tray.rs (show_main, MouseButton::Left). Formnachweis: beide Handler rufen dieselbe Funktion auf; native Interaktionsabnahme separat.
 - [x] Schliessen verbirgt nur bei aktivierter Einstellung; Beenden bleibt ein echter Exit. Beleg: src-tauri/src/tray.rs (on_window_event: hide vor prevent_close, app.exit(0)). Testnachweis: `close_policy_requires_enabled_setting_available_tray_and_main_window`, `tray_menu_actions_distinguish_show_from_real_exit`.
 - [x] Verbergen veraendert Aufnahme/Pause/Detektor nicht; Exit nutzt das bestehende Cleanup. Beleg: tray.rs verbirgt ausschliesslich Window; lib.rs RunEvent::ExitRequested/Exit behaelt Sidecar- und Detektor-Cleanup. Formnachweis: kein Recording-/Detektor-Aufruf im Hide-Pfad; native Probe separat.
-- [x] Settings-Default, Persistenz, sofortige Uebernahme und Checkbox sind implementiert. Beleg: TS/Rust WindowSettings, commands::save_user_settings aktualisiert Cache erst nach erfolgreichem Save, SettingsPanel.tsx, Beispielconfig. Testnachweis: `close_to_tray_defaults_off_and_persists_both_boolean_values`, Node-Tests fuer malformed Defaults, true/false sowie Checkbox-Persistenz und Recording-Sperre.
-- [x] Typecheck, Node-/Rust-Tests und Release-Build sind bestanden. Beleg: 89 Node-Tests, 44 Rust-Tests, Tauri-Release-Build, Portable 31,37 MB / 4 Dateien / 3 Hashes, Smoke gruen, Deployment PASS 9 / FAIL 0 (18.11.2026). Testnachweis: npm run typecheck, npm run test:unit, cargo test, npm run tauri -- build --no-bundle, npm run test:smoke, npm run verify:deployment.
+- [x] Settings-Default, Persistenz, sofortige Uebernahme und Checkbox sind implementiert. Beleg: TS/Rust WindowSettings, commands::save_user_settings aktualisiert Cache erst nach erfolgreichem Save, SettingsPanel.tsx, Beispielconfig. Testnachweis: `close_to_tray_defaults_on_and_persists_both_boolean_values`, Node-Tests fuer malformed Defaults, true/false sowie Checkbox-Persistenz und Recording-Sperre.
+- [x] Typecheck, Node-/Rust-Tests und Release-Build sind bestanden. Beleg: v0.1.2, 92 Node-Tests, 44 Rust-Tests, Tauri-Release-Build, Portable 31,37 MB / 4 Dateien / 3 Hashes, Smoke gruen, Deployment PASS 9 / FAIL 0 (18.11.2026). Testnachweis: npm run typecheck, npm run test:unit, cargo test, npm run tauri -- build --no-bundle, npm run test:smoke, npm run verify:deployment.
 - [ ] Native Windows-Abnahme: sichtbares Icon, Kontextmenue, Doppelklick, X und Alt+F4 bei beiden Optionen sowie echter Exit mit laufendem Sidecar. - **offen**: Ausfuehrung von scripts/test-tray.ps1 meldet SKIPPED, weil dieser Host keinen interaktiven Windows-Desktop mit Explorer bereitstellt. PowerShell-/Win32-Testhelfer kompiliert; echte Maus-/Explorer-Interaktion und Aufnahme-Exit sind nicht belegt.
 
-## Nachweise (18.11.2026)
+## Aktualisierung v0.1.2 (18.11.2026)
+Default jetzt **an** nach Martins Vorgabe. Neuer Release-/Default-Testlauf:
+92 Node-Tests, 44 Rust-Tests, Release-Build/Smoke bestanden, Deployment PASS 9 / FAIL 0.
+Explizites false bleibt erhalten. Native Explorer-Abnahme weiterhin SKIPPED;
+die alte Messung unten bleibt als historischer Nachweis erhalten.
+
+## Historische Nachweise der T-514-Implementierung (18.11.2026, vor v0.1.2)
 - Typecheck und 89 Node-Tests bestanden; darunter true/false-Persistenz,
   fehlende/malformed Defaults, Checkbox-Anzeige und Sperre waehrend Aufnahme.
 - 44 Rust-Tests bestanden; neue Tests fuer WindowSettings, Close-Policy und

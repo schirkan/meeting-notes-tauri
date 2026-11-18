@@ -617,6 +617,28 @@ COM-Callback-Metadaten von NAudio.Wasapi werden beim Trimming konservativ erhalt
 
 Siehe [T-513](./specs/T-513-automatische-meeting-erkennung-und-auto-start.md).
 
+## AD-021 - Automatische Aufnahme und Tray-Minimierung standardmaessig an (18.11.2026)
+
+**Vorgabe von Martin:** Auto capture, Auto stop und Schliessen in den Systray
+sollen standardmaessig aktiv sein; anschliessend neue Version taggen und dokumentieren.
+
+**Umsetzung ab v0.1.2:** `user.autoStart.enabled` und
+`user.window.minimizeToTrayOnClose` erhalten Default **true** in Rust, TypeScript
+und Beispielconfig. Auto-Start und passender Session-Ende-Stop nutzen weiterhin
+dieselbe Achse, keinen neuen separaten Stop-Schalter. Fehlende/teilweise Felder
+uebernehmen den neuen Default. Bereits explizit gespeichertes **false bleibt erhalten**
+(keine Zwangsmigration persoenlicher Configs).
+
+**Unveraendert:** Ohne vollstaendige Azure-Konfiguration keine automatische Aufnahme;
+manuelle Aufnahmen werden nicht automatisch beendet. Session-Ende bleibt eine
+Heuristik mit 3-s-Schonfrist. Tray-Beenden beendet die App unabhaengig von der
+Minimierungsoption. Kein Kalender und kein neuer Fenster-Fallback.
+
+**Versionierung:** Anwendung, Lockfiles, Tauri-Config und Sidecar-Version werden auf
+0.1.2 gesetzt. IPC-Protokoll bleibt 1.0.0. Annotierter Tag `v0.1.2` nach Build/Test
+auf dem dokumentierten Commit; eine zusaetzliche GitHub-Release-Veroeffentlichung
+ist von diesem Tag getrennt.
+
 | # | Frage | Status |
 |---|---|---|
 | OQ-1 | Soll der Sidecar-EXE-Name gleich bleiben (`MeetingNotes.Sidecar.exe`) oder umbenannt werden (`MeetingNotes.AudioService.exe` o. ä.)? | offen — wird in `specs/T-201` entschieden |

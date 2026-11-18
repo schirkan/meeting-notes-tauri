@@ -63,17 +63,22 @@ pub struct UserSettings {
     pub window: WindowSettings,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct WindowSettings {
     pub minimize_to_tray_on_close: bool,
 }
 
+impl Default for WindowSettings {
+    fn default() -> Self {
+        Self { minimize_to_tray_on_close: true }
+    }
+}
+
 /// Automatischer Aufnahmestart bei erkanntem Meeting (T-513).
 ///
-/// Der Modus ist bewusst standardmaessig **aus**: Auto-Start nimmt Mikrofon
-/// und Systemton ohne Zutun des Nutzers auf, das ist eine bewusste
-/// Entscheidung und keine Voreinstellung.
+/// Seit v0.1.2 standardmaessig an: Start und passender Session-Ende-Stop.
+/// Explizit gespeichertes false bleibt erhalten.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AutoStartSettings {
@@ -86,7 +91,7 @@ pub struct AutoStartSettings {
 impl Default for AutoStartSettings {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             processes: Vec::new(),
         }
     }
@@ -496,11 +501,11 @@ mod config_tests {
     }
 
     #[test]
-    fn close_to_tray_defaults_off_and_persists_both_boolean_values() {
+    fn close_to_tray_defaults_on_and_persists_both_boolean_values() {
         let legacy: UserSettings = serde_json::from_str(r#"{"language":"de-DE"}"#).unwrap();
-        assert!(!legacy.window.minimize_to_tray_on_close);
+        assert!(legacy.window.minimize_to_tray_on_close);
         let partial: UserSettings = serde_json::from_str(r#"{"window":{}}"#).unwrap();
-        assert!(!partial.window.minimize_to_tray_on_close);
+        assert!(partial.window.minimize_to_tray_on_close);
         for enabled in [false, true] {
             let mut config = default_app_config();
             config.user.window.minimize_to_tray_on_close = enabled;
@@ -513,23 +518,25 @@ mod config_tests {
     }
 
     #[test]
-    fn auto_start_is_off_by_default_and_survives_a_save_cycle() {
+    fn auto_start_is_on_by_default_and_explicit_false_survives_a_save_cycle() {
         let defaults = default_user_settings();
-        assert!(!defaults.auto_start.enabled, "Auto-Start ist standardmaessig aus");
+        assert!(defaults.auto_start.enabled, "Auto-Start samt Auto-Stop ist standardmaessig an");
         assert!(defaults.auto_start.processes.is_empty(), "Keine feste Prozessliste im Default");
 
         let mut settings = defaults.clone();
-        settings.auto_start.enabled = true;
+        settings.auto_start.enabled = false;
         settings.auto_start.processes = vec!["teams".into(), "zoom".into()];
         let encoded = serde_json::to_string(&settings).expect("settings serialisieren");
         let decoded: UserSettings = serde_json::from_str(&encoded).expect("settings lesen");
-        assert!(decoded.auto_start.enabled, "Auto-Start bleibt erhalten");
+        assert!(!decoded.auto_start.enabled, "Explizit gespeichertes false bleibt erhalten");
         assert_eq!(decoded.auto_start.processes, vec!["teams".to_string(), "zoom".to_string()]);
 
         // Fehlt der Abschnitt, greifen die Defaults.
         let without_auto_start: UserSettings =
             serde_json::from_str(r#"{"language":"de-DE"}"#).expect("teilweise Settings lesen");
-        assert!(!without_auto_start.auto_start.enabled);
+        assert!(without_auto_start.auto_start.enabled);
+        let partial: UserSettings = serde_json::from_str(r#"{"autoStart":{}}"#).unwrap();
+        assert!(partial.auto_start.enabled);
         assert!(without_auto_start.auto_start.processes.is_empty());
     }
 

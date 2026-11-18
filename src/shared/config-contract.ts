@@ -40,9 +40,8 @@ export interface TranscriptSettings {
 /**
  * Automatic recording start when a meeting is detected (T-513).
  *
- * The mode is off by default: an automatic start records microphone and
- * system audio without the user asking for it, so it has to be an explicit
- * decision.
+ * Start and matching session-end stop are enabled by default from v0.1.2.
+ * Explicitly saved false values remain false.
  */
 export interface AutoStartSettings {
   enabled: boolean
@@ -51,7 +50,7 @@ export interface AutoStartSettings {
 }
 
 export interface WindowSettings {
-  /** Hide the main window on close; explicit tray Quit always exits. Default false. */
+  /** Hide the main window on close; explicit tray Quit always exits. Default true. */
   minimizeToTrayOnClose: boolean
 }
 
@@ -91,8 +90,8 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   transcript: {
     markdownExport: { enabled: true, path: null }
   },
-  autoStart: { enabled: false, processes: [] },
-  window: { minimizeToTrayOnClose: false }
+  autoStart: { enabled: true, processes: [] },
+  window: { minimizeToTrayOnClose: true }
 }
 
 const BCP47_PATTERN = /^[a-z]{2,3}-[A-Z]{2}$/
