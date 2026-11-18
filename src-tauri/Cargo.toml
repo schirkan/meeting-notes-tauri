@@ -1,6 +1,6 @@
 [package]
 name = "meeting-notes"
-version = "0.1.0"
+version = "0.1.1"
 description = "Meeting Notes (Windows-Desktop-App fuer Meeting-Transkripte)"
 authors = ["Martin Pietschmann <martin.pietschmann@itergo.com>"]
 license = "MIT"

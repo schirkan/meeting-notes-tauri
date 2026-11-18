@@ -18,7 +18,7 @@ used on its own.
 - **Speaker mapping:** Enable speaker recognition separately for each source and replace speaker labels with names.
 - **Pause and resume:** Pause transcription and continue within the same session.
 - **Markdown export:** Save or copy finalized transcripts with timestamps, speakers, and session metadata.
-- **Portable app:** Extract the complete folder and run it without an installer. Current source builds include their .NET runtime.
+- **Portable app:** Extract the complete folder and run it without an installer. The .NET runtime ships with the app.
 - **Connection diagnostics:** Test Azure connectivity and an optional corporate proxy from the settings dialog.
 
 ## 📦 Installation
@@ -30,11 +30,12 @@ used on its own.
 - An internet connection and an **Azure Speech resource** with an endpoint, region, and key
 - A microphone and/or an audio output device, depending on which source you want to transcribe
 
-> **Downloading a release?** The published **v0.1.0** release still requires the
+> **Downloading a release?** The published **v0.1.1** release bundles the .NET
+> runtime, so no separate .NET installation is needed; an existing .NET 8 or 10
+> installation does not interfere. The earlier **v0.1.0** release still requires the
 > [.NET 10 Runtime (x64)](https://dotnet.microsoft.com/en-us/download/dotnet/10.0).
-> Current source builds bundle the runtime and need no separate .NET installation;
-> an existing .NET 8 installation does not interfere. This README describes the
-> current source version. Check the [release notes](https://github.com/schirkan/meeting-notes-tauri/releases)
+> This README describes the current version. Check the
+> [release notes](https://github.com/schirkan/meeting-notes-tauri/releases)
 > for the requirements and features of a downloaded version.
 
 ### Run the portable version
