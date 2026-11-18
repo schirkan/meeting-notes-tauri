@@ -23,6 +23,35 @@ used on its own.
 - **System tray:** Right-click the Meeting Notes tray icon for **Anzeigen** or **Beenden**. **Anzeigen** and a left double-click restore and focus the main window. **Beim Schließen in den Systray minimieren** under **Allgemein** keeps the app, recording and meeting detection running when closing the window. Enabled by default from **v0.1.2**; **Beenden** always exits. The preference applies after saving, without restarting.
 - **Automatic recording:** "Aufnahme bei erkanntem Meeting automatisch starten" is enabled by default from **v0.1.2** and the app watches the Windows audio session graph in the background. An active audio session from an allowed meeting application starts recording. When all of that process's microphone/output sessions remain inactive for 3 seconds, its automatically started recording stops via the normal stop/export path. Manual recordings are never stopped by the detector. Automatic start and matching session-end stop share the same enabled setting. This is an audio-session heuristic, not a definitive meeting signal; real Teams/Zoom acceptance remains open.
 
+## Screenshots
+
+The images below are generated from the real renderer UI by `npm run screenshots`
+(see [docs/README.md](./docs/README.md)). The Tauri bridge is replaced by a stub with
+realistic data, so they show layout, texts, dialogs and states - not the native window
+frame, the tray icon or the recording pipeline.
+
+### Live transcript
+
+![Live transcript with speakers and interim text](docs/02-aufnahme-transkript.png)
+
+### Speaker mapping
+
+![Speaker mapping panel with per-source aliases](docs/07-sprecherzuordnung.png)
+
+### Settings
+
+| Allgemein | Azure-Konfiguration | Proxy |
+|---|---|---|
+| ![Settings tab Allgemein](docs/03-einstellungen-allgemein.png) | ![Settings tab Azure-Konfiguration](docs/04-einstellungen-azure.png) | ![Settings tab Proxy](docs/05-einstellungen-proxy.png) |
+
+### Connection diagnostics
+
+![Connection test dialog with step table](docs/06-verbindungstest.png)
+
+### Debug log
+
+![Debug log dock](docs/08-debug-log.png)
+
 ## 📦 Installation
 
 ### Requirements
