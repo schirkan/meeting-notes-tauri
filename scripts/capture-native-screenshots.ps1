@@ -323,7 +323,6 @@ try {
     Start-Sleep -Seconds 3
     $vis = [NC]::IsWindowVisible($main.H)
     L ('  window visible after double click: ' + $vis)
-    if ($vis) { Grab '10-fenster-nach-doppelklick' }
 
     # Acceptance B: right click opens the context menu with Anzeigen and Beenden.
     [NC]::RightClick([int]($r.Left + $r.Width / 2), [int]($r.Top + $r.Height / 2))
