@@ -24,7 +24,7 @@
 - Zusaetzlich 44 Rust-Tests bestanden.
 - Frischer Portable-Build: 31,37 MB / 4 Dateien / 3 gepruefte SHA256-Summen.
   Haupt-EXE ProductVersion 0.1.2; Sidecar FileVersion 0.1.2.0.
-- Smoke bestanden; Deployment PASS 9 / FAIL 0. Native Tray-Probe und bekannte
+- Smoke bestanden; Deployment PASS 9 / FAIL 0. Tray-Icon-Abnahme nativ belegt, Kontextmenue-/Doppelklick-Abnahme und bekannte
   MediaFoundation-Stichprobe SKIPPED; diese sind keine bestandenen Abnahmen.
 
 ### Bekannte Grenzen
@@ -32,7 +32,11 @@
 - Audio-Session-Ende ist eine Heuristik, kein garantiertes Meeting-Ende.
   Echte Teams-/Zoom-Abnahme und Podcast-Gegenprobe stehen aus.
 - Native Tray-/Maus-/Fokus-Abnahme ist auf dem aktuellen nicht-interaktiven
-  Build-Host nicht ausfuehrbar. Win32-Probe und offene Punkte: [T-514](./specs/T-514-systray-und-schliessen-verhalten.md).
+  Build-Host per Session-Bridge nicht ausfuehrbar. Win32-Probe und offene Punkte: [T-514](./specs/T-514-systray-und-schliessen-verhalten.md).
 - Live-Latenz, Clean-Machine-Abnahme und die bekannte MF-Stichprobe bleiben offen.
+- Eine interaktive Benutzersitzung existiert auf diesem Host (Session 1 mit Explorer).
+  Das Gateway laeuft in Session 0 und sieht sie nicht; eine geplante Aufgabe mit
+  LogonType=Interactive ueberbrueckt das. Native Screenshots und Tray-Icon-Nachweis
+  sind damit moeglich, Kontextmenue und Doppelklick nicht.
 
 Versions-Tag und GitHub-Release-Assets sind getrennte Veroeffentlichungen.

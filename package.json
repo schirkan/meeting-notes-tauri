@@ -25,7 +25,9 @@
     "verify:deployment": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-deployment.ps1 -PortableDir dist/portable",
     "test:unit": "node --test tests/*.test.mjs",
     "test:tray": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-tray.ps1",
-    "screenshots": "node scripts/capture-screenshots.mjs"
+    "screenshots": "node scripts/capture-screenshots.mjs",
+    "screenshots:native": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-native-capture.ps1 -Script capture-native-screenshots.ps1",
+    "test:tray:native": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-native-capture.ps1 -Script capture-tray-acceptance.ps1 -TaskName openclaw-tray"
   },
   "dependencies": {
     "react": "^19.3.1",

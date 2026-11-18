@@ -20,7 +20,7 @@
  * Aufruf: npm run screenshots
  */
 
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
@@ -28,7 +28,7 @@ import { chromium } from 'playwright'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = join(__dirname, '..')
-const OUTPUT_DIR = join(PROJECT_ROOT, 'docs')
+const OUTPUT_DIR = join(PROJECT_ROOT, 'docs', 'renderer')
 const VIEWPORT = { width: 1280, height: 860 }
 
 // Deutsche Oberflaechentexte als Unicode-Escapes (ASCII-sichere Datei).
@@ -256,30 +256,7 @@ async function main() {
     await server.close()
   }
 
-  writeFileSync(join(OUTPUT_DIR, 'README.md'), [
-    '# Screenshots',
-    '',
-    'Diese Bilder zeigen die echte Renderer-Oberflaeche (React/CSS aus src/renderer),',
-    'headless ueber den Vite-Dev-Server erzeugt von scripts/capture-screenshots.mjs',
-    '(npm run screenshots).',
-    '',
-    'Die Tauri-Bridge ist dabei durch eine Attrappe mit realistischen Daten ersetzt.',
-    'Belegt sind Layout, Texte, Dialoge und Zustaende - nicht das native',
-    'Fensterrahmens, das Tray-Icon oder die Aufnahme-Pipeline.',
-    '',
-    '| Datei | Inhalt |',
-    '|---|---|',
-    '| 01-startbildschirm.png | Startbildschirm mit Audio-Einstellungen |',
-    '| 02-aufnahme-transkript.png | Laufende Aufnahme mit Transkript und Sprechern |',
-    '| 03-einstellungen-allgemein.png | Einstellungen - Allgemein |',
-    '| 04-einstellungen-azure.png | Einstellungen - Azure-Konfiguration |',
-    '| 05-einstellungen-proxy.png | Einstellungen - Proxy |',
-    '| 06-verbindungstest.png | Diagnose-Dialog Verbindungstest |',
-    '| 07-sprecherzuordnung.png | Sprecherzuordnung im Inspector |',
-    '| 08-debug-log.png | Debug-Log-Dock |',
-    ''
-  ].join('\n'), 'utf8')
-  console.log('Fertig. docs/README.md beschreibt die Bilder.')
+  console.log('Fertig. Die Renderer-Screenshots liegen in docs/renderer.')
   if (failures.length > 0) {
     console.error('Fehlgeschlagene Aufnahmen: ' + failures.join(' | '))
     process.exitCode = 1

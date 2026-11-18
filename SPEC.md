@@ -3,7 +3,7 @@
 Stand: 18.11.2026
 Status: Implementierungsstand fortgeschrieben; Corporate-Netz-/Proxy-Akzeptanz am 2026-11-12 erfolgreich. Offen bleiben Latenz- und Clean-Machine-Akzeptanz.
 
-Aktueller Stand: **v0.1.2** vollstaendig verifiziert (`npm run verify -- --full`: **9 Schritte gruen**, zusaetzlich **44 Rust-Tests**). Auto-Aufnahme samt zugehoerigem Auto-Stop und Schliessen in den Systray sind standardmaessig aktiv; explizit gespeichertes `false` bleibt erhalten. **92 Node-Tests**, **539 C#-Assertions** gegen Quellen / **552** gegen den publizierten Sidecar. Frischer Portable-Build: **31,37 MB / 4 Dateien / 3 gepruefte Hashes**, Haupt-EXE 16,48 MB (`ProductVersion` 0.1.2), Sidecar 14,89 MB (`FileVersion` 0.1.2.0), Smoke gruen, Deployment **PASS 9 / FAIL 0**. Native Tray-Abnahme weiterhin SKIPPED (kein interaktiver Desktop/Explorer), bekannte MF-Stichprobe SKIPPED; Live-/Clean-Machine-Abnahme bleibt offen. Auto-Start braucht weiterhin vollstaendige Azure-Konfiguration. Details: [CHANGELOG](./CHANGELOG.md).
+Aktueller Stand: **v0.1.2** vollstaendig verifiziert (`npm run verify -- --full`: **9 Schritte gruen**, zusaetzlich **44 Rust-Tests**). Auto-Aufnahme samt zugehoerigem Auto-Stop und Schliessen in den Systray sind standardmaessig aktiv; explizit gespeichertes `false` bleibt erhalten. **92 Node-Tests**, **539 C#-Assertions** gegen Quellen / **552** gegen den publizierten Sidecar. Frischer Portable-Build: **31,37 MB / 4 Dateien / 3 gepruefte Hashes**, Haupt-EXE 16,48 MB (`ProductVersion` 0.1.2), Sidecar 14,89 MB (`FileVersion` 0.1.2.0), Smoke gruen, Deployment **PASS 9 / FAIL 0**. Tray-Icon nativ belegt (Screenshot der echten Taskleiste); Kontextmenue und Doppelklick weiterhin offen. MF-Stichprobe in der interaktiven Sitzung erneut getestet und weiterhin SKIPPED, dort antwortet MediaFoundation nicht. Live-/Clean-Machine-Abnahme bleibt offen. Auto-Start braucht weiterhin vollstaendige Azure-Konfiguration. Details: [CHANGELOG](./CHANGELOG.md).
 
 Historischer Nachweis fuer **v0.1.1**; Portable-Build **30,74 MB** (4 Dateien, 3 geprüfte Hashes; Rebuild vom 2026-11-18 - flaches Layout mit `MeetingNotes.exe` und **self-contained** Single-File-Sidecar, `ProductVersion` 0.1.1) mit der EXE `MeetingNotes.exe`, dem gemeinsamen Config-Template, der unabhängigen Mic-/Speaker-Diarization und der auswählbaren Transkriptions-Quelle (`user.transcription`, Mic/Speaker/beides); `npm run verify -- --full` (**9 Schritte grün**), Build-Smoke inklusive Sidecar-Geräteabfrage und Deployment-Nachweis (**PASS 9 / FAIL 0**) erfolgreich. Dafür sind TypeScript, **85 Node-Tests**, **35 Rust-Tests** und **508 C#-Assertions** (davon **521** gegen die publizierte, getrimmte Sidecar-EXE) erfolgreich; die Node-/UI-Tests laufen im CLI-Browserlauf grün. Nicht jede ursprüngliche Audio-/Protokoll-Anforderung ist als abgenommen bestätigt; Einzelstatus siehe [Specs](./specs/).
 
@@ -38,7 +38,7 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-509 | Latenz und Ausgabequalitaet sind auf echter Hardware gegen die |
 | T-510 | Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch |
 | T-510 | Befunde sind in `T-504`, `T-500`, `SPEC.md` und `AGENTS.md` nachgezogen. |
-| T-514 | Native Windows-Abnahme: sichtbares Icon, Kontextmenue, Doppelklick, X und Alt+F4 bei beiden Op… |
+| T-514 | Native Windows-Abnahme: sichtbares Icon (belegt), Kontextmenue, Doppelklick, X und Alt+F4 bei beiden Op… |
 
 ### Offen als bewusste Entscheidung (10 Punkte)
 
@@ -58,7 +58,7 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 ### Nächste Schritte auf deinem Rechner (die 11 offenen Punkte)
 
 Alles hier ist auf dieser Maschine nicht ausführbar (0 Audioeingänge, 0
-Ausgänge, keine Azure-Credentials, keine interaktive Sitzung). Auf deinem
+Ausgänge, keine Azure-Credentials, kein Audio-Endpoint in der Test-Sitzung). Auf deinem
 Rechner sind es sechs Schritte:
 
 **1. Latenz messen (T-502, T-500)** — das Werkzeug liegt vor:
@@ -88,7 +88,7 @@ getrennt prüfen (`user.transcription.mic` / `.speaker`).
 npm run test:sidecar
 ```
 
-Der Test läuft nur, wo MediaFoundation antwortet; hier steht `SKIPPED`.
+Der Test läuft nur, wo MediaFoundation antwortet; in der interaktiven Sitzung dieses Hosts weiterhin `SKIPPED`.
 Auf deinem Rechner prüft er 48-kHz-Stereo → 16-kHz-Mono inklusive Länge,
 Pegel, Übersteuerung und Dropouts.
 

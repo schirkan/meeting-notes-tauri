@@ -1,0 +1,338 @@
+param(
+  [string]$ExePath = 'C:\Users\Admin\.openclaw\workspace\projects\meeting-notes-tauri\dist\portable\MeetingNotes.exe',
+  [string]$OutDir = 'C:\Users\Admin\.openclaw\workspace\projects\meeting-notes-tauri\docs\native',
+  [string]$LogPath = 'C:\Users\Admin\.openclaw\workspace\temp\native-capture.log'
+)
+
+# Runs INSIDE the interactive Windows session (scheduled task, LogonType Interactive).
+# Captures the real Tauri window with PrintWindow(PW_RENDERFULLCONTENT) and drives the
+# real WebView2 UI through the accessibility tree.
+# ASCII only on purpose: PowerShell 5.1 reads this file without BOM.
+
+$ErrorActionPreference = 'Continue'
+$lines = New-Object System.Collections.ArrayList
+function L($m) { [void]$script:lines.Add(('[' + (Get-Date -Format 'HH:mm:ss.fff') + '] ' + $m)) }
+
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+
+$cs = @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public class NC {
+  public delegate bool EnumProc(IntPtr h, IntPtr l);
+
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr p, EnumProc cb, IntPtr l);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowTextW(IntPtr h, StringBuilder s, int m);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetClassNameW(IntPtr h, StringBuilder s, int m);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h, ref POINT p);
+  [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
+  [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr v);
+  [DllImport("shcore.dll")] public static extern int SetProcessDpiAwareness(int a);
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(uint f, int dx, int dy, uint d, IntPtr e);
+  [DllImport("user32.dll")] public static extern IntPtr GetMenu(IntPtr h);
+  [DllImport("user32.dll")] public static extern int GetMenuItemCount(IntPtr m);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetMenuStringW(IntPtr m, uint id, StringBuilder s, int max, uint flag);
+
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+  [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+
+  public static string Text(IntPtr h) { StringBuilder s = new StringBuilder(512); GetWindowTextW(h, s, 512); return s.ToString(); }
+  public static string Cls(IntPtr h) { StringBuilder s = new StringBuilder(256); GetClassNameW(h, s, 256); return s.ToString(); }
+
+  public static void LeftClick(int x, int y) {
+    SetCursorPos(x, y);
+    System.Threading.Thread.Sleep(120);
+    mouse_event(0x0002, 0, 0, 0, IntPtr.Zero);
+    System.Threading.Thread.Sleep(60);
+    mouse_event(0x0004, 0, 0, 0, IntPtr.Zero);
+  }
+
+  public static void DoubleClick(int x, int y) {
+    SetCursorPos(x, y);
+    System.Threading.Thread.Sleep(120);
+    mouse_event(0x0002, 0, 0, 0, IntPtr.Zero);
+    System.Threading.Thread.Sleep(40);
+    mouse_event(0x0004, 0, 0, 0, IntPtr.Zero);
+    System.Threading.Thread.Sleep(70);
+    mouse_event(0x0002, 0, 0, 0, IntPtr.Zero);
+    System.Threading.Thread.Sleep(40);
+    mouse_event(0x0004, 0, 0, 0, IntPtr.Zero);
+  }
+
+  public static void RightClick(int x, int y) {
+    SetCursorPos(x, y);
+    System.Threading.Thread.Sleep(120);
+    mouse_event(0x0008, 0, 0, 0, IntPtr.Zero);
+    System.Threading.Thread.Sleep(70);
+    mouse_event(0x0010, 0, 0, 0, IntPtr.Zero);
+  }
+}
+'@
+Add-Type -TypeDefinition $cs
+
+# Per-Monitor-V2 so client coordinates and accessibility rectangles use the same
+# physical pixels. Without it the click coordinates are scaled and miss.
+if (-not [NC]::SetProcessDpiAwarenessContext([IntPtr](-4))) { [void][NC]::SetProcessDpiAwareness(2) }
+
+if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir -Force | Out-Null }
+
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--force-renderer-accessibility'
+L ('session=' + (Get-Process -Id $PID).SessionId + ' interactive=' + [Environment]::UserInteractive)
+
+# Dummy Azure configuration WITHOUT a proxy section: an empty proxy object makes
+# isConfigComplete() fail and forces the settings dialog open at startup.
+# Written without BOM: PowerShell 5.1 Set-Content -Encoding UTF8 adds one and the
+# Rust config loader then rejects the file.
+$configPath = Join-Path (Split-Path $ExePath) 'MeetingNotes.config.json'
+$cfg = @{
+  azure = @{ endpoint = 'wss://westeurope.stt.speech.microsoft.com/speech/universal/v2'; region = 'westeurope'; speechKey = 'dummy-key-for-screenshot-capture'; interimResults = $true }
+  user = @{ language = 'de-DE'; transcription = @{ mic = $true; speaker = $true }; diarization = @{ mic = $true; speaker = $true }; devices = @{ micId = $null; speakerLoopbackId = $null }; transcript = @{ markdownExport = @{ enabled = $true; path = $null } }; autoStart = @{ enabled = $true; processes = @() }; window = @{ minimizeToTrayOnClose = $true } }
+} | ConvertTo-Json -Depth 8
+[System.IO.File]::WriteAllText($configPath, $cfg, (New-Object System.Text.UTF8Encoding($false)))
+L ('wrote dummy config (no BOM, no proxy): ' + $configPath)
+
+Get-Process MeetingNotes -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Seconds 2
+
+if (-not (Test-Path $ExePath)) { L ('EXE missing: ' + $ExePath); $lines | Set-Content -Path $LogPath -Encoding UTF8; exit 4 }
+$app = Start-Process $ExePath -WorkingDirectory (Split-Path $ExePath) -PassThru
+L ('app pid=' + $app.Id)
+
+$script:tops = New-Object System.Collections.ArrayList
+function Refresh-Tops() {
+  $script:tops = New-Object System.Collections.ArrayList
+  $cb = [NC+EnumProc]{ param($h, $l); $p2 = 0; [void][NC]::GetWindowThreadProcessId($h, [ref]$p2); [void]$script:tops.Add([PSCustomObject]@{ H = $h; Pid = $p2; Cls = [NC]::Cls($h); T = [NC]::Text($h); V = [NC]::IsWindowVisible($h) }); return $true }
+  [void][NC]::EnumWindows($cb, [IntPtr]::Zero)
+  return $script:tops
+}
+
+$main = $null
+for ($i = 0; $i -lt 60; $i++) {
+  Start-Sleep -Milliseconds 500
+  $t = (Refresh-Tops) | Where-Object { $_.Pid -eq $app.Id -and $_.V -and $_.Cls -eq 'Tauri Window' } | Select-Object -First 1
+  if ($t) { $main = $t; L ('window after ' + ($i * 0.5) + 's'); break }
+}
+if (-not $main) { L 'NO MAIN WINDOW'; $lines | Set-Content -Path $LogPath -Encoding UTF8; exit 5 }
+
+[void][NC]::SetWindowPos($main.H, [IntPtr]::Zero, 20, 20, 1500, 940, 0x0040)
+[void][NC]::SetForegroundWindow($main.H)
+Start-Sleep -Seconds 10
+
+$script:kids = New-Object System.Collections.ArrayList
+$kcb = [NC+EnumProc]{ param($h, $l); [void]$script:kids.Add([PSCustomObject]@{ H = $h; Cls = [NC]::Cls($h); V = [NC]::IsWindowVisible($h) }); return $true }
+[void][NC]::EnumChildWindows($main.H, $kcb, [IntPtr]::Zero)
+$render = $script:kids | Where-Object { $_.Cls -eq 'Chrome_RenderWidgetHostHWND' } | Select-Object -First 1
+if (-not $render) { L 'NO RENDER HOST'; $lines | Set-Content -Path $LogPath -Encoding UTF8; exit 6 }
+$origin = New-Object NC+POINT
+[void][NC]::ClientToScreen($render.H, [ref]$origin)
+L ('render host origin=' + $origin.X + ',' + $origin.Y)
+
+function Grab([string]$tag) {
+  $r = New-Object NC+RECT
+  [void][NC]::GetWindowRect($main.H, [ref]$r)
+  $w = $r.Right - $r.Left; $h = $r.Bottom - $r.Top
+  if ($w -le 0 -or $h -le 0) { L ('grab skipped ' + $tag); return }
+  $bmp = New-Object System.Drawing.Bitmap($w, $h)
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $hdc = $g.GetHdc()
+  [void][NC]::PrintWindow($main.H, $hdc, 2)
+  $g.ReleaseHdc($hdc); $g.Dispose()
+  $p = Join-Path $OutDir ($tag + '.png')
+  $bmp.Save($p, [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+  L ('grab ' + $tag + ' ' + $w + 'x' + $h + ' bytes=' + (Get-Item $p).Length)
+}
+
+function Grab-Hwnd([IntPtr]$hwnd, [string]$tag) {
+  $r = New-Object NC+RECT
+  [void][NC]::GetWindowRect($hwnd, [ref]$r)
+  $w = $r.Right - $r.Left; $h = $r.Bottom - $r.Top
+  if ($w -le 0 -or $h -le 0) { L ('grab skipped ' + $tag); return }
+  $bmp = New-Object System.Drawing.Bitmap($w, $h)
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $hdc = $g.GetHdc()
+  [void][NC]::PrintWindow($hwnd, $hdc, 2)
+  $g.ReleaseHdc($hdc); $g.Dispose()
+  $p = Join-Path $OutDir ($tag + '.png')
+  $bmp.Save($p, [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+  L ('grab ' + $tag + ' ' + $w + 'x' + $h + ' bytes=' + (Get-Item $p).Length)
+}
+
+function All-Elements() {
+  $el = [System.Windows.Automation.AutomationElement]::FromHandle($main.H)
+  if ($el -eq $null) { return $null }
+  return $el.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
+}
+
+function Find-El([string]$needle, [string]$type) {
+  $all = All-Elements
+  if ($all -eq $null) { return $null }
+  $fallback = $null
+  foreach ($e in $all) {
+    $n = $e.Current.Name
+    if (-not $n) { continue }
+    if ($n -like ('*' + $needle + '*')) {
+      $t = $e.Current.ControlType.ProgrammaticName
+      if (-not $type -or $t -eq $type) { return $e }
+      if ($fallback -eq $null) { $fallback = $e }
+    }
+  }
+  return $fallback
+}
+
+function Click([string]$needle, [string]$type) {
+  $el = Find-El $needle $type
+  if ($el -eq $null) {
+    L ('click MISS: ' + $needle)
+    $all = All-Elements
+    if ($all) {
+      $names = @()
+      foreach ($e in $all) { if ($e.Current.Name) { $names += $e.Current.Name } }
+      L ('  available: ' + (($names | Select-Object -Unique) -join ' | '))
+    }
+    return $false
+  }
+  L ('click ' + $needle + ' -> ' + $el.Current.Name + ' [' + $el.Current.ControlType.ProgrammaticName + ']')
+  try {
+    $el.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+    L '  select ok'
+    Start-Sleep -Milliseconds 1200
+    return $true
+  } catch { }
+  try {
+    $el.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    L '  invoke ok'
+    Start-Sleep -Milliseconds 1200
+    return $true
+  } catch { }
+  $b = $el.Current.BoundingRectangle
+  $cx = [int]($b.Left + $b.Width / 2) - $origin.X
+  $cy = [int]($b.Top + $b.Height / 2) - $origin.Y
+  $lp = [IntPtr](($cy -shl 16) -bor ($cx -band 0xFFFF))
+  [void][NC]::PostMessage($render.H, 0x0200, [IntPtr]::Zero, $lp)
+  [void][NC]::PostMessage($render.H, 0x0201, [IntPtr]1, $lp)
+  [void][NC]::PostMessage($render.H, 0x0202, [IntPtr]::Zero, $lp)
+  L ('  posted click at client ' + $cx + ',' + $cy)
+  Start-Sleep -Milliseconds 1200
+  return $true
+}
+
+L '=== 1 main window ==='
+Click 'Fehlermeldung schlie' $null | Out-Null
+Click 'Dialog schlie' $null | Out-Null
+Start-Sleep -Seconds 1
+Grab '01-startbildschirm'
+
+L '=== 2 settings allgemein ==='
+Click 'Einstellungsdialog' $null | Out-Null
+Grab '03-einstellungen-allgemein'
+
+L '=== 3 azure tab ==='
+Click 'Azure-Konfiguration' 'ControlType.TabItem' | Out-Null
+Grab '04-einstellungen-azure'
+
+L '=== 4 connection test ==='
+Click 'Verbindung testen' $null | Out-Null
+for ($i = 0; $i -lt 12; $i++) {
+  Start-Sleep -Seconds 5
+  if (Find-El 'Verbindungstest anzeigen' $null) { L ('  test finished after ' + (($i + 1) * 5) + 's'); break }
+}
+Click 'Verbindungstest anzeigen' $null | Out-Null
+Start-Sleep -Seconds 2
+Grab '06-verbindungstest'
+Click 'Dialog schlie' $null | Out-Null
+Start-Sleep -Milliseconds 800
+
+L '=== 5 proxy tab ==='
+Click 'Proxy' 'ControlType.TabItem' | Out-Null
+Grab '05-einstellungen-proxy'
+Click 'Dialog schlie' $null | Out-Null
+Start-Sleep -Milliseconds 800
+
+L '=== 6 speakers ==='
+Click 'Sprecherzuordnung' $null | Out-Null
+Grab '07-sprecherzuordnung'
+
+L '=== 7 debug log ==='
+Click 'Weitere Aktionen' $null | Out-Null
+Click 'Debug-Log' $null | Out-Null
+Start-Sleep -Milliseconds 800
+Grab '08-debug-log'
+
+L '=== 8 tray acceptance ==='
+try {
+  $root = [System.Windows.Automation.AutomationElement]::RootElement
+  $trayCond = New-Object System.Windows.Automation.PropertyCondition ([System.Windows.Automation.AutomationElement]::ClassNameProperty), 'Shell_TrayWnd'
+  $tray = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $trayCond)
+  $icon = $null
+  # The overflow flyout is a separate top level window, so search the whole tree first.
+  foreach ($e in $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
+    if ($e.Current.Name -eq 'Meeting Notes' -and $e.Current.ClassName -like 'SystemTray*') { $icon = $e; break }
+  }
+  if (-not $icon) {
+    L '  icon not visible, expanding hidden icons'
+    foreach ($e in $tray.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
+      if ($e.Current.Name -like 'Ausgeblendete*') {
+        try { $e.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); L '  expanded'; Start-Sleep -Seconds 3 } catch { L ('  expand failed: ' + $_.Exception.Message) }
+        break
+      }
+    }
+    for ($i = 0; $i -lt 10; $i++) {
+      foreach ($e in $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
+        if ($e.Current.Name -eq 'Meeting Notes' -and $e.Current.ClassName -like 'SystemTray*') { $icon = $e; break }
+      }
+      if ($icon) { break }
+      Start-Sleep -Seconds 1
+    }
+  }
+  if (-not $icon) { L '  TRAY ICON NOT FOUND' } else {
+    $r = $icon.Current.BoundingRectangle
+    L ('  tray icon: class=' + $icon.Current.ClassName + ' rect=' + $r)
+
+    # Acceptance A: double click restores the main window.
+    [void][NC]::ShowWindow($main.H, 6)
+    Start-Sleep -Seconds 1
+    L ('  window visible before double click: ' + [NC]::IsWindowVisible($main.H))
+    [NC]::DoubleClick([int]($r.Left + $r.Width / 2), [int]($r.Top + $r.Height / 2))
+    Start-Sleep -Seconds 3
+    $vis = [NC]::IsWindowVisible($main.H)
+    L ('  window visible after double click: ' + $vis)
+    if ($vis) { Grab '10-fenster-nach-doppelklick' }
+
+    # Acceptance B: right click opens the context menu with Anzeigen and Beenden.
+    [NC]::RightClick([int]($r.Left + $r.Width / 2), [int]($r.Top + $r.Height / 2))
+    Start-Sleep -Seconds 3
+    $menuHwnd = [IntPtr]::Zero
+    foreach ($t in (Refresh-Tops)) {
+      if ($t.V -and $t.Cls -eq '#32768') { $menuHwnd = $t.H; L ('  context menu window: ' + $t.H); break }
+    }
+    if ($menuHwnd -ne [IntPtr]::Zero) {
+      Grab-Hwnd $menuHwnd '09-systray-kontextmenu'
+      $hMenu = [NC]::GetMenu($menuHwnd)
+      $count = [NC]::GetMenuItemCount($hMenu)
+      L ('  menu items: ' + $count)
+      for ($i = 0; $i -lt $count; $i++) {
+        $sb = New-Object System.Text.StringBuilder 256
+        [void][NC]::GetMenuStringW($hMenu, [uint32]$i, $sb, 256, 0x400)
+        L ('    menu[' + $i + '] = ' + $sb.ToString())
+      }
+    } else { L '  NO CONTEXT MENU WINDOW' }
+  }
+} catch { L ('tray error: ' + $_.Exception.Message) }
+
+Get-Process MeetingNotes -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
+$lines | Set-Content -Path $LogPath -Encoding UTF8
+Write-Output 'NATIVE-CAPTURE-DONE'

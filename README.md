@@ -25,32 +25,43 @@ used on its own.
 
 ## Screenshots
 
-The images below are generated from the real renderer UI by `npm run screenshots`
-(see [docs/README.md](./docs/README.md)). The Tauri bridge is replaced by a stub with
-realistic data, so they show layout, texts, dialogs and states - not the native window
-frame, the tray icon or the recording pipeline.
+The images below are **captures of the real application**: the built `MeetingNotes.exe`
+runs in the interactive Windows session and the real window is recorded with
+`PrintWindow(PW_RENDERFULLCONTENT)`. They therefore show the native window frame, the
+real app icon, the real WebView2 content and the real Windows taskbar with the tray
+icon. The one exception is the live transcript: a real recording needs Azure Speech
+credentials, so that view comes from the headless renderer (`npm run screenshots`).
+See [docs/README.md](./docs/README.md) for the details of both sets.
+
+### Main window
+
+![Native main window with source settings](docs/native/01-startbildschirm.png)
 
 ### Live transcript
 
-![Live transcript with speakers and interim text](docs/02-aufnahme-transkript.png)
-
-### Speaker mapping
-
-![Speaker mapping panel with per-source aliases](docs/07-sprecherzuordnung.png)
+![Live transcript with speakers and interim text](docs/renderer/02-aufnahme-transkript.png)
 
 ### Settings
 
 | Allgemein | Azure-Konfiguration | Proxy |
 |---|---|---|
-| ![Settings tab Allgemein](docs/03-einstellungen-allgemein.png) | ![Settings tab Azure-Konfiguration](docs/04-einstellungen-azure.png) | ![Settings tab Proxy](docs/05-einstellungen-proxy.png) |
+| ![Settings tab Allgemein](docs/native/03-einstellungen-allgemein.png) | ![Settings tab Azure-Konfiguration](docs/native/04-einstellungen-azure.png) | ![Settings tab Proxy](docs/native/05-einstellungen-proxy.png) |
 
 ### Connection diagnostics
 
-![Connection test dialog with step table](docs/06-verbindungstest.png)
+![Connection test dialog with step table](docs/native/06-verbindungstest.png)
+
+### Speaker mapping
+
+![Speaker mapping panel with per-source aliases](docs/native/07-sprecherzuordnung.png)
 
 ### Debug log
 
-![Debug log dock](docs/08-debug-log.png)
+![Debug log dock](docs/native/08-debug-log.png)
+
+### System tray
+
+![Windows taskbar with the Meeting Notes app icon](docs/native/11-taskbar-mit-app-icon.png)
 
 ## 📦 Installation
 
