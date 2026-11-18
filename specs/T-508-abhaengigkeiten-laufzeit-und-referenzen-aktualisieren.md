@@ -14,7 +14,20 @@ die Aufnahme- und Transkriptionslogik bleibt unveraendert.
 - [x] **npm:** React und React-Doma auf 19.3.1, `@types/react`/`@types/react-dom` auf 19.3.0, Beleg: package.json (React 19.3.1, @types/react 19.3.0, @types/react-dom 19.3.0).
   `@vitejs/plugin-react` auf 6.3.0, Vite auf 8.3.8, Playwright auf 1.65.0,
   `@tauri-apps/api` und `@tauri-apps/cli` auf 2.12.4, `@types/node` auf 26.6.6.
-  `npm audit` meldet **0 Vulnerabilities**.
+  `npm audit` meldet **0 Vulnerabilities** (Stand der Pruefung am 2026-11-13).
+  **Nachtrag 2026-11-18:** Der damalige Befund gilt nicht mehr - `npm audit`
+  meldet heute **5 high severity** ueber die Kette `vite` -> `tinyglobby` -> `fdir`
+  -> `picomatch` (Advisory [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf),
+  betroffen ist `picomatch` <= 4.0.7; installiert ist 4.0.7). Die Meldung ist
+  **keine Regression** aus einem spaeteren Commit - der Lockfile von `f32737b`
+  meldet dieselben 5. Betroffen ist nur die Build-Toolchain, nicht das
+  ausgelieferte Produkt. Ein `picomatch`-Override auf 4.0.7 raeumt die Meldung
+  nicht ab, und `npm audit fix --force` wuerde Vite auf 6.2.7 downgraden - beide
+  Wege sind unbrauchbar. **Entscheidung vom 2026-11-18:** es wird auf ein
+  Vite-Update gewartet, das die Luecke schliesst. Ein Waechter
+  (`scripts/watch-vite-audit-fix.js` im OpenClaw-Workspace) meldet sich, sobald
+  eine neue stabile Vite-Version erscheint oder `picomatch` den Advisory-Bereich
+  verlaesst.
 - [x] **TypeScript 7.0.2:** `baseUrl` ist in TS 7 entfernt, die Pfade sind jetzt Beleg: tests/startup-ui.test.mjs (baseUrl) (geprueft).
   relativ (`./src/shared/*`). Der Typecheck laeuft fehlerfrei durch.
 - [x] **.NET:** Ziel-Framework von `net8.0-windows` auf **`net10.0-windows`**. Beleg: sidecar/MeetingNotes.Sidecar.csproj (net10.0-windows; das optionale net9.0-Ziel wurde beim neuesten NuGet-Update auf Nutzerwunsch entfernt).
