@@ -81,12 +81,13 @@ jobs:
           $stream = [System.IO.File]::OpenRead($zip)
           try { $bytes = $sha.ComputeHash($stream) } finally { $stream.Dispose(); $sha.Dispose() }
           $hash = ([System.BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
+          # Eine Textdatei, kein ZIP: der Name sagt, was es ist.
           "sha256:$hash  MeetingNotes-v$version-win-x64.zip" |
-            Out-File -FilePath (Join-Path $env:RUNNER_TEMP 'SHA256SUMS.zip') -Encoding utf8
+            Out-File -FilePath (Join-Path $env:RUNNER_TEMP 'SHA256SUMS.txt') -Encoding utf8
           Write-Host "ZIP: $zip ($((Get-Item $zip).Length) Bytes)"
           Write-Host "SHA256: $hash"
           Add-Content -Path $env:GITHUB_ENV -Value "ZIP_PATH=$zip"
-          Add-Content -Path $env:GITHUB_ENV -Value "SUMS_PATH=$env:RUNNER_TEMP/SHA256SUMS.zip"
+          Add-Content -Path $env:GITHUB_ENV -Value "SUMS_PATH=$env:RUNNER_TEMP/SHA256SUMS.txt"
           Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_VERSION=$version"
 
       - name: Upload the release asset
@@ -106,7 +107,7 @@ jobs:
           $tag = '${{ inputs.tag || github.ref_name }}'
           $version = $env:RELEASE_VERSION
           $zip = Join-Path $env:RUNNER_TEMP "MeetingNotes-v$version-win-x64.zip"
-          $sums = Join-Path $env:RUNNER_TEMP 'SHA256SUMS.zip'
+          $sums = Join-Path $env:RUNNER_TEMP 'SHA256SUMS.txt'
           $notes = @"
           ## Meeting Notes v$version
           Portable-Distribution fuer Windows x64.
