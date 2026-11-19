@@ -28,7 +28,7 @@
   MediaFoundation-Stichprobe SKIPPED; diese sind keine bestandenen Abnahmen.
 
 ### Release-Pipeline
-- GitHub Actions baut und veroeffentlicht die Releases: `ci.yml` (Push/PR: Typecheck, Node-, Spec- und Rust-Tests, Build, Smoke, Deployment) und `release.yml` (Tag-Push: Build aus dem Tag, ZIP + `SHA256SUMS` als Release-Asset; `workflow_dispatch` holt ein fehlendes Release ohne Tag-Verschiebung nach).
+- GitHub Actions baut und veroeffentlicht die Releases: **ausschliesslich bei einem Release-Tag** (`release.yml`) - kein automatischer Build bei Push oder Pull Request. Der Workflow checkt genau das Tag aus, laesst Typecheck, Node-Tests und Spec-Konsistenz durch, baut die Portable-Distribution, prueft sie mit Smoke-Test und Deployment-Pruefung und veroeffentlicht ZIP + `SHA256SUMS` als Release-Asset. `workflow_dispatch` holt ein fehlendes Release ohne Tag-Verschiebung nach.
 - Das Release **v0.1.2** wurde nachgetragen: ZIP aus dem Tag-Commit `5b8d876`.
 
 ### Bekannte Grenzen

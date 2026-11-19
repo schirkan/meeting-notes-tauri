@@ -222,10 +222,10 @@ For the native tray callback/menu/exit probe, run `npm run test:tray` on an inte
 
 ### Releases and CI
 
-GitHub Actions builds and publishes the portable releases:
+GitHub Actions builds and publishes the portable releases. There is **no automatic build on push** - the workflow only runs when a release tag is pushed:
 
-- **CI** (`.github/workflows/ci.yml`) runs on every push and pull request against `main`: typecheck, Node tests, spec consistency, Rust tests, then a full build with smoke test and deployment check.
-- **Release** (`.github/workflows/release.yml`) runs when you push a `v*` tag. It builds the portable distribution from that tag, verifies it, and publishes the ZIP as a GitHub release asset with a `SHA256SUMS` file. A missing release can be published later without moving the tag via **Run workflow** with the `tag` input.
+- **Release** (`.github/workflows/release.yml`) runs when you push a `v*` tag. It checks out exactly that tag, runs typecheck, Node tests and spec consistency, builds the portable distribution, verifies it with the smoke test and the deployment check, and publishes the ZIP as a GitHub release asset together with a `SHA256SUMS` file.
+- A missing release can be published later without moving the tag via **Run workflow** with the `tag` input.
 
 ```powershell
 git tag v0.1.3

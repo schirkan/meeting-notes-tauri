@@ -251,10 +251,9 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 
 ### Release-Pipeline (T-515)
 
-Jede Veroeffentlichung laeuft ueber GitHub Actions, damit das publizierte ZIP immer zum Tag gehoert:
+Jede Veroeffentlichung laeuft ueber GitHub Actions, damit das publizierte ZIP immer zum Tag gehoert. **Es gibt bewusst keinen automatischen Build bei Push oder Pull Request** - der Workflow startet ausschliesslich bei einem Release-Tag:
 
-- **CI** (`.github/workflows/ci.yml`): bei jedem Push und Pull Request gegen `main` laufen Typecheck, Node-Tests, Spec-Konsistenz, Rust-Tests sowie ein vollstaendiger Build mit Smoke-Test und Deployment-Pruefung.
-- **Release** (`.github/workflows/release.yml`): beim Push eines `v*`-Tags wird die Portable-Distribution aus diesem Tag gebaut, geprueft und als GitHub-Release-Asset veroeffentlicht (`MeetingNotes-v<version>-win-x64.zip` plus `SHA256SUMS.zip`). Ein fehlendes Release laesst sich ohne Tag-Verschiebung ueber **Run workflow** mit dem `tag`-Input nachholen.
+- **Release** (`.github/workflows/release.yml`): beim Push eines `v*`-Tags wird genau dieses Tag ausgecheckt, Typecheck, Node-Tests und Spec-Konsistenz laufen, die Portable-Distribution wird gebaut, mit Smoke-Test und Deployment-Pruefung geprueft und als GitHub-Release-Asset veroeffentlicht (`MeetingNotes-v<version>-win-x64.zip` plus `SHA256SUMS.zip`). Ein fehlendes Release laesst sich ohne Tag-Verschiebung ueber **Run workflow** mit dem `tag`-Input nachholen.
 - Die C#-Sidecar-Validierung laeuft bewusst nicht im Workflow: sie braucht reale Audio-Hardware, die GitHub-Runner nicht besitzen.
 
 Details: [T-515](./specs/T-515-github-actions-pipeline-und-release.md).
