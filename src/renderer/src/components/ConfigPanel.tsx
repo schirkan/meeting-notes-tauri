@@ -1,16 +1,11 @@
 import type { AppConfigState } from '@shared/config-contract'
 import type { ConfigDraft } from '../config-utils'
-import type { ConnectivityResult } from './ConnectivityDialog'
 
 type ConfigPanelProps = {
   configState: AppConfigState | null
   configDraft: ConfigDraft
   statusRunning: boolean
   setConfigDraft: React.Dispatch<React.SetStateAction<ConfigDraft>>
-  onTestConnectivity: () => Promise<void>
-  onOpenConnectivityDialog: () => void
-  isTestingConnectivity: boolean
-  connectivityResult: ConnectivityResult | null
 }
 
 export function ConfigPanel(props: ConfigPanelProps) {
@@ -18,11 +13,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
     configState,
     configDraft,
     statusRunning,
-    setConfigDraft,
-    onTestConnectivity,
-    onOpenConnectivityDialog,
-    isTestingConnectivity,
-    connectivityResult
+    setConfigDraft
   } = props
 
   return (
@@ -82,21 +73,6 @@ export function ConfigPanel(props: ConfigPanelProps) {
         </label>
       </div>
 
-      <div className="settings-action-row">
-        <button
-          className="secondary-button"
-          type="button"
-          onClick={() => void onTestConnectivity()}
-          disabled={isTestingConnectivity || !configDraft.endpoint || !configDraft.speechKey || !configDraft.region}
-        >
-          {isTestingConnectivity ? 'Teste …' : 'Verbindung testen'}
-        </button>
-        {(connectivityResult || isTestingConnectivity) && (
-          <button className="secondary-button" type="button" onClick={onOpenConnectivityDialog}>
-            {isTestingConnectivity ? 'Laufenden Verbindungstest anzeigen' : 'Letzten Verbindungstest anzeigen'}
-          </button>
-        )}
-      </div>
     </section>
   )
 }

@@ -1,4 +1,4 @@
-import { Children, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Icon } from './Icon'
 
 type SettingsDialogProps = {
@@ -6,11 +6,7 @@ type SettingsDialogProps = {
   onClose: () => void
   children: React.ReactNode
   title?: string
-  /**
-   * Names of the sections. All sections live on one page; the navigation
-   * only scrolls to the selected section.
-   */
-  sections?: string[]
+  scrollable?: boolean
   footer?: React.ReactNode
   busy?: boolean
 }
@@ -25,14 +21,7 @@ const FOCUSABLE_SELECTOR = [
 ].join(',')
 
 export function SettingsDialog(props: SettingsDialogProps) {
-  const { isOpen, onClose, children, title = 'Einstellungen', sections, footer, busy = false } = props
-  const [activeSection, setActiveSection] = useState(0)
-  const navRefs = useRef<Array<HTMLButtonElement | null>>([])
-  const sectionRefs = useRef<Array<HTMLElement | null>>([])
-  const gridRef = useRef<HTMLDivElement | null>(null)
-  // While a programmatic scroll runs, the scroll spy must not override the
-  // section the user just chose.
-  const scrollLock = useRef(false)
+  const { isOpen, onClose, children, title = 'Einstellungen', scrollable = false, footer, busy = false } = props
   const dialogRef = useRef<HTMLElement | null>(null)
   // Ref statt State, damit onClose-Wechsel den Initial-Focus-Effekt nicht
   // erneut auslösen. Außerdem den Initial-Fokus nur einmalig pro Open-Phase
@@ -119,39 +108,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
     }
   }, [isOpen])
 
-  // Die Bereiche liegen alle auf einer Seite. Die Navigation scrollt nur zum
-  // gewaehlten Abschnitt.
-  const scrollToSection = (index: number) => {
-    const section = sectionRefs.current[index]
-    const grid = gridRef.current
-    if (!section || !grid) return
-    scrollLock.current = true
-    setActiveSection(index)
-    window.setTimeout(() => { scrollLock.current = false }, 600)
-    const gridTop = grid.getBoundingClientRect().top
-    const sectionTop = section.getBoundingClientRect().top
-    grid.scrollTo({ top: grid.scrollTop + (sectionTop - gridTop) - 8, behavior: 'smooth' })
-  }
-
-  // Scroll-Spy: markiert den Abschnitt, der gerade oben steht.
-  useEffect(() => {
-    if (!isOpen || !sections) return
-    const grid = gridRef.current
-    if (!grid) return
-    const update = () => {
-      if (scrollLock.current) return
-      const gridTop = grid.getBoundingClientRect().top
-      let current = 0
-      sectionRefs.current.forEach((section, index) => {
-        if (section && section.getBoundingClientRect().top - gridTop <= 40) current = index
-      })
-      setActiveSection(current)
-    }
-    update()
-    grid.addEventListener('scroll', update, { passive: true })
-    return () => grid.removeEventListener('scroll', update)
-  }, [isOpen, sections])
-
   if (!isOpen) {
     return null
   }
@@ -160,7 +116,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
     <div className="settings-dialog-overlay" role="presentation" onClick={onClose}>
       <section
         ref={dialogRef}
-        className={`settings-dialog ${sections ? 'settings-dialog-scroll' : ''}`}
+        className={`settings-dialog ${scrollable ? 'settings-dialog-scroll' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -174,34 +130,8 @@ export function SettingsDialog(props: SettingsDialogProps) {
           </button>
         </div>
 
-        {sections && <nav className="settings-sections" aria-label="Einstellungsbereiche">
-          {sections.map((section, index) => <button
-            key={section}
-            type="button"
-            ref={(element) => { navRefs.current[index] = element }}
-            aria-current={activeSection === index ? 'true' : undefined}
-            onClick={() => scrollToSection(index)}
-            onKeyDown={(event) => {
-              let next = index
-              if (event.key === 'ArrowRight') next = (index + 1) % sections.length
-              else if (event.key === 'ArrowLeft') next = (index + sections.length - 1) % sections.length
-              else if (event.key === 'Home') next = 0
-              else if (event.key === 'End') next = sections.length - 1
-              else return
-              event.preventDefault()
-              scrollToSection(next)
-              navRefs.current[next]?.focus()
-            }}>{section}</button>)}
-        </nav>}
-        <div className="settings-dialog-grid" ref={gridRef} inert={busy}>
-          {sections
-            ? Children.toArray(children).map((child, index) => <div
-              key={sections[index] ?? `settings-section-${index}`}
-              className="settings-section"
-              id={`settings-section-${index}`}
-              ref={(element) => { sectionRefs.current[index] = element }}
-            >{child}</div>)
-            : children}
+        <div className="settings-dialog-grid" inert={busy}>
+          {children}
         </div>
 
         {footer && <div className="settings-dialog-footer">{footer}</div>}

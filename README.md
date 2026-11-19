@@ -20,7 +20,7 @@ used on its own.
 - **Markdown export:** Save or copy finalized transcripts with timestamps, speakers, and session metadata.
 - **Portable app:** Extract the complete folder and run it without an installer. The .NET runtime ships with the app.
 - **Connection diagnostics:** Test Azure connectivity and an optional corporate proxy from the settings dialog.
-- **System tray:** Right-click the Meeting Notes tray icon for **Anzeigen** or **Beenden**. **Anzeigen** and a left double-click restore and focus the main window. **Beim Schließen in den Systray minimieren** under **Allgemein** keeps the app, recording and meeting detection running when closing the window. Enabled by default from **v0.1.2**; **Beenden** always exits. The preference applies after saving, without restarting.
+- **System tray:** The tray icon turns **red while recording**, **yellow while paused**, and returns to its original color after stopping or a sidecar crash. Right-click it for **Anzeigen** or **Beenden**. **Anzeigen** and a left double-click restore and focus the main window. **Beim Schließen in den Systray minimieren** under **Allgemein** keeps the app, recording and meeting detection running when closing the window. Enabled by default from **v0.1.2**; **Beenden** always exits. The preference applies after saving, without restarting.
 - **Automatic recording:** "Aufnahme bei erkanntem Meeting automatisch starten" is enabled by default from **v0.1.2** and the app watches the Windows audio session graph in the background. An active audio session from an allowed meeting application starts recording. When all of that process's microphone/output sessions remain inactive for 3 seconds, its automatically started recording stops via the normal stop/export path. Manual recordings are never stopped by the detector. Automatic start and matching session-end stop share the same enabled setting. This is an audio-session heuristic, not a definitive meeting signal; real Teams/Zoom acceptance remains open.
 
 ## Screenshots
@@ -115,7 +115,7 @@ Settings open automatically on first launch if the Azure configuration is missin
 
 ### Transcribe a conversation
 
-1. Select the language and audio devices. Changes on the start page are saved immediately; changes in the settings dialog require **Speichern**.
+1. Select audio devices under **Audio Einstellungen**, centered in the empty transcript area on the start page; changes are saved immediately. Select the language under **Allgemein** in the settings dialog and confirm with **Speichern**. The dialog keeps its sections on one scrolling page without tabs, with consistently spaced two-column fields; **Verbindung testen** is available in its footer when the required Azure fields are filled in. **Transkript automatisch speichern** enables automatic Markdown export; the adjacent path and folder icon select its destination.
 2. Use the checkboxes next to the device selectors to enable microphone audio, speaker playback, or both. At least one source stays enabled.
 3. Enable **Sprechererkennung** (Speaker recognition) for either source if needed. Each source has its own checkbox beside its device selector.
 4. Click **Start**. The live transcript appears in the main area.

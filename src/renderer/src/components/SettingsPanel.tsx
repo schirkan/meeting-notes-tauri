@@ -40,14 +40,14 @@ export function SettingsPanel(props: SettingsPanelProps) {
   return (
     <section className="panel settings">
       <div className="panel-header">
-        <h2>{audioOnly ? 'Allgemeine Einstellungen' : 'Allgemein'}</h2>
+        <h2>{audioOnly ? 'Audio Einstellungen' : 'Allgemein'}</h2>
       </div>
 
       {statusRunning && <div className="settings-inline-hint">Aufnahme stoppen, um Einstellungen zu ändern.</div>}
 
       {/* Nur der Leerzustand nutzt das Audio-Grid; im Dialog hat der Abschnitt "Audio" eigene Felder. */}
       <div className={audioOnly ? 'settings-block audio-settings-grid' : 'settings-block'}>
-        <label>
+        {!audioOnly && <label>
           <span className="field-caption"><Icon name="flag" />Sprache</span>
           <select
             value={settings.language}
@@ -64,9 +64,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
-        </label>
+        </label>}
 
-        {/* Der Leerzustand auf der Startseite zeigt Sprache und Audioquellen. */}
+        {/* Der Leerzustand auf der Startseite zeigt nur Audioquellen. */}
         {audioOnly && <AudioSources
           statusRunning={statusRunning}
           settings={settings}
@@ -75,89 +75,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         />}
 
         {!audioOnly && <>
-          <label className="checkbox-field full-field">
-            <input
-              type="checkbox"
-              checked={settings.autoStart.enabled}
-              onChange={(event) => {
-                const enabled = event.currentTarget.checked
-                setSettings((prev) => ({
-                  ...prev,
-                  autoStart: { ...prev.autoStart, enabled }
-                }))
-              }}
-              disabled={statusRunning}
-            />
-            <span>Aufnahme bei erkanntem Meeting automatisch starten</span>
-          </label>
-
-          <label className="checkbox-field full-field">
-            <input
-              type="checkbox"
-              aria-label="Aufnahme automatisch beenden"
-              checked={settings.autoStart.autoStop}
-              onChange={(event) => {
-                const autoStop = event.currentTarget.checked
-                setSettings((prev) => ({
-                  ...prev,
-                  autoStart: { ...prev.autoStart, autoStop }
-                }))
-              }}
-              disabled={statusRunning || !settings.autoStart.enabled}
-            />
-            <span>Aufnahme automatisch beenden, wenn das Meeting automatisch gestartet wurde</span>
-          </label>
-
-          <label className="checkbox-field full-field">
-            <input
-              type="checkbox"
-              checked={settings.transcript.markdownExport.enabled}
-              onChange={(event) => {
-                const enabled = event.currentTarget.checked
-                setSettings((prev) => ({
-                  ...prev,
-                  transcript: {
-                ...prev.transcript,
-                markdownExport: { ...prev.transcript.markdownExport, enabled }
-              }
-            }))
-            }}
-            disabled={statusRunning}
-          />
-          <span>Transkript automatisch als Markdown speichern</span>
-          </label>
-
-          {/* Der Speicherpfad gehoert direkt unter seine Checkbox. */}
-          <div className="full-field directory-field">
-            <label htmlFor="transcript-export-path">Speicherpfad (optional)</label>
-            <div className="directory-control">
-              <input
-                id="transcript-export-path"
-                type="text"
-                value={settings.transcript.markdownExport.path ?? ''}
-                onChange={(event) => {
-                  const path = event.currentTarget.value.trim() || null
-                  setSettings((prev) => ({
-                    ...prev,
-                    transcript: {
-                      ...prev.transcript,
-                      markdownExport: {
-                        ...prev.transcript.markdownExport,
-                        path
-                      }
-                    }
-                  }))
-                }}
-                placeholder="Standard: Anwendungsverzeichnis"
-                disabled={statusRunning || !settings.transcript.markdownExport.enabled}
-              />
-              <button type="button" onClick={() => void onChooseDirectory()}
-                disabled={statusRunning || !settings.transcript.markdownExport.enabled || choosingDirectory}
-                aria-label="Speicherordner auswählen"><Icon name="folder" />Ordner auswählen</button>
-            </div>
-          </div>
-
-          <label className="checkbox-field full-field">
+          <label className="checkbox-field">
             <input
               type="checkbox"
               checked={settings.window.minimizeToTrayOnClose}
@@ -172,6 +90,74 @@ export function SettingsPanel(props: SettingsPanelProps) {
             />
             <span>Beim Schließen in den Systray minimieren</span>
           </label>
+
+          <label className="checkbox-field" title="Aufnahme bei erkanntem Meeting automatisch starten">
+            <input
+              type="checkbox"
+              checked={settings.autoStart.enabled}
+              onChange={(event) => {
+                const enabled = event.currentTarget.checked
+                setSettings((prev) => ({ ...prev, autoStart: { ...prev.autoStart, enabled } }))
+              }}
+              disabled={statusRunning}
+            />
+            <span>Aufnahme automatisch starten</span>
+          </label>
+          <label className="checkbox-field" title="Aufnahme automatisch beenden, wenn das Meeting automatisch gestartet wurde">
+            <input
+              type="checkbox"
+              aria-label="Aufnahme automatisch beenden"
+              checked={settings.autoStart.autoStop}
+              onChange={(event) => {
+                const autoStop = event.currentTarget.checked
+                setSettings((prev) => ({ ...prev, autoStart: { ...prev.autoStart, autoStop } }))
+              }}
+              disabled={statusRunning || !settings.autoStart.enabled}
+            />
+            <span>Aufnahme automatisch beenden</span>
+          </label>
+
+          <label className="checkbox-field" title="Transkript automatisch als Markdown speichern">
+            <input
+              type="checkbox"
+              checked={settings.transcript.markdownExport.enabled}
+              onChange={(event) => {
+                const enabled = event.currentTarget.checked
+                setSettings((prev) => ({
+                  ...prev,
+                  transcript: {
+                    ...prev.transcript,
+                    markdownExport: { ...prev.transcript.markdownExport, enabled }
+                  }
+                }))
+              }}
+              disabled={statusRunning}
+            />
+            <span>Transkript automatisch speichern</span>
+          </label>
+          <div className="directory-control">
+            <input
+              id="transcript-export-path"
+              aria-label="Speicherpfad (optional)"
+              type="text"
+              value={settings.transcript.markdownExport.path ?? ''}
+              onChange={(event) => {
+                const path = event.currentTarget.value.trim() || null
+                setSettings((prev) => ({
+                  ...prev,
+                  transcript: {
+                    ...prev.transcript,
+                    markdownExport: { ...prev.transcript.markdownExport, path }
+                  }
+                }))
+              }}
+              placeholder="Standard: Anwendungsverzeichnis"
+              disabled={statusRunning || !settings.transcript.markdownExport.enabled}
+            />
+            <button type="button" onClick={() => void onChooseDirectory()}
+              disabled={statusRunning || !settings.transcript.markdownExport.enabled || choosingDirectory}
+              aria-label="Speicherordner auswählen" title="Ordner auswählen"><Icon name="folder" /></button>
+          </div>
         </>}
       </div>
     </section>

@@ -243,6 +243,17 @@ function Click([string]$needle, [string]$type) {
   return $true
 }
 
+function Scroll-To([string]$name) {
+  $el = Find-El $name 'ControlType.Text'
+  if ($null -eq $el) { throw ('Section not found: ' + $name) }
+  $pattern = $null
+  if (-not $el.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$pattern)) {
+    throw ('ScrollItemPattern unavailable for section: ' + $name)
+  }
+  $pattern.ScrollIntoView()
+  L ('scrolled to ' + $name)
+}
+
 L '=== 1 main window ==='
 Click 'Fehlermeldung schlie' $null | Out-Null
 Click 'Dialog schlie' $null | Out-Null
@@ -254,23 +265,21 @@ Click 'Einstellungsdialog' $null | Out-Null
 Grab '03-einstellungen-allgemein'
 
 L '=== 3 settings audio ==='
-Click 'Audio' 'ControlType.Button' | Out-Null
+Scroll-To 'Audio'
 Start-Sleep -Milliseconds 900
 Grab '04-einstellungen-audio'
 
 L '=== 4 settings azure ==='
-Click 'Azure' 'ControlType.Button' | Out-Null
+Scroll-To 'Azure'
 Start-Sleep -Milliseconds 900
 Grab '05-einstellungen-azure'
 
 L '=== 5 settings proxy ==='
-Click 'Proxy' 'ControlType.Button' | Out-Null
+Scroll-To 'Proxy'
 Start-Sleep -Milliseconds 900
 Grab '06-einstellungen-proxy'
 
 L '=== 6 connection test ==='
-Click 'Azure' 'ControlType.Button' | Out-Null
-Start-Sleep -Milliseconds 900
 Click 'Verbindung testen' $null | Out-Null
 for ($i = 0; $i -lt 18; $i++) {
   Start-Sleep -Seconds 5

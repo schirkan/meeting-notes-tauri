@@ -136,21 +136,36 @@ export function App() {
         isOpen={settingsDialogOpen}
         busy={isSavingSettings || isChoosingDirectory}
         onClose={closeSettingsDialog}
-        sections={['Allgemein', 'Audio', 'Azure', 'Proxy']}
+        scrollable
         footer={
           <div className="settings-dialog-footer-content">
             <div className="settings-dialog-footer-copy">
               <p className="meta">Änderungen gelten nach dem Speichern für die nächste Aufnahme.</p>
               {configState && <p className="meta-path">Konfiguration: {configState.path}</p>}
             </div>
-            <button
-              className="primary-button settings-save-button"
-              type="button"
-              onClick={() => void onSaveAll()}
-              disabled={status.running || isSavingSettings || isChoosingDirectory}
-            >
-              Speichern
-            </button>
+            <div className="settings-dialog-footer-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => void onTestConnectivity()}
+                disabled={isTestingConnectivity || isSavingSettings || isChoosingDirectory || !configDraft.endpoint || !configDraft.speechKey || !configDraft.region}
+              >
+                {isTestingConnectivity ? 'Teste …' : 'Verbindung testen'}
+              </button>
+              {(connectivityResult || isTestingConnectivity) && (
+                <button className="secondary-button" type="button" onClick={onOpenConnectivityDialog}>
+                  {isTestingConnectivity ? 'Laufenden Verbindungstest anzeigen' : 'Letzten Verbindungstest anzeigen'}
+                </button>
+              )}
+              <button
+                className="primary-button settings-save-button"
+                type="button"
+                onClick={() => void onSaveAll()}
+                disabled={status.running || isSavingSettings || isChoosingDirectory}
+              >
+                Speichern
+              </button>
+            </div>
             {settingsHint && <div className="hint">{settingsHint}</div>}
           </div>
         }
@@ -176,10 +191,6 @@ export function App() {
           configDraft={configDraft}
           statusRunning={status.running}
           setConfigDraft={setConfigDraft}
-          onTestConnectivity={onTestConnectivity}
-          onOpenConnectivityDialog={onOpenConnectivityDialog}
-          isTestingConnectivity={isTestingConnectivity}
-          connectivityResult={connectivityResult}
         />
 
         <ProxyPanel

@@ -172,7 +172,7 @@ test('valid startup configuration leaves settings closed', async () => {
   }
 })
 
-test('settings shows all sections on one page, scrolls to the selected one and preserves save and test payloads', async () => {
+test('settings shows all sections without navigation and preserves two-column layout, save and test payloads', async () => {
   const page = await openApp({
     configState: { exists: true, path: 'test-config', config: validConfig },
     connectivityError: 'Local diagnostic test'
@@ -186,28 +186,67 @@ test('settings shows all sections on one page, scrolls to the selected one and p
     const azure = panels.nth(2)
     const proxy = panels.nth(3)
     // Alle Abschnitte stehen gleichzeitig auf einer Seite.
-    assert.equal(await dialog.locator('.settings-section').count(), 4)
+    assert.equal(await dialog.getByRole('navigation').count(), 0)
+    assert.equal(await dialog.getByRole('tab').count(), 0)
     assert.equal(await audio.getByRole('combobox', { name: 'Mikrofon', exact: true }).count(), 1)
-    await dialog.getByRole('button', { name: 'Azure', exact: true }).click()
+    await azure.getByRole('heading', { name: 'Azure', exact: true }).scrollIntoViewIfNeeded()
     assert.equal(await azure.getByLabel('Proxy verwenden').count(), 0)
     assert.equal(await proxy.getByRole('button', { name: 'Verbindung testen', exact: true }).count(), 0)
-    assert.equal(await azure.getByRole('button', { name: 'Verbindung testen', exact: true }).count(), 1)
-    assert.equal(await azure.getByRole('button', { name: 'Verbindung testen', exact: true }).getAttribute('title'), null)
+    assert.equal(await azure.getByRole('button', { name: 'Verbindung testen', exact: true }).count(), 0)
     assert.equal(await panels.locator('.meta-path').count(), 0)
     const footer = dialog.locator('.settings-dialog-footer')
+    assert.equal(await footer.getByRole('button', { name: 'Verbindung testen', exact: true }).count(), 1)
+    assert.equal(await footer.getByRole('button', { name: 'Verbindung testen', exact: true }).getAttribute('title'), null)
     assert.deepEqual(await footer.locator('.meta-path').allTextContents(), [
       'Konfiguration: test-config'
     ])
     assert.equal(await dialog.locator('.settings-dialog-grid .settings-dialog-footer').count(), 0)
     const dialogBox = await dialog.boundingBox()
-    await dialog.getByRole('button', { name: 'Proxy', exact: true }).click()
-    await page.waitForTimeout(600)
-    // Die Navigation scrollt nur zum Abschnitt, die Seite bleibt bestehen.
+    assert.equal(dialogBox.width, 770)
+    const [endpointBox, regionBox] = await Promise.all([
+      azure.getByLabel('Endpoint', { exact: true }).boundingBox(),
+      azure.getByLabel('Region', { exact: true }).boundingBox()
+    ])
+    assert.equal(endpointBox.y, regionBox.y)
+    assert.ok(endpointBox.x + endpointBox.width <= regionBox.x)
+    const general = panels.nth(0)
+    for (const [left, right] of [
+      [general.getByRole('combobox', { name: 'Sprache' }), general.getByRole('checkbox', { name: 'Beim Schließen in den Systray minimieren' }).locator('..')],
+      [general.getByRole('checkbox', { name: 'Aufnahme automatisch starten', exact: true }).locator('..'), general.getByRole('checkbox', { name: 'Aufnahme automatisch beenden', exact: true }).locator('..')],
+      [general.getByRole('checkbox', { name: 'Transkript automatisch speichern', exact: true }).locator('..'), general.locator('.directory-control')]
+    ]) {
+      const [leftBox, rightBox] = await Promise.all([left.boundingBox(), right.boundingBox()])
+      assert.equal(leftBox.y, rightBox.y)
+      assert.ok(Math.abs(leftBox.width - rightBox.width) < 1)
+      assert.ok(Math.abs(rightBox.x - leftBox.x - leftBox.width - 17) < 1)
+    }
+    for (const header of await panels.locator('.panel-header').all()) {
+      assert.equal(await header.evaluate(element => getComputedStyle(element, '::after').borderTopWidth), '1px')
+    }
+    const gaps = await panels.locator('.settings-block').evaluateAll(elements => elements.map(element => {
+      const style = getComputedStyle(element)
+      return [style.columnGap, style.rowGap]
+    }))
+    assert.deepEqual(gaps, Array(4).fill(['17px', '17px']))
+    for (const checkbox of await dialog.getByRole('checkbox').all()) {
+      const box = await checkbox.boundingBox()
+      assert.equal(box.width, 14)
+      assert.equal(box.height, 14)
+    }
+    const exportControl = panels.nth(0).locator('.directory-control')
+    assert.equal(await exportControl.locator('label').count(), 0)
+    const toggleBox = await general.getByRole('checkbox', { name: 'Transkript automatisch speichern', exact: true }).boundingBox()
+    const pathBox = await exportControl.getByRole('textbox').boundingBox()
+    assert.ok(toggleBox.x + toggleBox.width < pathBox.x)
+    assert.ok(Math.abs(toggleBox.y + toggleBox.height / 2 - pathBox.y - pathBox.height / 2) < 1)
+    const folderButton = exportControl.getByRole('button', { name: 'Speicherordner auswählen' })
+    assert.equal(await folderButton.innerText(), '')
+    assert.equal(await folderButton.getAttribute('title'), 'Ordner auswählen')
+    await proxy.getByRole('heading', { name: 'Proxy', exact: true }).scrollIntoViewIfNeeded()
     const gridBox = await dialog.locator('.settings-dialog-grid').boundingBox()
     const proxyBox = await proxy.boundingBox()
-    assert.ok(proxyBox.y >= gridBox.y - 2, 'Proxy-Abschnitt wird nach oben gescrollt')
     assert.ok(proxyBox.y < gridBox.y + gridBox.height, 'Proxy-Abschnitt bleibt im sichtbaren Bereich')
-    assert.equal(await dialog.locator('.settings-section').count(), 4)
+    assert.equal(await panels.count(), 4)
     assert.equal(await proxy.locator('.settings-inline-hint').count(), 0)
     assert.equal(await proxy.getByLabel('Proxy Host', { exact: true }).isDisabled(), true)
     await proxy.getByLabel('Proxy verwenden').check()
@@ -220,28 +259,32 @@ test('settings shows all sections on one page, scrolls to the selected one and p
     await page.waitForFunction(() => !!window.lastSavedConfig)
     assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), { ...validConfig, proxy: proxyConfig })
     await reopenSettings(page)
-    await dialog.getByRole('button', { name: 'Proxy', exact: true }).click()
+    await proxy.getByRole('heading', { name: 'Proxy', exact: true }).scrollIntoViewIfNeeded()
     assert.deepEqual(await dialog.boundingBox(), dialogBox)
     for (const width of [1280, 800, 560, 390]) {
       await page.setViewportSize({ width, height: 860 })
       const before = await dialog.boundingBox()
       for (const section of ['Allgemein', 'Audio', 'Azure', 'Proxy']) {
-        await dialog.getByRole('button', { name: section, exact: true }).click()
-        await page.waitForTimeout(300)
+        await dialog.getByRole('heading', { name: section, exact: true }).scrollIntoViewIfNeeded()
         assert.deepEqual(await dialog.boundingBox(), before)
-        assert.equal(await dialog.locator('.settings-section').count(), 4)
+        assert.equal(await panels.count(), 4)
       }
       const [host, port, username, password] = await Promise.all([
         'Proxy Host', 'Proxy Port', 'Proxy Benutzername (optional)', 'Proxy Passwort (optional)'
       ].map(name => proxy.getByLabel(name, { exact: true }).boundingBox()))
-      assert.equal(host.y, port.y)
-      assert.equal(username.y, password.y)
-      assert.ok(host.x + host.width <= port.x)
+      if (width > 500) {
+        assert.equal(host.y, port.y)
+        assert.equal(username.y, password.y)
+        assert.ok(host.x + host.width <= port.x)
+      } else {
+        assert.ok(port.y > host.y + host.height)
+        assert.ok(password.y > username.y + username.height)
+      }
       assert.ok(username.y > host.y + host.height)
       assert.equal(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth), true)
+      assert.equal(await footer.evaluate((element) => element.scrollWidth <= element.clientWidth), true)
     }
-    await dialog.getByRole('button', { name: 'Azure', exact: true }).click()
-    await azure.getByRole('button', { name: 'Verbindung testen', exact: true }).click()
+    await footer.getByRole('button', { name: 'Verbindung testen', exact: true }).click()
     await page.getByRole('dialog', { name: 'Verbindungstest', exact: true }).locator('tbody tr').waitFor()
     assert.deepEqual(await page.evaluate(() => window.lastConnectivityPayload), { ...validConfig, proxy: proxyConfig, language: 'de-DE' })
   } finally {
@@ -269,9 +312,15 @@ test('settings offers a single save button in the footer that persists config an
       const content = await footer.locator('.settings-dialog-footer-content').boundingBox()
       assert.equal(hintBox.x, path.x)
       assert.ok(path.y >= hintBox.y + hintBox.height)
-      assert.ok(save.x >= copy.x + copy.width)
-      assert.equal(save.y, copy.y)
-      assert.equal(save.height, copy.height)
+      if (width > 500) {
+        assert.ok(save.x >= copy.x + copy.width)
+        assert.ok(Math.abs(save.y + save.height / 2 - copy.y - copy.height / 2) < 1)
+      } else {
+        assert.ok(save.y >= copy.y + copy.height)
+      }
+      const connection = await footer.getByRole('button', { name: 'Verbindung testen', exact: true }).boundingBox()
+      assert.equal(save.height, connection.height)
+      assert.equal(save.height, 32)
       assert.equal(save.x + save.width, content.x + content.width)
     }
     await page.setViewportSize({ width: 1280, height: 860 })
@@ -313,7 +362,6 @@ test('language dropdown saves the selection and forwards it to connectivity test
     await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.language === 'en-US')
     await reopenSettings(page)
-    await page.getByRole('button', { name: 'Azure', exact: true }).click()
     await page.getByRole('button', { name: 'Verbindung testen', exact: true }).click()
     await page.getByRole('dialog', { name: 'Verbindungstest', exact: true }).waitFor()
     assert.equal((await page.evaluate(() => window.lastConnectivityPayload)).language, 'en-US')
@@ -330,7 +378,7 @@ test('idle settings save rapid changes in order before enabling recording', asyn
   })
   try {
     const idle = page.locator('.idle-audio-panel')
-    await idle.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('en-US')
+    await idle.getByRole('checkbox', { name: 'Sprechererkennung für Mikrofon', exact: true }).uncheck()
     await idle.getByRole('combobox', { name: 'Mikrofon', exact: true }).selectOption('mic-one')
     await idle.getByRole('checkbox', { name: 'Speaker-Loopback transkribieren', exact: true }).uncheck()
     assert.equal(await page.getByRole('button', { name: 'Start', exact: true }).isDisabled(), true)
@@ -344,7 +392,8 @@ test('idle settings save rapid changes in order before enabling recording', asyn
       }
     }
     await page.waitForFunction(() => window.lastSavedSettings?.devices.micId === 'mic-one' && window.lastSavedSettings.transcription.speaker === false)
-    assert.equal(await page.evaluate(() => window.lastSavedSettings.language), 'en-US')
+    assert.equal(await page.evaluate(() => window.lastSavedSettings.language), 'de-DE')
+    assert.equal(await page.evaluate(() => window.lastSavedSettings.diarization.mic), false)
     await page.locator('.hero-controls .primary-button:not(:disabled)').waitFor()
     assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
   } finally { await page.close() }
@@ -357,13 +406,13 @@ test('failed idle autosave is visible and a successful retry restores recording'
   })
   try {
     const idle = page.locator('.idle-audio-panel')
-    await idle.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('en-US')
+    await idle.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).uncheck()
     await page.getByRole('alert').waitFor()
     assert.match(await page.getByRole('alert').innerText(), /schreibgeschützt/)
     assert.equal(await page.getByRole('button', { name: 'Start', exact: true }).isDisabled(), true)
     await page.evaluate(() => { window.settingsSaveError = null })
     await idle.getByRole('checkbox', { name: 'Sprechererkennung für Mikrofon', exact: true }).uncheck()
-    await page.waitForFunction(() => window.lastSavedSettings?.language === 'en-US' && window.lastSavedSettings.diarization.mic === false)
+    await page.waitForFunction(() => window.lastSavedSettings?.language === 'de-DE' && window.lastSavedSettings.diarization.mic === false && window.lastSavedSettings.diarization.speaker === false)
     await page.locator('.hero-controls .primary-button:not(:disabled)').waitFor()
     assert.equal(await page.getByRole('alert').count(), 0)
   } finally { await page.close() }
@@ -416,7 +465,7 @@ test('export folder picker preserves cancellation and saves the selected folder'
     await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.transcript.markdownExport.path === 'D:\\Meeting Notes')
     await reopenSettings(page)
-    await page.getByRole('checkbox', { name: 'Transkript automatisch als Markdown speichern', exact: true }).uncheck()
+    await page.getByRole('checkbox', { name: 'Transkript automatisch speichern', exact: true }).uncheck()
     assert.equal(await picker.isDisabled(), true)
     assert.equal(await path.isDisabled(), true)
   } finally { await page.close() }
@@ -500,6 +549,17 @@ for (const inDialog of [false, true]) {
           }).boundingBox()
           assert.ok(diarization.x >= deviceBox.x + deviceBox.width)
           assert.ok(Math.abs(diarization.y + diarization.height / 2 - deviceBox.y - deviceBox.height / 2) < 1)
+          const row = panel.locator('.audio-source-row').nth(device === 'Mikrofon' ? 0 : 1)
+          const [deviceColumn, diarizationColumn] = await Promise.all([
+            row.locator('.audio-source-field').boundingBox(), row.locator('.source-diarization').boundingBox()
+          ])
+          assert.ok(Math.abs(deviceColumn.width - diarizationColumn.width) < 1)
+          assert.ok(Math.abs(diarizationColumn.x - deviceColumn.x - deviceColumn.width - 17) < 1)
+          const arrowStyle = await panel.getByRole('combobox', { name: device, exact: true }).evaluate(element => {
+            const style = getComputedStyle(element)
+            return [style.appearance, style.paddingRight, style.backgroundPositionX]
+          })
+          assert.deepEqual(arrowStyle, ['none', '32px', 'calc(100% - 10px)'])
         }
         const micBox = await panel.getByRole('combobox', { name: 'Mikrofon', exact: true }).boundingBox()
         const speakerBox = await panel.getByRole('combobox', { name: 'Speaker Loopback', exact: true }).boundingBox()
@@ -606,7 +666,7 @@ test('automatic recording default on and explicitly disabled preferences are sho
     })
     try {
       await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
-      assert.equal(await page.getByRole('checkbox', { name: 'Aufnahme bei erkanntem Meeting automatisch starten', exact: true }).isChecked(), !explicitFalse)
+      assert.equal(await page.getByRole('checkbox', { name: 'Aufnahme automatisch starten', exact: true }).isChecked(), !explicitFalse)
       assert.equal(await page.getByRole('checkbox', { name: 'Beim Schließen in den Systray minimieren', exact: true }).isChecked(), !explicitFalse)
     } finally { await page.close() }
   }
@@ -727,7 +787,6 @@ test('saving a complete configuration replaces the warning and enables recording
   const page = await openApp({ configState: { exists: false, path: 'test-config', config: null } })
   try {
     await page.getByRole('dialog', { name: 'Einstellungen' }).waitFor()
-    await page.getByRole('button', { name: 'Azure', exact: true }).click()
     await page.getByRole('textbox', { name: 'Endpoint', exact: true }).fill(validConfig.endpoint)
     await page.getByRole('textbox', { name: 'Region', exact: true }).fill(validConfig.region)
     await page.getByLabel('Speech Key', { exact: true }).fill(validConfig.speechKey)
@@ -746,7 +805,6 @@ for (const error of ['Proxy CONNECT: 407 Proxy Authentication Required', { messa
     const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, connectivityError: error })
     try {
       await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
-      await page.getByRole('button', { name: 'Azure', exact: true }).click()
       await page.getByRole('button', { name: 'Verbindung testen', exact: true }).click()
       const dialog = page.getByRole('dialog', { name: 'Verbindungstest', exact: true })
       await dialog.locator('tbody tr').waitFor()
@@ -764,7 +822,6 @@ test('connectivity dialog displays pending test and all results, and can reopen 
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, deferConnectivity: true })
   try {
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
-    await page.getByRole('button', { name: 'Azure', exact: true }).click()
     await page.getByRole('button', { name: 'Verbindung testen', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Verbindungstest', exact: true })
     await dialog.waitFor()
@@ -929,29 +986,54 @@ test('inline speaker editing has no reflow, cancels with Escape, and updates map
   } finally { await page.close() }
 })
 
+test('idle audio settings stay centered in the available transcript area', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    const idle = page.locator('.idle-audio-panel')
+    await idle.waitFor()
+    for (const [width, height] of [[1280, 860], [950, 650], [390, 650], [950, 260]]) {
+      await page.setViewportSize({ width, height })
+      for (const withSpeakers of [false, true]) {
+        if (withSpeakers) await page.getByRole('button', { name: 'Sprecherzuordnung einblenden', exact: true }).click()
+        const area = await page.locator('.console-transcript').boundingBox()
+        const panel = await idle.boundingBox()
+        assert.ok(Math.abs(panel.x + panel.width / 2 - area.x - area.width / 2) < 1)
+        assert.ok(Math.abs(panel.y + panel.height / 2 - area.y - area.height / 2) < 1)
+        assert.ok(panel.height <= area.height + 1)
+        assert.equal(await idle.evaluate(element => element.scrollWidth <= element.clientWidth), true)
+        if (withSpeakers) await page.getByRole('button', { name: 'Sprecherzuordnung ausblenden', exact: true }).click()
+      }
+    }
+  } finally { await page.close() }
+})
+
 test('idle audio settings synchronize with dialog, persist, and reset is stopped-only', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
   try {
-    await page.getByRole('heading', { name: 'Allgemeine Einstellungen', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Audio Einstellungen', exact: true }).waitFor()
     const idle = page.locator('.idle-audio-panel')
-    assert.equal(await idle.getByRole('combobox').count(), 3)
+    assert.equal(await idle.locator('.panel-header').evaluate(element => getComputedStyle(element, '::after').content), 'none')
+    assert.equal(await idle.getByRole('combobox').count(), 2)
+    assert.equal(await idle.getByRole('combobox', { name: 'Sprache', exact: true }).count(), 0)
     assert.equal(await idle.getByRole('checkbox').count(), 4)
     assert.equal(await idle.getByLabel('Speicherpfad (optional)', { exact: true }).count(), 0)
     assert.equal(await idle.getByRole('button', { name: 'Speichern', exact: true }).count(), 0)
     assert.equal(await idle.getByText(/Änderungen gelten/).count(), 0)
-    await idle.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('en-US')
     await idle.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).uncheck()
-    await page.waitForFunction(() => window.lastSavedSettings?.language === 'en-US' && window.lastSavedSettings?.diarization.speaker === false)
+    await page.waitForFunction(() => window.lastSavedSettings?.language === 'de-DE' && window.lastSavedSettings?.diarization.speaker === false)
     assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
     const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
-    assert.equal(await dialog.getByRole('combobox', { name: 'Sprache', exact: true }).inputValue(), 'en-US')
+    assert.equal(await dialog.getByRole('combobox', { name: 'Sprache', exact: true }).inputValue(), 'de-DE')
     assert.equal(await dialog.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).isChecked(), false)
     await dialog.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('fr-FR')
     await dialog.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.language === 'fr-FR')
     await dialog.waitFor({ state: 'hidden' })
-    assert.equal(await idle.getByRole('combobox', { name: 'Sprache', exact: true }).inputValue(), 'fr-FR')
+    assert.equal(await idle.getByRole('combobox', { name: 'Sprache', exact: true }).count(), 0)
+    await reopenSettings(page)
+    assert.equal(await dialog.getByRole('combobox', { name: 'Sprache', exact: true }).inputValue(), 'fr-FR')
+    await dialog.getByRole('button', { name: 'Dialog schließen', exact: true }).click()
     assert.equal(await page.getByRole('button', { name: 'Transkript löschen', exact: true }).isDisabled(), true)
     await page.getByRole('button', { name: 'Start', exact: true }).click()
     await emitSegments(page)
@@ -1053,30 +1135,18 @@ test('recording timer excludes pauses, freezes after stop and resets on a new st
   } finally { await page.close() }
 })
 
-test('settings sections preserve input focus, support keyboard selection and trap focus', async () => {
+test('settings without navigation preserve input focus, scroll and trap focus', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
   try {
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
     const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
-    await dialog.getByRole('button', { name: 'Allgemein', exact: true }).focus()
-    await page.keyboard.press('ArrowRight')
-    assert.equal(await dialog.getByRole('button', { name: 'Audio', exact: true }).getAttribute('aria-current'), 'true')
-    const section = dialog.getByRole('button', { name: 'Audio', exact: true })
-    assert.equal(await section.evaluate((element) => getComputedStyle(element).outlineStyle), 'none')
+    assert.equal(await dialog.getByRole('navigation').count(), 0)
     const endpoint = dialog.getByRole('textbox', { name: 'Endpoint', exact: true })
     await endpoint.fill('https://changed.test')
-    assert.deepEqual(await section.evaluate((element) => {
-      const style = getComputedStyle(element)
-      return [style.borderLeftWidth, style.borderRightWidth, style.outlineStyle]
-    }), ['0px', '0px', 'none'])
     assert.equal(await endpoint.evaluate((element) => element === document.activeElement), true)
     const before = await dialog.boundingBox()
-    await dialog.getByRole('button', { name: 'Azure', exact: true }).focus()
-    await page.keyboard.press('End')
-    assert.equal(await dialog.getByRole('button', { name: 'Proxy', exact: true }).getAttribute('aria-current'), 'true')
+    await dialog.getByRole('heading', { name: 'Proxy', exact: true }).scrollIntoViewIfNeeded()
     assert.deepEqual(await dialog.boundingBox(), before)
-    await page.keyboard.press('Home')
-    assert.equal(await dialog.getByRole('button', { name: 'Allgemein', exact: true }).getAttribute('aria-current'), 'true')
     await dialog.getByRole('button', { name: 'Speichern', exact: true }).focus()
     await page.keyboard.press('Tab')
     assert.equal(await dialog.getByRole('button', { name: 'Dialog schließen', exact: true }).evaluate((element) => element === document.activeElement), true)
@@ -1085,7 +1155,6 @@ test('settings sections preserve input focus, support keyboard selection and tra
     await page.keyboard.press('Escape')
     assert.equal(await page.getByRole('dialog').count(), 0)
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
-    await page.getByRole('button', { name: 'Azure', exact: true }).click()
     assert.equal(await page.getByRole('textbox', { name: 'Endpoint', exact: true }).inputValue(), 'https://changed.test')
   } finally { await page.close() }
 })

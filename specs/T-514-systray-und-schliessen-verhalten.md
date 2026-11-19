@@ -12,7 +12,11 @@ Einstellung bestimmt, ob Schliessen die App beendet oder nur im Tray verbirgt.
 
 ## Verhalten
 - Beim App-Start wird genau ein Tray-Icon mit vorhandenem App-Icon und Tooltip
-  `Meeting Notes` angelegt. Es ist nicht vom Auto-Start oder Aufnahmezustand abhaengig.
+  `Meeting Notes` angelegt. Seine Existenz ist nicht vom Auto-Start oder Aufnahmezustand abhaengig.
+- Die Iconfarbe zeigt den Aufnahmestatus: **rot** bei Aufnahme, **gelb** bei Pause,
+  Originalfarbe nach Stop, fehlgeschlagenem Start oder Sidecar-Absturz. Der Tooltip
+  lautet dabei `Meeting Notes - Aufnahme`, `Meeting Notes - Pausiert` oder `Meeting Notes`.
+  Dies gilt auch bei verborgenem Fenster und automatisch gestarteten Aufnahmen.
 - Rechtsklick zeigt genau zwei Eintraege in dieser Reihenfolge: `Anzeigen`, `Beenden`.
 - `Anzeigen` und linker Doppelklick machen das vorhandene Hauptfenster sichtbar,
   stellen es aus minimiertem Zustand wieder her und fokussieren es. Kein zweites Fenster.
@@ -31,8 +35,7 @@ Einstellung bestimmt, ob Schliessen die App beendet oder nur im Tray verbirgt.
 - Kann kein Tray erstellt werden, meldet Windows keine erreichbare Tray-Position
   (`tray.rect()`), oder kann das Fenster nicht verborgen werden, wird der Close
   nicht verschluckt. Kein unerreichbares Hintergrundfenster.
-- Kein Autostart mit Windows, kein Start im Tray, keine dynamischen Recording-Icons
-  und keine zusaetzlichen Menuepunkte in dieser Iteration.
+- Kein Autostart mit Windows, kein Start im Tray und keine zusaetzlichen Menuepunkte.
 
 ## Technische Umsetzung
 Tauri-Feature `tray-icon`; natives Tray/Menu im Rust-Main, keine Renderer-Emulation.
@@ -41,6 +44,13 @@ nach erfolgreichem Hide verhindert. Ein in-memory Bool spiegelt die erfolgreich
 persistierte Einstellung, damit der UI-Eventhandler keine Dateizugriffe blockiert.
 Tray-Beenden nutzt App-Exit, nicht Window-Close, damit die Option keinen Exit verhindert.
 TS/Rust-Contracts und Beispielconfig enthalten dieselbe Settings-Achse.
+`events::emit_status` aktualisiert auch den nativen Tray-Indikator. Die Aktualisierung
+liest den aktuellen Zustand im UI-Thread, damit verzoegerte Statusmeldungen keine alte
+Farbe wiederherstellen. Die vorhandenen Icon-Pixel werden ohne neue Assets/Dependencies
+eingefaerbt; Transparenz und Kontrast bleiben erhalten. Fehler werden im Debug-Log gemeldet.
+Testnachweis: `recording_indicator_tracks_start_pause_resume_and_stop` und
+`recording_icons_preserve_shape_alpha_and_restore_the_original`. Die echte Windows-
+Farbumschaltung bei Aufnahme/Pause bleibt Teil der offenen nativen Abnahme.
 
 ## Done When
 - [x] Tray mit vorhandenem App-Icon und den Menuepunkten Anzeigen/Beenden ist eingebunden. Beleg: src-tauri/src/tray.rs (init, Menu::with_items), Cargo.toml (tray-icon). Testnachweis: Cargo-Compile und `tray_menu_actions_distinguish_show_from_real_exit`.

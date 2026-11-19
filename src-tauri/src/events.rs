@@ -50,6 +50,7 @@ pub struct FixedConfigStatus {
 }
 
 pub fn emit_status(app: &AppHandle, status: &TranscriptStatus) {
+  crate::tray::update_recording_indicator(app);
   let _ = app.emit(EVENT_STATUS, status);
 }
 
