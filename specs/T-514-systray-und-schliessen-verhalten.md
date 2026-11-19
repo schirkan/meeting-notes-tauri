@@ -1,7 +1,7 @@
 # T-514 - Systray und Schliessen-Verhalten
 
 ## Kontext
-Status: teils umgesetzt (1 offener Punkt: native Kontextmenue- und Doppelklick-Abnahme)
+Status: teils umgesetzt (1 offener Punkt: Alt+F4 und Beenden waehrend einer Aufnahme)
 Prioritaet: medium
 Abhaengigkeiten: T-300, T-305, T-403, T-513
 
@@ -59,7 +59,14 @@ Farbumschaltung bei Aufnahme/Pause bleibt Teil der offenen nativen Abnahme.
 - [x] Verbergen veraendert Aufnahme/Pause/Detektor nicht; Exit nutzt das bestehende Cleanup. Beleg: tray.rs verbirgt ausschliesslich Window; lib.rs RunEvent::ExitRequested/Exit behaelt Sidecar- und Detektor-Cleanup. Formnachweis: kein Recording-/Detektor-Aufruf im Hide-Pfad; native Probe separat.
 - [x] Settings-Default, Persistenz, sofortige Uebernahme und Checkbox sind implementiert. Beleg: TS/Rust WindowSettings, commands::save_user_settings aktualisiert Cache erst nach erfolgreichem Save, SettingsPanel.tsx, Beispielconfig. Testnachweis: `close_to_tray_defaults_on_and_persists_both_boolean_values`, Node-Tests fuer malformed Defaults, true/false sowie Checkbox-Persistenz und Recording-Sperre.
 - [x] Typecheck, Node-/Rust-Tests und Release-Build sind bestanden. Beleg: v0.1.2, 92 Node-Tests, 44 Rust-Tests, Tauri-Release-Build, Portable 31,37 MB / 4 Dateien / 3 Hashes, Smoke gruen, Deployment PASS 9 / FAIL 0 (18.11.2026). Testnachweis: npm run typecheck, npm run test:unit, cargo test, npm run tauri -- build --no-bundle, npm run test:smoke, npm run verify:deployment.
-- [ ] Native Windows-Abnahme: sichtbares Icon, Kontextmenue, Doppelklick, X und Alt+F4 bei beiden Optionen sowie echter Exit mit laufendem Sidecar. - **offen**: Ausfuehrung von scripts/test-tray.ps1 meldet SKIPPED, weil das Gateway in Session 0 laeuft. Ueber eine geplante Aufgabe mit LogonType=Interactive ist die interaktive Sitzung erreichbar: das Tray-Icon ist nativ belegt (Screenshot docs/native/11-taskbar-mit-app-icon.png); Kontextmenue, Doppelklick und Exit bleiben unbelegt, weil synthetische Maus-Eingaben in der getrennten Sitzung nicht zugestellt werden. PowerShell-/Win32-Testhelfer kompiliert; echte Maus-/Explorer-Interaktion und Aufnahme-Exit sind nicht belegt.
+- [x] Native Windows-Abnahme: sichtbares Icon, Kontextmenue, Doppelklick und X bei beiden Optionen. Beleg: manuelle Nutzerabnahme vom 19.11.2026, im Gespraech bestaetigt; keine synthetische Callback-Probe als Ersatz behauptet.
+- [ ] Native Windows-Abnahme: Alt+F4 bei beiden Optionen sowie echter Exit mit laufender Aufnahme. - **offen**: Nutzer hat diese beiden Teilpruefungen am 19.11.2026 ausdruecklich als nicht getestet benannt.
+
+## Manuelle Abnahme (19.11.2026)
+Der Nutzer bestaetigt Tray-Icon, Kontextmenue, Doppelklick und Schliessen per X
+bei beiden Einstellungen. Alt+F4 und Beenden waehrend einer Aufnahme wurden
+nicht getestet und bleiben offen. Die historischen SKIPPED-Nachweise unten
+beschreiben die damalige automatisierte Testumgebung, nicht diese Nutzerabnahme.
 
 ## Aktualisierung v0.1.2 (18.11.2026)
 Default jetzt **an** nach Martins Vorgabe. Neuer Release-/Default-Testlauf:

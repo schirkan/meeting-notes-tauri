@@ -1,7 +1,7 @@
 # T-500: Qualitätssicherung und Akzeptanztests
 
 ## Kontext
-Status: teils umgesetzt (3 Punkte offen)
+Status: teils umgesetzt (2 Punkte offen)
 Priorität: high
 Subtasks: T-501, T-502, T-503, T-504, T-505
 Abhängigkeiten: -
@@ -21,14 +21,15 @@ Vollständige QA-Strecke für die Tauri-Variante: Smoke-Test, Latency-Messung, D
 - [x] TypeScript-Prüfung und drei fokussierte Rust-Tests für relative Config-Pfade und beide serialisierten Pfade erfolgreich. Beleg: npm run typecheck (gruen) und die Rust-Tests in src-tauri/src/settings.rs (relative Config-Pfade, Serialisierung).
 - [x] Native lokale Prüfung: Release-F12, Laden/Speichern neben der EXE bei fremdem Arbeitsverzeichnis sowie kontrollierte HTTPS-/Speech-Fehler im separaten Dialog. Kein echter Azure-Erfolg durch den Loopback-Negativtest behauptet. Beleg: scripts/verify-deployment.ps1 -LaunchApp (Laden/Speichern neben der EXE, PE-Subsystem 2 - kein Konsolenfenster).
 - [x] Positiver Corporate-Proxy-/Speech-Test mit echten Zugangsdaten — am 2026-11-12 im Firmennetz erfolgreich (HTTPS **und** native Speech/WSS). Beleg: Am 2026-11-12 im Firmennetz erfolgreich (README.md, SPEC.md, specs/T-306).
-- [ ] Erfolgreiche Aufnahme und End-to-End-Latenz (< 5 s) mit echten Zugangsdaten — weiterhin offen (siehe [T-502](./T-502-latenz-messung.md)). - **offen**: Braucht die Live-Aufnahme mit echten Zugangsdaten (T-502).
-- [ ] Aktueller Portable-Build auf sauberem Windows-11-Zielsystem geprüft. - **offen**: Braucht ein frisches Windows-11-Zielsystem (T-510).
+- [ ] Erfolgreiche Aufnahme und End-to-End-Latenz (< 5 s) mit echten Zugangsdaten — weiterhin offen (siehe [T-502](./T-502-latency-messung.md)). - **offen**: Braucht die Live-Aufnahme mit echten Zugangsdaten (T-502).
+- [x] Aktueller Portable-Build auf sauberem Windows-11-Zielsystem geprüft (Download und Start). Beleg: manuelle Nutzerabnahme vom 19.11.2026, im Gespraech bestaetigt; keine automatische Deployment-Pruefung oder Live-Latenzmessung daraus abgeleitet. Siehe [T-510](./T-510-clean-machine-deployment-windows-11.md) und [T-515](./T-515-github-actions-pipeline-und-release.md).
 
 ## Approach
 - T-501 bis T-505 sequenziell umsetzen.
 - Tests zuerst manuell, dann (optional) automatisiert.
 
 ## Log
+- 2026-11-19: Nutzer bestaetigt manuellen Download und Start auf dem Zielsystem. Die Clean-Machine-Startabnahme ist dokumentiert; Aufnahme/Latenz bleiben separat offen.
 - 2026-06-25: Spec angelegt.
 - 2026-11-09: Aktuelle UI-/Config-/Diagnose-Validierung und Portable-Messwerte dokumentiert; reale Netz-, Aufnahme-, Latenz- und Clean-Machine-Tests ausdrücklich offen gehalten.
 - 2026-11-12: Corporate-Proxy-/Azure-Test im Firmennetz erfolgreich — Netz-Akzeptanz abgeschlossen, kein Proxy-Workaround nötig. Aufnahme-Latenz und Clean-Machine-Deployment bleiben offen.

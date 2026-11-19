@@ -16,21 +16,20 @@ Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1
 Die Checkboxen wurden gegen den **Code** geprueft, nicht gegen den Spec-Status:
 jeder abgehakte Punkt traegt den Beleg im Klartext (`Beleg: …`), jeder offene
 Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **40 Specs** als
-`umgesetzt` bzw. `teils umgesetzt` markiert, **23 offene Punkte in 16 Specs**.
+`umgesetzt` bzw. `teils umgesetzt` markiert, **21 offene Punkte in 15 Specs**.
 Vorher waren ueber 70 Checkboxen offen, obwohl die Funktion ueberwiegend fertig
 und verifiziert war - die Specs sind jetzt mit dem Stand der Implementierung
 deckungsgleich.
 
 _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 
-### Offen und braucht deinen Rechner (12 Punkte)
+### Offen und braucht deinen Rechner (11 Punkte)
 
 | Spec | Punkt |
 |---|---|
 | T-205 | Diarization funktioniert für mindestens 2 Sprecher je aktivierter Quelle (manueller Live-Azure… |
 | T-500 | Latency-Messung dokumentiert < 5 s End-to-End (T-502) |
 | T-500 | Erfolgreiche Aufnahme und End-to-End-Latenz (< 5 s) mit echten Zugangsdaten — weiterhin offen… |
-| T-500 | Aktueller Portable-Build auf sauberem Windows-11-Zielsystem geprüft. |
 | T-502 | Report `context/latency-report.md` mit P50/P95/P99 über 100 Audio-Chunks - **offen**: |
 | T-502 | Ziel: P95 < 5 s End-to-End |
 | T-504 | Portable Build auf einem **frischen** Windows-11-System ohne .NET-Installation mit WebView2 va… |
@@ -38,9 +37,9 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-509 | Latenz und Ausgabequalitaet sind auf echter Hardware gegen die |
 | T-510 | Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch |
 | T-510 | Befunde sind in `T-504`, `T-500`, `SPEC.md` und `AGENTS.md` nachgezogen. |
-| T-514 | Native Windows-Abnahme: sichtbares Icon, Kontextmenue, Doppelklick, X und Alt+F4 bei beiden Op… |
+| T-514 | Native Windows-Abnahme: Alt+F4 bei beiden Optionen sowie echter Exit mit laufender Aufnahme. |
 
-### Offen als bewusste Entscheidung (11 Punkte)
+### Offen als bewusste Entscheidung (10 Punkte)
 
 | Spec | Punkt | Warum offen |
 |---|---|---|
@@ -54,7 +53,6 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-513 | Das Ende nutzt mehrere Signale (Stille, Session-Ende), nicht nur eine… | Session-Ende ist umgesetzt, Pegel-/Stille-Erkennung hingegen nicht. Der Detektor beobachtet Session-Metadaten, keine Audiodaten. |
 | T-513 | Live-Abnahme: ein echtes Meeting (Teams oder Zoom) startet die Aufnah… | braucht einen echten Rechner mit Teams oder Zoom und einen Podcast-Playback als Gegenprobe. |
 | T-513 | Der Fenster-/Applikations-Fallback (Stufe 2) ist gebaut, falls Stufe… | laut Entscheidung vom 2026-11-18 erst umsetzen, **wenn** die Session-Erkennung in der Praxis nicht trägt. |
-| T-515 | Abnahme auf einem fremden Rechner: Download des ZIP, Entpacken, `Meet… | Der Download ist hier nur als Asset nachgewiesen; das Entpacken und der Start auf einem anderen Rechner mit WebView2 und Azure-Zu… |
 
 ### Nächste Schritte auf deinem Rechner (die 11 offenen Punkte)
 
@@ -291,6 +289,65 @@ Bereits festgelegt: stdin/stdout statt Named Pipe, Windows-only; Installer-Konfi
 
 ## 12. Querverweise
 - Aktueller Projektstatus: [README.md](./README.md)
+- Agenten-Einstieg und Arbeitsregeln: [AGENTS.md](./AGENTS.md)
 - Architekturentscheidungen: [DECISIONS.md](./DECISIONS.md)
-- Tasks und Akzeptanzstatus: [specs/](./specs/)
+- Tasks und Akzeptanzstatus: [Spec-Index](#spec-index)
 - Quell-Projekt (Electron): `../meeting-notes/` (unveränderte Referenz)
+
+## Spec-Index
+
+Die einzelnen Specs enthalten Anforderungen, aktuellen Implementierungsstand,
+Testbelege, offene Abnahmen und ihre Aenderungshistorie. Abhaengigkeiten und
+fachliche Zusammenhaenge werden direkt zwischen den Specs verlinkt. Die
+generierte Uebersicht im Abschnitt **Stand der Specs** fasst offene Punkte zusammen.
+
+### Grundlagen und historische Migration
+- [T-100: Rahmen und Migrationshintergrund](./specs/T-100-tauri-migration-planen-und-grundstruktu.md)
+- [T-101: Tauri-Scaffold mit React und Vite](./specs/T-101-tauri-2-scaffold-mit-react-und-vite.md)
+- [T-102: Renderer-/Rust-IPC-Vertrag](./specs/T-102-ipc-vertrag-zwischen-renderer-und-rust.md)
+- [T-103: Azure- und Benutzerkonfiguration](./specs/T-103-konfiguration-azure-und-user-settings.md)
+- [T-104: Historisches Modul-Mapping](./specs/T-104-migrationsplan-was-bleibt-was-wandert.md)
+
+### Audio, Speech und Sidecar
+- [T-200: Sidecar-Architektur](./specs/T-200-c-sharp-sidecar-architektur-audio-und-azure.md)
+- [T-201: JSON-Lines-Protokoll](./specs/T-201-json-lines-protokoll-tauri-zu-sidecar.md)
+- [T-202: WASAPI-Audio-Capture](./specs/T-202-audio-capture-mit-naudio-wasapi.md)
+- [T-203: Resampling auf 16-kHz-Mono-PCM](./specs/T-203-audio-resampling-16khz-mono-pcm.md)
+- [T-204: Azure Speech SDK](./specs/T-204-azure-speech-sdk-integration-im-sidecar.md)
+- [T-205: Continuous LID und Diarization](./specs/T-205-continuous-lid-und-diarization-in-c-sharp.md)
+- [T-206: Azure-Start mit Rollback](./specs/T-206-azure-start-pfad-mit-rollback.md)
+- [T-207: Sidecar-Deployment](./specs/T-207-sidecar-deployment-framework-dependent-exe.md)
+- [T-509: WasapiRecorderBuilder](./specs/T-509-audio-capture-auf-wasapirecorderbuilder-umstellen.md)
+- [T-511: Transkriptionsquellen](./specs/T-511-transkriptions-quellen-auswaehlen.md)
+- [T-512: Target-Framework und Single-File-Sidecar](./specs/T-512-sidecar-targetframeworks-und-single-file.md)
+
+### Orchestrierung und Persistenz
+- [T-300: Tauri-Main](./specs/T-300-tauri-main-als-orchestrator.md)
+- [T-301: Sidecar-Spawn](./specs/T-301-sidecar-spawn-via-shell-plugin.md)
+- [T-302: Commands](./specs/T-302-tauri-commands.md)
+- [T-303: Events](./specs/T-303-tauri-events.md)
+- [T-304: Verbindungsdiagnose](./specs/T-304-connectivity-diagnose-in-rust.md)
+- [T-305: Settings-Persistenz](./specs/T-305-settings-persistenz-im-tauri-main.md)
+- [T-306: Nativer Proxy-Transport](./specs/T-306-proxy-aware-azure-transport.md)
+- [T-505: Proxy-Abnahme und historische Alternativen](./specs/T-505-proxy-aware-azure-transport.md)
+- [T-513: Meeting-Erkennung, Auto-Start und Auto-Stop](./specs/T-513-automatische-meeting-erkennung-und-auto-start.md)
+- [T-514: Systray und Schliessen](./specs/T-514-systray-und-schliessen-verhalten.md)
+
+### Oberflaeche und Transkripte
+- [T-400: Frontend-Portierung](./specs/T-400-react-frontend-auf-tauri-portieren.md)
+- [T-401: Preload-Bridge](./specs/T-401-tauri-preload-bridge.md)
+- [T-402: UI-Komponenten](./specs/T-402-ui-komponenten-portieren.md)
+- [T-403: Einstellungen und Verbindungstest](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md)
+- [T-404: Sprecherzuordnung, Auto-Scroll und Fokus](./specs/T-404-speaker-mapping-auto-scroll-focus-trap.md)
+- [T-506: Markdown-Export](./specs/T-506-transkript-markdown-export-und-frontmatter.md)
+- [T-507: Pause, Stop und Sitzungsidentitaet](./specs/T-507-pause-stop-und-sitzungsgebundene-sprecherzuordnung.md)
+
+### Qualitaet, Build und Release
+- [T-500: Qualitaetssicherung und Akzeptanz](./specs/T-500-qualitaetssicherung-und-akzeptanztests.md)
+- [T-501: Smoke-Test](./specs/T-501-smoke-test-tauri-und-sidecar.md)
+- [T-502: Latenzmessung](./specs/T-502-latency-messung.md)
+- [T-503: Build-Skripte und Distribution](./specs/T-503-distribution-und-build-skripte.md)
+- [T-504: Portable-Build](./specs/T-504-portable-build.md)
+- [T-508: Abhaengigkeiten und Laufzeit](./specs/T-508-abhaengigkeiten-laufzeit-und-referenzen-aktualisieren.md)
+- [T-510: Clean-Machine-Deployment](./specs/T-510-clean-machine-deployment-windows-11.md)
+- [T-515: GitHub-Actions und Release](./specs/T-515-github-actions-pipeline-und-release.md)

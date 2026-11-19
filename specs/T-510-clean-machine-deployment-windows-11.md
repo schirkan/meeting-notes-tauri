@@ -108,14 +108,17 @@ PowerShell 7.
   kopiert werden, nicht nur die Haupt-EXE.
 
 ## Offene Punkte
-- Zielsystem noch nicht verfuegbar — kein Clean-Machine-Nachweis vorhanden. Der Nachweis
-  ist aber als ausfuehrbares Skript vorbereitet (`scripts/verify-deployment.ps1`, siehe
-  oben) und lokal erprobt: PASS 9 / FAIL 0.
+- Download und Start auf dem Zielsystem wurden am 19.11.2026 manuell vom Nutzer
+  bestaetigt ([T-500](./T-500-qualitaetssicherung-und-akzeptanztests.md),
+  [T-515](./T-515-github-actions-pipeline-und-release.md)). Ein vollstaendiger
+  Pruefskript-Lauf auf diesem Rechner sowie alle Settings-/Diagnose-Teilpruefungen
+  sind damit nicht belegt und bleiben offen.
 - Die Reihenfolge ist geklaert: T-509 (Variante A, Aufnahme-Umstellung) und dieser Spec
   pruefen unterschiedliche Seiten — T-509 den Aufnahme-Pfad, T-510 die
   Installationsseite. Beide sind umgesetzt und unabhaengig voneinander.
 
 ## Log
+- 2026-11-19: Manuelle Nutzerabnahme fuer Download und Start auf sauberem Windows-11-Zielsystem dokumentiert. Kein Skript-Output, keine Runtime-Inventur und keine vollstaendige Settings-/Diagnose-Abnahme daraus abgeleitet.
 - 2026-11-17: Deployment-Pruefer auf Self-contained umgestellt. Kein Runtime-Installationscheck mehr; die EXE muss trotz ungueltiger DOTNET_ROOT-Pfade und defekter Additional-Deps starten. Negativkontrolle: ein framework-dependent Sidecar scheitert an derselben defekten Datei. Eine lediglich fehlende Datei wurde von diesem Host ebenfalls ignoriert und ist deshalb kein geeigneter Nachweis. Prozessfenster unterdrueckt, stdout/stderr erhalten, Zeitlimit 15 s. Neues Portable 30,22 MiB / 4 Dateien: PASS 9 / FAIL 0; Azure-/Audio-Live-Test und echte Clean-Machine-Abnahme weiterhin offen.
 - 2026-11-17: Checkliste in `scripts/verify-deployment.ps1` als ausfuehrbaren Nachweis
   umgesetzt und gegen die lokale Distribution erprobt (PASS 9 / FAIL 0). Zwei Befunde dabei

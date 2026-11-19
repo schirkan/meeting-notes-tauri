@@ -17,6 +17,11 @@ Vollständige Inventur: Welche Module aus `../meeting-notes` werden **portiert**
 
 ## Approach — Mapping-Skizze
 
+Das Mapping dokumentiert den Migrationsentwurf, nicht die heutigen Dateipfade
+oder noch anstehende Arbeiten. Hintergrund und Phasen stehen in
+[T-100](./T-100-tauri-migration-planen-und-grundstruktu.md#historischer-migrationsrahmen),
+der aktuelle Architektur-Einstieg in [AGENTS.md](../AGENTS.md).
+
 | Quelle (`../meeting-notes/`) | Ziel (`meeting-notes-tauri/`) | Aktion |
 |---|---|---|
 | `src/main/index.ts` | `src-tauri/src/main.rs` | **Refactor:** Electron-Main → Tauri-Main |
@@ -31,6 +36,12 @@ Vollständige Inventur: Welche Module aus `../meeting-notes` werden **portiert**
 | `sidecar/MeetingNotes.Sidecar/**` | `sidecar/MeetingNotes.Sidecar/**` | **1:1 Port + NuGet `Microsoft.CognitiveServices.Speech` ergänzen** |
 | `electron.vite.config.ts` | — | **Entfällt** |
 | `scripts/pack-portable.mjs` | `tauri.conf.json → bundle.resources` | **Entfällt, ersetzt durch Tauri-Bundle** |
+
+## Querverweise
+- [Spec-Index](../SPEC.md#spec-index).
+- [T-200: Sidecar-Architektur](./T-200-c-sharp-sidecar-architektur-audio-und-azure.md).
+- [T-400: Frontend-Portierung](./T-400-react-frontend-auf-tauri-portieren.md)
+  und [T-402: heutige UI-Komponenten](./T-402-ui-komponenten-portieren.md).
 
 ## Log
 - 2026-06-25: Spec angelegt.

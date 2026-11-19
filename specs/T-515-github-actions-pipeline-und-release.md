@@ -1,7 +1,7 @@
 # T-515: GitHub-Actions-Pipeline und Release-Veroeffentlichung
 
 ## Kontext
-Status: umgesetzt (1 offener Punkt: echter Release-Download auf einem fremden Rechner)
+Status: umgesetzt
 Prioritaet: medium
 Abhaengigkeiten: T-503, T-504, T-505
 
@@ -21,7 +21,7 @@ veroeffentlicht werden soll.
 - [x] Der Workflow laesst sich auch manuell fuer ein bestehendes Tag ausloesen (`workflow_dispatch` mit `tag`-Input), damit ein Release nachgeholt werden kann, ohne das Tag zu verschieben. Beleg: `.github/workflows/release.yml`, `workflow_dispatch.inputs.tag`; vorhandenes Release wird per `gh release upload --clobber` ersetzt statt ein zweites anzulegen.
 - [x] Das fehlende Release **v0.1.2** ist veroeffentlicht und als ZIP herunterladbar. Beleg: GitHub-Release `v0.1.2` (https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.2, veroeffentlicht 19.11.2026) mit Asset `MeetingNotes-v0.1.2-win-x64.zip` (16.469.792 Bytes, SHA256 `c917e8a89cebe100cbad570f0f98a9ad5b3c218dafd8716185b362477ae949f2`) plus `SHA256SUMS.txt` im `sha256sum`-Format. Das ZIP wurde vom Release-Workflow aus dem Tag-Stand `e3781c1` gebaut; der Asset-Digest von GitHub und der selbst berechnete Hash des heruntergeladenen ZIP stimmen ueberein, die 3 enthaltenen Dateien sind gegen die archivinterne `SHA256SUMS` verifiziert (**3/3 OK**), `MeetingNotes.exe` ProductVersion 0.1.2, `MeetingNotes.Sidecar.exe` FileVersion 0.1.2.0, entpackt **31,17 MB / 4 Dateien**.
 - [x] Das Tag `v0.1.2` wurde vor der Veroeffentlichung auf den Commit mit der Release-Pipeline verschoben. Beleg: `git ls-remote --tags origin` zeigt `refs/tags/v0.1.2` auf `e3781c1`. Grund: Der erste Pipeline-Lauf scheiterte an `Get-FileHash` (das Utility-Modul fehlt auf Build-Runnern); der Fix liegt in `scripts/verify-deployment.ps1`. **Der Produktcode ist zwischen dem alten Tag-Stand `5b8d876` und `e3781c1` identisch** (`git diff --stat 5b8d876 v0.1.2 -- src src-tauri/src src-tauri/tauri.conf.json sidecar` ist leer) - es wurden nur Doku, Specs, Screenshots, Build-Skripte und die Pipeline geaendert. Der Tag enthaelt damit auch die korrigierte Workflow-Fassung (`SHA256SUMS.txt` statt `.zip`, kein `--target`), sodass ein Nachlauf des Releases korrekt arbeitet.
-- [ ] Abnahme auf einem fremden Rechner: Download des ZIP, Entpacken, `MeetingNotes.exe` starten, Konfiguration neben der EXE entsteht. - **offen**: Der Download ist hier nur als Asset nachgewiesen; das Entpacken und der Start auf einem anderen Rechner mit WebView2 und Azure-Zugangsdaten ist nicht belegt.
+- [x] Abnahme auf einem fremden Rechner: Download des ZIP, Entpacken, `MeetingNotes.exe` starten, Konfiguration neben der EXE entsteht. Beleg: manuelle Nutzerabnahme vom 19.11.2026, im Gespraech bestaetigt (Download und Start funktionieren; verbleibende Einschraenkungen betreffen Alt+F4 und Exit waehrend Aufnahme in [T-514](./T-514-systray-und-schliessen-verhalten.md)). Keine Live-Azure-/Latenzabnahme daraus abgeleitet.
 
 ## Approach
 - Der Workflow laeuft auf `windows-latest`, weil der Sidecar eine Windows-Runtime braucht und
@@ -44,6 +44,8 @@ veroeffentlicht werden soll.
   per `try/catch` abfaengt und eine leere Liste statt eines Fehlers liefert.
 
 ## Verifikation
+
+- 19.11.2026: Manueller Release-Download und Start auf fremdem Rechner vom Nutzer bestaetigt; siehe auch [T-500](./T-500-qualitaetssicherung-und-akzeptanztests.md).
 
 - Pipeline-Datei: `.github/workflows/release.yml` (einziger Workflow im Repo).
 - Release v0.1.2 mit ZIP-Asset und SHA256-Summe; ZIP aus dem Tag-Commit `5b8d876` gebaut.
