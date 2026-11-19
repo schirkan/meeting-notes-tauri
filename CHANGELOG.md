@@ -29,7 +29,7 @@
 
 ### Release-Pipeline
 - GitHub Actions baut und veroeffentlicht die Releases: **ausschliesslich bei einem Release-Tag** (`release.yml`) - kein automatischer Build bei Push oder Pull Request. Der Workflow checkt genau das Tag aus, laesst Typecheck, Node-Tests und Spec-Konsistenz durch, baut die Portable-Distribution, prueft sie mit Smoke-Test und Deployment-Pruefung und veroeffentlicht ZIP + `SHA256SUMS` als Release-Asset. `workflow_dispatch` holt ein fehlendes Release ohne Tag-Verschiebung nach.
-- Das Release **v0.1.2** wurde nachgetragen: ZIP aus dem Tag, erzeugt vom Release-Workflow - **16.469.792 Bytes**, entpackt **32,68 MB / 4 Dateien**, `SHA256SUMS.txt` als zweites Asset, alle 3 Dateien gegen die Summen verifiziert.
+- Das Release **v0.1.2** wurde nachgetragen: ZIP aus dem Tag, erzeugt vom Release-Workflow - **16.469.792 Bytes** (SHA256 `c917e8a8…949f2`), entpackt **31,17 MB / 4 Dateien**, `SHA256SUMS.txt` als zweites Asset im `sha256sum`-Format, alle 3 Dateien gegen die Summen verifiziert.
 - Das Tag `v0.1.2` wurde vor der Veroeffentlichung auf den Commit mit der Pipeline verschoben (Produktcode zwischen den beiden Staenden identisch).
 
 ### Bekannte Grenzen

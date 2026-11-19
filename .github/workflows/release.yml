@@ -82,7 +82,9 @@ jobs:
           try { $bytes = $sha.ComputeHash($stream) } finally { $stream.Dispose(); $sha.Dispose() }
           $hash = ([System.BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
           # Eine Textdatei, kein ZIP: der Name sagt, was es ist.
-          "sha256:$hash  MeetingNotes-v$version-win-x64.zip" |
+          # Format wie die SHA256SUMS im Archiv: ohne Praefix, damit
+          # `sha256sum -c SHA256SUMS.txt` direkt funktioniert.
+          "$hash  MeetingNotes-v$version-win-x64.zip" |
             Out-File -FilePath (Join-Path $env:RUNNER_TEMP 'SHA256SUMS.txt') -Encoding utf8
           Write-Host "ZIP: $zip ($((Get-Item $zip).Length) Bytes)"
           Write-Host "SHA256: $hash"
