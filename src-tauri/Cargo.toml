@@ -2,7 +2,7 @@
 name = "meeting-notes"
 version = "0.1.2"
 description = "Meeting Notes (Windows-Desktop-App fuer Meeting-Transkripte)"
-authors = ["Martin Pietschmann <martin.pietschmann@itergo.com>"]
+authors = ["Martin Pietschmann"]
 license = "MIT"
 edition = "2021"
 # tauri 2.12.x verlangt Rust >= 1.90 (MSRV).
