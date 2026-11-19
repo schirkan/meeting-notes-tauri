@@ -29,6 +29,7 @@ Vollständige QA-Strecke für die Tauri-Variante: Smoke-Test, Latency-Messung, D
 - Tests zuerst manuell, dann (optional) automatisiert.
 
 ## Log
+- 2026-11-19: Git-Sync mit origin/main (3163e2a, v0.1.3) und Integration der ueberarbeiteten Agentendokumentation. Typecheck, 94 Node-Tests, 47 Rust-Tests, C#-Build und Spec-Konsistenz bestanden; eingehendes Screenshot-Skript syntaktisch geprueft. Bestehende Rust-/Trimming-Warnungen bleiben erhalten. Kein neuer Voll-/Portable-/Hardware-Abnahmelauf behauptet.
 - 2026-11-19: Nutzer bestaetigt manuellen Download und Start auf dem Zielsystem. Die Clean-Machine-Startabnahme ist dokumentiert; Aufnahme/Latenz bleiben separat offen.
 - 2026-06-25: Spec angelegt.
 - 2026-11-09: Aktuelle UI-/Config-/Diagnose-Validierung und Portable-Messwerte dokumentiert; reale Netz-, Aufnahme-, Latenz- und Clean-Machine-Tests ausdrücklich offen gehalten.

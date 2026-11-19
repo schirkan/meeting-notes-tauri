@@ -22,7 +22,7 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
 
 ## Aktueller Produktstand
 
-- **Meeting Notes**, Version **0.1.2**, ist eine portable Windows-11-x64-Anwendung
+- **Meeting Notes**, Version **0.1.3**, ist eine portable Windows-11-x64-Anwendung
   fuer Live-Transkripte mit Azure Speech. Implementierung vorhanden; offene
   Live-/Hardware-/Zielsystem-Abnahmen sind in den Specs ausgewiesen.
 - Mikrofon, Speaker-Loopback oder beide Quellen sind waehlbar. Sprechererkennung
@@ -37,10 +37,14 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
   gespeichertes `false` bleibt erhalten. Die Erkennung ist eine Heuristik.
   Siehe [T-513](./specs/T-513-automatische-meeting-erkennung-und-auto-start.md).
 - Schliessen verbirgt das Fenster standardmaessig im Systray, ohne Aufnahme oder
-  Detektor zu stoppen. **Beenden** beendet die App. Siehe [T-514](./specs/T-514-systray-und-schliessen-verhalten.md).
-- Einstellungen stehen auf einer scrollenden Seite: **Allgemein**, **Audio**,
-  **Azure**, **Proxy**. Audiooptionen im Leerzustand werden sofort gespeichert;
-  der Dialog speichert explizit. Siehe [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md).
+  Detektor zu stoppen. **Beenden** beendet die App. Das Icon ist bei Aufnahme rot,
+  bei Pause gelb, nach Stop wieder in Originalfarbe.
+  Siehe [T-514](./specs/T-514-systray-und-schliessen-verhalten.md).
+- Einstellungen stehen auf einer scrollenden Seite ohne Tabs oder Bereichsnavigation:
+  **Allgemein**, **Audio**, **Azure**, **Proxy**. Audiooptionen im Leerzustand werden
+  sofort gespeichert; der Dialog speichert explizit. **Verbindung testen**, letzte
+  Ergebnisse und **Speichern** liegen im Footer.
+  Siehe [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md).
 - Automatischer Markdown-Export ist standardmaessig aktiv; Datei und Clipboard
   nutzen denselben Builder mit YAML-Frontmatter. Siehe [T-506](./specs/T-506-transkript-markdown-export-und-frontmatter.md).
 - HTTPS- und native Speech/WSS-Diagnose sind getrennte Pruefungen mit aktiver
@@ -66,10 +70,11 @@ Kein automatischer Reconnect mit neuer Azure-Sitzung. Siehe [T-201](./specs/T-20
 ## Konfiguration und Distribution
 
 - Eine Datei `MeetingNotes.config.json` mit `azure` und `user` (siehe
-  [Beispielconfig](./MeetingNotes.config.example.json)): im Release neben der EXE, in Entwicklung im Repository-Root,
-  unabhaengig vom Arbeitsverzeichnis. Kein AppData-Fallback. Zugangsdaten liegen
-  im Klartext; persoenliche Config, Transkripte und Credentials nicht committen
-  oder mit Releases verteilen. Siehe [T-103](./specs/T-103-konfiguration-azure-und-user-settings.md)
+  [Beispielconfig](./MeetingNotes.config.example.json)): im Release neben der EXE,
+  in Entwicklung im Repository-Root, unabhaengig vom Arbeitsverzeichnis.
+  Kein AppData-Fallback. Zugangsdaten liegen im Klartext; persoenliche Config,
+  Transkripte und Credentials nicht committen oder mit Releases verteilen.
+  Siehe [T-103](./specs/T-103-konfiguration-azure-und-user-settings.md)
   und [T-305](./specs/T-305-settings-persistenz-im-tauri-main.md).
 - Portable: `MeetingNotes.exe`, `MeetingNotes.Sidecar.exe`, Config-Template und
   `SHA256SUMS` im selben Ordner. Sidecar ist self-contained, Single-File,
