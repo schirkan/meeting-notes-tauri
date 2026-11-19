@@ -27,6 +27,10 @@
 - Smoke bestanden; Deployment PASS 9 / FAIL 0. Tray-Icon-Abnahme nativ belegt, Kontextmenue-/Doppelklick-Abnahme und bekannte
   MediaFoundation-Stichprobe SKIPPED; diese sind keine bestandenen Abnahmen.
 
+### Release-Pipeline
+- GitHub Actions baut und veroeffentlicht die Releases: `ci.yml` (Push/PR: Typecheck, Node-, Spec- und Rust-Tests, Build, Smoke, Deployment) und `release.yml` (Tag-Push: Build aus dem Tag, ZIP + `SHA256SUMS` als Release-Asset; `workflow_dispatch` holt ein fehlendes Release ohne Tag-Verschiebung nach).
+- Das Release **v0.1.2** wurde nachgetragen: ZIP aus dem Tag-Commit `5b8d876`.
+
 ### Bekannte Grenzen
 - Aufnahme benoetigt weiterhin vollstaendige Azure-Konfiguration.
 - Audio-Session-Ende ist eine Heuristik, kein garantiertes Meeting-Ende.

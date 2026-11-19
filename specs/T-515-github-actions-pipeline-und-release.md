@@ -1,0 +1,44 @@
+# T-515: GitHub-Actions-Pipeline und Release-Veroeffentlichung
+
+## Kontext
+Status: umgesetzt (1 offener Punkt: echter Release-Download auf einem fremden Rechner)
+Prioritaet: medium
+Abhaengigkeiten: T-503, T-504, T-505
+
+Bisher wurden alle Builds und Releases ausschliesslich lokal auf einem Windows-Entwicklerrechner
+erzeugt. Das Repo hatte keinen `.github`-Ordner, also weder eine CI-Pipeline noch einen
+automatischen Release-Pfad. Jede Veroeffentlichung war damit ein manueller,
+nicht reproduzierbarer Schritt auf einem einzigen Rechner.
+
+## Done When
+- [x] CI-Workflow fuer Push und Pull Requests: Typecheck, Node-Tests, Spec-Konsistenz und Rust-Tests laufen automatisch. Beleg: `.github/workflows/ci.yml`, Job `verify`. Testnachweis: `npm run typecheck`, `npm run test:unit`, `npm run check:specs`, `cargo test --manifest-path src-tauri/Cargo.toml`.
+- [x] Release-Workflow baut aus dem Tag heraus die Portable-Distribution und veroeffentlicht sie als GitHub-Release mit ZIP-Asset. Beleg: `.github/workflows/release.yml`, Job `release`; ZIP-Name `MeetingNotes-v<version>-win-x64.zip`, zusaetzlich `SHA256SUMS.zip`. Testnachweis: `npm run tauri -- build --no-bundle`, `npm run dist:portable`, `npm run test:smoke`, `npm run verify:deployment`.
+- [x] Der Workflow laesst sich auch manuell fuer ein bestehendes Tag ausloesen (`workflow_dispatch` mit `tag`-Input), damit ein Release nachgeholt werden kann, ohne das Tag zu verschieben. Beleg: `.github/workflows/release.yml`, `workflow_dispatch.inputs.tag`; vorhandenes Release wird per `gh release upload --clobber` ersetzt statt ein zweites anzulegen.
+- [x] Das fehlende Release **v0.1.2** ist veroeffentlicht und als ZIP herunterladbar. Beleg: GitHub-Release `v0.1.2` mit Asset `MeetingNotes-v0.1.2-win-x64.zip`, gebaut aus dem Tag-Commit `5b8d876`; `MeetingNotes.exe` ProductVersion 0.1.2, `MeetingNotes.Sidecar.exe` FileVersion 0.1.2.0.
+- [ ] Abnahme auf einem fremden Rechner: Download des ZIP, Entpacken, `MeetingNotes.exe` starten, Konfiguration neben der EXE entsteht. - **offen**: Der Download ist hier nur als Asset nachgewiesen; das Entpacken und der Start auf einem anderen Rechner mit WebView2 und Azure-Zugangsdaten ist nicht belegt.
+
+## Approach
+- Der Workflow laeuft auf `windows-latest`, weil der Sidecar eine Windows-Runtime braucht und
+  `tauri build` den Sidecar ueber `src-tauri/build.rs` selbst publiziert.
+- Die Toolchain wird im Workflow explizit gesetzt: Node 24 (`.node-version` ist nicht im
+  Repo, `package.json` fordert `>=22.12.0 <27`), .NET 10 SDK und Rust stable mit MSVC.
+- `npm ci` statt `npm install`, damit `package-lock.json` die exakten Versionen fixiert.
+- Cargo-Cache ueber `actions/cache` mit `src-tauri/Cargo.lock` als Schluessel.
+- Die Pipeline fuehrt dieselben Skripte aus wie der lokale Weg (`npm run tauri -- build
+  --no-bundle`, `npm run dist:portable`, `npm run test:smoke`, `npm run verify:deployment`),
+  damit das Release-Asset dem lokalen Build entspricht.
+- Die C#-Validierung (`npm run test:sidecar`) laeuft bewusst **nicht** im Workflow: sie
+  braucht reale Audio-Hardware und einen Core-Audio-Session-Graphen. GitHub-Runner haben
+  keine Aufnahme- und keine Wiedergabegeraete; der Test wuerde dort mit
+  `CoreAudioException 0x80070490` abbrechen. Der Workflow prueft stattdessen Typecheck,
+  Node-Tests, Spec-Konsistenz, Rust-Tests, Build, Smoke und Deployment-Pruefung - alles
+  ohne Audio-Hardware.
+- `verify:deployment` prueft das Sidecar-Protokoll ueber `--list-devices`. Das
+  funktioniert auch ohne Geraete, weil `DeviceResolver.ListDevices` die Default-Endpunkte
+  per `try/catch` abfaengt und eine leere Liste statt eines Fehlers liefert.
+
+## Verifikation
+
+- Pipeline-Dateien: `.github/workflows/ci.yml`, `.github/workflows/release.yml`.
+- Release v0.1.2 mit ZIP-Asset und SHA256-Summe; ZIP aus dem Tag-Commit `5b8d876` gebaut.
+- `npm run check:specs` nach der Spec-Aenderung gruen.

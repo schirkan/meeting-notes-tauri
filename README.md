@@ -88,10 +88,13 @@ From **v0.1.2**, new or incomplete configurations default to automatic meeting c
 
 ### Run the portable version
 
-1. Download the portable ZIP from [Releases](https://github.com/schirkan/meeting-notes-tauri/releases).
+1. Download the portable ZIP from [Releases](https://github.com/schirkan/meeting-notes-tauri/releases). Every tagged version is published there as `MeetingNotes-v<version>-win-x64.zip`, together with a `SHA256SUMS.zip` for verification.
 2. Extract **all files** into a folder you can write to.
 3. Run `MeetingNotes.exe`. Keep `MeetingNotes.Sidecar.exe` in the same folder.
 4. Configure your Azure connection as described below.
+
+Releases are built by a GitHub Actions workflow from the tagged commit, so the published
+ZIP always matches the tag. See [Development and building from source](#development-and-building-from-source).
 
 The app is not code-signed, so Windows may display a security warning.
 Only use downloads from a trusted source.
@@ -216,6 +219,22 @@ npm run verify:deployment
 ```
 
 For the native tray callback/menu/exit probe, run `npm run test:tray` on an interactive Windows desktop with Explorer. It uses an isolated portable copy and no personal configuration. This is not a substitute for checking the visible icon, physical double-click and Alt+F4 yourself; headless execution reports SKIPPED. See [T-514](./specs/T-514-systray-und-schliessen-verhalten.md).
+
+### Releases and CI
+
+GitHub Actions builds and publishes the portable releases:
+
+- **CI** (`.github/workflows/ci.yml`) runs on every push and pull request against `main`: typecheck, Node tests, spec consistency, Rust tests, then a full build with smoke test and deployment check.
+- **Release** (`.github/workflows/release.yml`) runs when you push a `v*` tag. It builds the portable distribution from that tag, verifies it, and publishes the ZIP as a GitHub release asset with a `SHA256SUMS` file. A missing release can be published later without moving the tag via **Run workflow** with the `tag` input.
+
+```powershell
+git tag v0.1.3
+git push origin v0.1.3
+```
+
+The workflow deliberately skips the C# sidecar validation: it needs real audio hardware,
+which GitHub runners do not have. Everything else runs on the runner. Details in
+[T-515](./specs/T-515-github-actions-pipeline-und-release.md).
 
 For technical details and outstanding checks, see the [specification](./SPEC.md),
 [architecture decisions](./DECISIONS.md), and [individual specs](./specs/).

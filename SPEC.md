@@ -11,12 +11,12 @@ Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1
 
 ---
 
-## Stand der Specs (Abgleich 18.11.2026)
+## Stand der Specs (Abgleich 19.11.2026)
 
 Die Checkboxen wurden gegen den **Code** geprueft, nicht gegen den Spec-Status:
 jeder abgehakte Punkt traegt den Beleg im Klartext (`Beleg: …`), jeder offene
-Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **39 Specs** als
-`umgesetzt` bzw. `teils umgesetzt` markiert, **22 offene Punkte in 15 Specs**.
+Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **40 Specs** als
+`umgesetzt` bzw. `teils umgesetzt` markiert, **23 offene Punkte in 16 Specs**.
 Vorher waren ueber 70 Checkboxen offen, obwohl die Funktion ueberwiegend fertig
 und verifiziert war - die Specs sind jetzt mit dem Stand der Implementierung
 deckungsgleich.
@@ -38,9 +38,9 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-509 | Latenz und Ausgabequalitaet sind auf echter Hardware gegen die |
 | T-510 | Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch |
 | T-510 | Befunde sind in `T-504`, `T-500`, `SPEC.md` und `AGENTS.md` nachgezogen. |
-| T-514 | Native Windows-Abnahme: sichtbares Icon (belegt), Kontextmenue, Doppelklick, X und Alt+F4 bei beiden Op… |
+| T-514 | Native Windows-Abnahme: sichtbares Icon, Kontextmenue, Doppelklick, X und Alt+F4 bei beiden Op… |
 
-### Offen als bewusste Entscheidung (10 Punkte)
+### Offen als bewusste Entscheidung (11 Punkte)
 
 | Spec | Punkt | Warum offen |
 |---|---|---|
@@ -54,6 +54,7 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-513 | Das Ende nutzt mehrere Signale (Stille, Session-Ende), nicht nur eine… | Session-Ende ist umgesetzt, Pegel-/Stille-Erkennung hingegen nicht. Der Detektor beobachtet Session-Metadaten, keine Audiodaten. |
 | T-513 | Live-Abnahme: ein echtes Meeting (Teams oder Zoom) startet die Aufnah… | braucht einen echten Rechner mit Teams oder Zoom und einen Podcast-Playback als Gegenprobe. |
 | T-513 | Der Fenster-/Applikations-Fallback (Stufe 2) ist gebaut, falls Stufe… | laut Entscheidung vom 2026-11-18 erst umsetzen, **wenn** die Session-Erkennung in der Praxis nicht trägt. |
+| T-515 | Abnahme auf einem fremden Rechner: Download des ZIP, Entpacken, `Meet… | Der Download ist hier nur als Asset nachgewiesen; das Entpacken und der Start auf einem anderen Rechner mit WebView2 und Azure-Zu… |
 
 ### Nächste Schritte auf deinem Rechner (die 11 offenen Punkte)
 
@@ -247,6 +248,16 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - Mobile (iOS/Android)
 - Kein Export in weitere Formate (JSON, DOCX, TXT)
 - Produktionsreife Betriebs-/Monitoring-Features
+
+### Release-Pipeline (T-515)
+
+Jede Veroeffentlichung laeuft ueber GitHub Actions, damit das publizierte ZIP immer zum Tag gehoert:
+
+- **CI** (`.github/workflows/ci.yml`): bei jedem Push und Pull Request gegen `main` laufen Typecheck, Node-Tests, Spec-Konsistenz, Rust-Tests sowie ein vollstaendiger Build mit Smoke-Test und Deployment-Pruefung.
+- **Release** (`.github/workflows/release.yml`): beim Push eines `v*`-Tags wird die Portable-Distribution aus diesem Tag gebaut, geprueft und als GitHub-Release-Asset veroeffentlicht (`MeetingNotes-v<version>-win-x64.zip` plus `SHA256SUMS.zip`). Ein fehlendes Release laesst sich ohne Tag-Verschiebung ueber **Run workflow** mit dem `tag`-Input nachholen.
+- Die C#-Sidecar-Validierung laeuft bewusst nicht im Workflow: sie braucht reale Audio-Hardware, die GitHub-Runner nicht besitzen.
+
+Details: [T-515](./specs/T-515-github-actions-pipeline-und-release.md).
 
 ## 10. MVP-Rollout
 
