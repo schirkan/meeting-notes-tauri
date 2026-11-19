@@ -45,6 +45,29 @@ veroeffentlicht werden soll.
 
 ## Verifikation
 
+### Release v0.1.3 (19.11.2026)
+Der parallel eingegangene Remote-Commit `0caf00b` dokumentiert die
+[Veroeffentlichung v0.1.3](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.3)
+aus Tag-Stand `3163e2a`, gebaut durch
+[Workflow-Run 44629755890](https://github.com/schirkan/meeting-notes-tauri/actions/runs/44629755890).
+Diese Detailnachweise wurden beim Merge aus der alten Agentenchronik hierher
+uebernommen; sie sind kein erneut ausgefuehrter Release-Download dieses Sync-Laufs.
+
+- Assets: `MeetingNotes-v0.1.3-win-x64.zip` (16.496.793 Bytes) und `SHA256SUMS.txt`.
+- Dokumentierter ZIP-SHA256: `e84d5a58fdb69d0724bb7755428cdf21a5ecc2e85fab24b2c0891fdea1c4cbf7`.
+- Dokumentierte Gegenprobe: 4 Dateien / 31,26 MB entpackt, Haupt-EXE
+  ProductVersion 0.1.3, Sidecar FileVersion 0.1.3.0; berechneter Hash entspricht
+  dem GitHub-Asset-Digest.
+- Dokumentierter Vollnachweis: 9 Verifikationsschritte, 94 Node-Tests,
+  47 Rust-Tests, 539 C#-Assertions gegen Quellen / 552 gegen publizierten Sidecar,
+  Deployment PASS 9 / FAIL 0; alle Workflow-Schritte gruen.
+- Native Screenshots nutzen Mausrad-Nachrichten am WebView2-Render-Host fuer die
+  Abschnittspositionierung: ScrollItemPattern scrollte die Seitenwurzel statt
+  des Settings-Grids; ScrollPattern lieferte keine brauchbaren Werte. Umsetzung:
+  [capture-native-screenshots.ps1](../scripts/capture-native-screenshots.ps1).
+
+### Weitere Nachweise
+
 - 19.11.2026: Manueller Release-Download und Start auf fremdem Rechner vom Nutzer bestaetigt; siehe auch [T-500](./T-500-qualitaetssicherung-und-akzeptanztests.md).
 
 - Pipeline-Datei: `.github/workflows/release.yml` (einziger Workflow im Repo).

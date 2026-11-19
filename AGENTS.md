@@ -22,7 +22,7 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
 
 ## Aktueller Produktstand
 
-- **Meeting Notes**, Version **0.1.3**, ist eine portable Windows-11-x64-Anwendung
+- **Meeting Notes**, veroeffentlichte Version **0.1.3**, ist eine portable Windows-11-x64-Anwendung
   fuer Live-Transkripte mit Azure Speech. Implementierung vorhanden; offene
   Live-/Hardware-/Zielsystem-Abnahmen sind in den Specs ausgewiesen.
 - Mikrofon, Speaker-Loopback oder beide Quellen sind waehlbar. Sprechererkennung
