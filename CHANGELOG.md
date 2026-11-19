@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.3 - 2026-11-19
+## v0.1.3 - 19.11.2026
 
 ### Neu
 - **Settings-Dialog auf einer Seite:** Alle Einstellungen stehen untereinander auf einer scrollenden Seite. Die Abschnitte **Allgemein**, **Audio**, **Azure**, **Proxy** erscheinen als Ueberschriften in dieser Reihenfolge - ohne Tabs und ohne Bereichsnavigation; alles bleibt gleichzeitig sichtbar und wird nur gescrollt.
@@ -11,6 +11,21 @@
 - **Verbindung testen** liegt jetzt im Dialog-Footer neben **Speichern** statt im Azure-Abschnitt; das Wiederoeffnen des laufenden/letzten Tests bleibt dort ebenfalls erreichbar.
 - Das Tray-Icon faerbt sich **rot** waehrend einer Aufnahme und **gelb** waehrend der Pause; nach Stop oder Sidecar-Crash kehrt es zur Originalfarbe zurueck.
 - Der Speicherpfad fuer den Markdown-Export steht direkt unter seiner Checkbox "Transkript automatisch als Markdown speichern".
+
+### Verifikation
+- `npm run verify -- --full`: 9 Schritte gruen; 94 Node-Tests, 47 Rust-Tests,
+  539 C#-Assertions gegen Quellen / 552 gegen den publizierten Sidecar.
+- Portable-Build: Haupt-EXE `ProductVersion` 0.1.3; Sidecar `FileVersion` 0.1.3.0.
+  Smoke bestanden; Deployment PASS 9 / FAIL 0.
+- Manuelle Nutzerabnahme am 19.11.2026: Tray-Icon, Kontextmenue, Doppelklick und
+  Schliessen per X bei beiden Einstellungen bestaetigt. Alt+F4 und Beenden
+  waehrend einer Aufnahme bleiben offen
+  ([T-514](./specs/T-514-systray-und-schliessen-verhalten.md)).
+
+### Release
+- [Veroeffentlichung v0.1.3](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.3)
+  mit `MeetingNotes-v0.1.3-win-x64.zip` (16.496.793 Bytes) und `SHA256SUMS.txt`.
+- ZIP-SHA256: `e84d5a58fdb69d0724bb7755428cdf21a5ecc2e85fab24b2c0891fdea1c4cbf7`.
 
 ## v0.1.2 - 18.11.2026
 

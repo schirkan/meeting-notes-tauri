@@ -38,7 +38,7 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-509 | Latenz und Ausgabequalitaet sind auf echter Hardware gegen die |
 | T-510 | Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch |
 | T-510 | Befunde sind in `T-504`, `T-500`, `SPEC.md` und `AGENTS.md` nachgezogen. |
-| T-514 | Native Windows-Abnahme: Alt+F4 bei beiden Optionen sowie echter Exit mit laufender Aufnahme. |
+| T-514 | Native Windows-Abnahme: Alt+F4 bei beiden Optionen sowie echter Exit mit laufender Aufnahme, s… |
 
 ### Offen als bewusste Entscheidung (10 Punkte)
 

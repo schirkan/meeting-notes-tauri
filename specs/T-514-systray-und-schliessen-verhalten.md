@@ -50,7 +50,7 @@ Farbe wiederherstellen. Die vorhandenen Icon-Pixel werden ohne neue Assets/Depen
 eingefaerbt; Transparenz und Kontrast bleiben erhalten. Fehler werden im Debug-Log gemeldet.
 Testnachweis: `recording_indicator_tracks_start_pause_resume_and_stop` und
 `recording_icons_preserve_shape_alpha_and_restore_the_original`. Die echte Windows-
-Farbumschaltung bei Aufnahme/Pause bleibt Teil der offenen nativen Abnahme.
+Farbumschaltung bei Aufnahme/Pause ist Teil des unten noch offenen Abnahmepunkts.
 
 ## Done When
 - [x] Tray mit vorhandenem App-Icon und den Menuepunkten Anzeigen/Beenden ist eingebunden. Beleg: src-tauri/src/tray.rs (init, Menu::with_items), Cargo.toml (tray-icon). Testnachweis: Cargo-Compile und `tray_menu_actions_distinguish_show_from_real_exit`.
@@ -60,7 +60,7 @@ Farbumschaltung bei Aufnahme/Pause bleibt Teil der offenen nativen Abnahme.
 - [x] Settings-Default, Persistenz, sofortige Uebernahme und Checkbox sind implementiert. Beleg: TS/Rust WindowSettings, commands::save_user_settings aktualisiert Cache erst nach erfolgreichem Save, SettingsPanel.tsx, Beispielconfig. Testnachweis: `close_to_tray_defaults_on_and_persists_both_boolean_values`, Node-Tests fuer malformed Defaults, true/false sowie Checkbox-Persistenz und Recording-Sperre.
 - [x] Typecheck, Node-/Rust-Tests und Release-Build sind bestanden. Beleg: v0.1.2, 92 Node-Tests, 44 Rust-Tests, Tauri-Release-Build, Portable 31,37 MB / 4 Dateien / 3 Hashes, Smoke gruen, Deployment PASS 9 / FAIL 0 (18.11.2026). Testnachweis: npm run typecheck, npm run test:unit, cargo test, npm run tauri -- build --no-bundle, npm run test:smoke, npm run verify:deployment.
 - [x] Native Windows-Abnahme: sichtbares Icon, Kontextmenue, Doppelklick und X bei beiden Optionen. Beleg: manuelle Nutzerabnahme vom 19.11.2026, im Gespraech bestaetigt; keine synthetische Callback-Probe als Ersatz behauptet.
-- [ ] Native Windows-Abnahme: Alt+F4 bei beiden Optionen sowie echter Exit mit laufender Aufnahme. - **offen**: Nutzer hat diese beiden Teilpruefungen am 19.11.2026 ausdruecklich als nicht getestet benannt.
+- [ ] Native Windows-Abnahme: Alt+F4 bei beiden Optionen sowie echter Exit mit laufender Aufnahme, samt Beobachtung der Icon-Farbe (rot bei Aufnahme, gelb bei Pause). - **offen**: Nutzer hat Alt+F4 und Beenden waehrend einer Aufnahme am 19.11.2026 ausdruecklich als nicht getestet benannt; die Icon-Farbe ist damit ebenfalls noch nicht visuell bestaetigt.
 
 ## Manuelle Abnahme (19.11.2026)
 Der Nutzer bestaetigt Tray-Icon, Kontextmenue, Doppelklick und Schliessen per X
