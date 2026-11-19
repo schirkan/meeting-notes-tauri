@@ -43,25 +43,25 @@ See [docs/README.md](./docs/README.md) for the details of both sets.
 
 ### Settings
 
-| Allgemein | Azure-Konfiguration | Proxy |
-|---|---|---|
-| ![Settings tab Allgemein](docs/native/03-einstellungen-allgemein.png) | ![Settings tab Azure-Konfiguration](docs/native/04-einstellungen-azure.png) | ![Settings tab Proxy](docs/native/05-einstellungen-proxy.png) |
+| Allgemein | Audio | Azure | Proxy |
+|---|---|---|---|
+| ![Settings section Allgemein](docs/native/03-einstellungen-allgemein.png) | ![Settings section Audio](docs/native/04-einstellungen-audio.png) | ![Settings section Azure](docs/native/05-einstellungen-azure.png) | ![Settings section Proxy](docs/native/06-einstellungen-proxy.png) |
 
 ### Connection diagnostics
 
-![Connection test dialog with step table](docs/native/06-verbindungstest.png)
+![Connection test dialog with step table](docs/native/07-verbindungstest.png)
 
 ### Speaker mapping
 
-![Speaker mapping panel with per-source aliases](docs/native/07-sprecherzuordnung.png)
+![Speaker mapping panel with per-source aliases](docs/native/08-sprecherzuordnung.png)
 
 ### Debug log
 
-![Debug log dock](docs/native/08-debug-log.png)
+![Debug log dock](docs/native/09-debug-log.png)
 
 ### Taskbar
 
-![Windows taskbar with the Meeting Notes app icon](docs/native/11-taskbar-mit-app-icon.png)
+![Windows taskbar with the Meeting Notes app icon](docs/native/10-taskbar-mit-app-icon.png)
 
 The icon in the notification area is confirmed separately through UI Automation
 (name `Meeting Notes`, class `SystemTray.NormalButton`); opening its context menu
@@ -108,7 +108,7 @@ the labels shown in the app.
 
 Settings open automatically on first launch if the Azure configuration is missing.
 
-1. Under **Azure-Konfiguration**, enter your Azure Speech endpoint, region, and Speech Key.
+1. Under **Azure**, enter your Azure Speech endpoint, region, and Speech Key.
 2. If needed, configure your HTTP proxy under **Proxy**. Enter only the hostname or IP address, without `http://` or a path.
 3. Use **Verbindung testen** (Test connection) to check connectivity. This test does not capture microphone or system audio, but it does connect to Azure.
 4. Click **Speichern** (Save). Successful saving closes the dialog; errors leave it open with an explanation.

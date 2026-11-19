@@ -172,7 +172,7 @@ test('valid startup configuration leaves settings closed', async () => {
   }
 })
 
-test('settings separates Proxy into a fixed-size tab and preserves save and test payloads', async () => {
+test('settings shows all sections on one page, scrolls to the selected one and preserves save and test payloads', async () => {
   const page = await openApp({
     configState: { exists: true, path: 'test-config', config: validConfig },
     connectivityError: 'Local diagnostic test'
@@ -181,10 +181,14 @@ test('settings separates Proxy into a fixed-size tab and preserves save and test
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
     const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
     const panels = dialog.locator('.panel')
-    assert.deepEqual(await panels.locator('h2').allTextContents(), ['Allgemein', 'Azure-Konfiguration', 'Proxy'])
-    const azure = panels.nth(1)
-    const proxy = panels.nth(2)
-    await dialog.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).click()
+    assert.deepEqual(await panels.locator('h2').allTextContents(), ['Allgemein', 'Audio', 'Azure', 'Proxy'])
+    const audio = panels.nth(1)
+    const azure = panels.nth(2)
+    const proxy = panels.nth(3)
+    // Alle Abschnitte stehen gleichzeitig auf einer Seite.
+    assert.equal(await dialog.locator('.settings-section').count(), 4)
+    assert.equal(await audio.getByRole('combobox', { name: 'Mikrofon', exact: true }).count(), 1)
+    await dialog.getByRole('button', { name: 'Azure', exact: true }).click()
     assert.equal(await azure.getByLabel('Proxy verwenden').count(), 0)
     assert.equal(await proxy.getByRole('button', { name: 'Verbindung testen', exact: true }).count(), 0)
     assert.equal(await azure.getByRole('button', { name: 'Verbindung testen', exact: true }).count(), 1)
@@ -196,7 +200,14 @@ test('settings separates Proxy into a fixed-size tab and preserves save and test
     ])
     assert.equal(await dialog.locator('.settings-dialog-grid .settings-dialog-footer').count(), 0)
     const dialogBox = await dialog.boundingBox()
-    await dialog.getByRole('tab', { name: 'Proxy', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Proxy', exact: true }).click()
+    await page.waitForTimeout(600)
+    // Die Navigation scrollt nur zum Abschnitt, die Seite bleibt bestehen.
+    const gridBox = await dialog.locator('.settings-dialog-grid').boundingBox()
+    const proxyBox = await proxy.boundingBox()
+    assert.ok(proxyBox.y >= gridBox.y - 2, 'Proxy-Abschnitt wird nach oben gescrollt')
+    assert.ok(proxyBox.y < gridBox.y + gridBox.height, 'Proxy-Abschnitt bleibt im sichtbaren Bereich')
+    assert.equal(await dialog.locator('.settings-section').count(), 4)
     assert.equal(await proxy.locator('.settings-inline-hint').count(), 0)
     assert.equal(await proxy.getByLabel('Proxy Host', { exact: true }).isDisabled(), true)
     await proxy.getByLabel('Proxy verwenden').check()
@@ -209,15 +220,16 @@ test('settings separates Proxy into a fixed-size tab and preserves save and test
     await page.waitForFunction(() => !!window.lastSavedConfig)
     assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), { ...validConfig, proxy: proxyConfig })
     await reopenSettings(page)
-    await dialog.getByRole('tab', { name: 'Proxy', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Proxy', exact: true }).click()
     assert.deepEqual(await dialog.boundingBox(), dialogBox)
     for (const width of [1280, 800, 560, 390]) {
       await page.setViewportSize({ width, height: 860 })
       const before = await dialog.boundingBox()
-      for (const tab of ['Allgemein', 'Azure-Konfiguration', 'Proxy']) {
-        await dialog.getByRole('tab', { name: tab, exact: true }).click()
+      for (const section of ['Allgemein', 'Audio', 'Azure', 'Proxy']) {
+        await dialog.getByRole('button', { name: section, exact: true }).click()
+        await page.waitForTimeout(300)
         assert.deepEqual(await dialog.boundingBox(), before)
-        assert.equal(await dialog.getByRole('tabpanel').count(), 1)
+        assert.equal(await dialog.locator('.settings-section').count(), 4)
       }
       const [host, port, username, password] = await Promise.all([
         'Proxy Host', 'Proxy Port', 'Proxy Benutzername (optional)', 'Proxy Passwort (optional)'
@@ -228,7 +240,7 @@ test('settings separates Proxy into a fixed-size tab and preserves save and test
       assert.ok(username.y > host.y + host.height)
       assert.equal(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth), true)
     }
-    await dialog.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Azure', exact: true }).click()
     await azure.getByRole('button', { name: 'Verbindung testen', exact: true }).click()
     await page.getByRole('dialog', { name: 'Verbindungstest', exact: true }).locator('tbody tr').waitFor()
     assert.deepEqual(await page.evaluate(() => window.lastConnectivityPayload), { ...validConfig, proxy: proxyConfig, language: 'de-DE' })
@@ -301,7 +313,7 @@ test('language dropdown saves the selection and forwards it to connectivity test
     await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.language === 'en-US')
     await reopenSettings(page)
-    await page.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).click()
+    await page.getByRole('button', { name: 'Azure', exact: true }).click()
     await page.getByRole('button', { name: 'Verbindung testen', exact: true }).click()
     await page.getByRole('dialog', { name: 'Verbindungstest', exact: true }).waitFor()
     assert.equal((await page.evaluate(() => window.lastConnectivityPayload)).language, 'en-US')
@@ -715,7 +727,7 @@ test('saving a complete configuration replaces the warning and enables recording
   const page = await openApp({ configState: { exists: false, path: 'test-config', config: null } })
   try {
     await page.getByRole('dialog', { name: 'Einstellungen' }).waitFor()
-    await page.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).click()
+    await page.getByRole('button', { name: 'Azure', exact: true }).click()
     await page.getByRole('textbox', { name: 'Endpoint', exact: true }).fill(validConfig.endpoint)
     await page.getByRole('textbox', { name: 'Region', exact: true }).fill(validConfig.region)
     await page.getByLabel('Speech Key', { exact: true }).fill(validConfig.speechKey)
@@ -734,7 +746,7 @@ for (const error of ['Proxy CONNECT: 407 Proxy Authentication Required', { messa
     const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, connectivityError: error })
     try {
       await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
-      await page.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).click()
+      await page.getByRole('button', { name: 'Azure', exact: true }).click()
       await page.getByRole('button', { name: 'Verbindung testen', exact: true }).click()
       const dialog = page.getByRole('dialog', { name: 'Verbindungstest', exact: true })
       await dialog.locator('tbody tr').waitFor()
@@ -752,7 +764,7 @@ test('connectivity dialog displays pending test and all results, and can reopen 
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, deferConnectivity: true })
   try {
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
-    await page.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).click()
+    await page.getByRole('button', { name: 'Azure', exact: true }).click()
     await page.getByRole('button', { name: 'Verbindung testen', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'Verbindungstest', exact: true })
     await dialog.waitFor()
@@ -1041,30 +1053,30 @@ test('recording timer excludes pauses, freezes after stop and resets on a new st
   } finally { await page.close() }
 })
 
-test('settings tabs preserve input focus, support keyboard selection and trap focus in the active panel', async () => {
+test('settings sections preserve input focus, support keyboard selection and trap focus', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
   try {
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
     const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
-    await dialog.getByRole('tab', { name: 'Allgemein', exact: true }).focus()
+    await dialog.getByRole('button', { name: 'Allgemein', exact: true }).focus()
     await page.keyboard.press('ArrowRight')
-    assert.equal(await dialog.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).getAttribute('aria-selected'), 'true')
-    const tab = dialog.getByRole('tab', { name: 'Azure-Konfiguration', exact: true })
-    assert.equal(await tab.evaluate((element) => getComputedStyle(element).outlineStyle), 'none')
+    assert.equal(await dialog.getByRole('button', { name: 'Audio', exact: true }).getAttribute('aria-current'), 'true')
+    const section = dialog.getByRole('button', { name: 'Audio', exact: true })
+    assert.equal(await section.evaluate((element) => getComputedStyle(element).outlineStyle), 'none')
     const endpoint = dialog.getByRole('textbox', { name: 'Endpoint', exact: true })
     await endpoint.fill('https://changed.test')
-    assert.deepEqual(await tab.evaluate((element) => {
+    assert.deepEqual(await section.evaluate((element) => {
       const style = getComputedStyle(element)
       return [style.borderLeftWidth, style.borderRightWidth, style.outlineStyle]
     }), ['0px', '0px', 'none'])
     assert.equal(await endpoint.evaluate((element) => element === document.activeElement), true)
     const before = await dialog.boundingBox()
-    await dialog.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).focus()
+    await dialog.getByRole('button', { name: 'Azure', exact: true }).focus()
     await page.keyboard.press('End')
-    assert.equal(await dialog.getByRole('tab', { name: 'Proxy', exact: true }).getAttribute('aria-selected'), 'true')
+    assert.equal(await dialog.getByRole('button', { name: 'Proxy', exact: true }).getAttribute('aria-current'), 'true')
     assert.deepEqual(await dialog.boundingBox(), before)
     await page.keyboard.press('Home')
-    assert.equal(await dialog.getByRole('tab', { name: 'Allgemein', exact: true }).getAttribute('aria-selected'), 'true')
+    assert.equal(await dialog.getByRole('button', { name: 'Allgemein', exact: true }).getAttribute('aria-current'), 'true')
     await dialog.getByRole('button', { name: 'Speichern', exact: true }).focus()
     await page.keyboard.press('Tab')
     assert.equal(await dialog.getByRole('button', { name: 'Dialog schließen', exact: true }).evaluate((element) => element === document.activeElement), true)
@@ -1073,7 +1085,7 @@ test('settings tabs preserve input focus, support keyboard selection and trap fo
     await page.keyboard.press('Escape')
     assert.equal(await page.getByRole('dialog').count(), 0)
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
-    await page.getByRole('tab', { name: 'Azure-Konfiguration', exact: true }).click()
+    await page.getByRole('button', { name: 'Azure', exact: true }).click()
     assert.equal(await page.getByRole('textbox', { name: 'Endpoint', exact: true }).inputValue(), 'https://changed.test')
   } finally { await page.close() }
 })

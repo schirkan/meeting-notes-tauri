@@ -28,7 +28,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
   return (
     <section className="panel settings">
       <div className="panel-header">
-        <h2>Azure-Konfiguration</h2>
+        <h2>Azure</h2>
       </div>
 
       {!configState?.exists && (

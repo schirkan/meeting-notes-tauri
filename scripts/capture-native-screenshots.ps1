@@ -112,7 +112,7 @@ L ('work copy: ' + $workDir)
 
 $configPath = Join-Path $workDir 'MeetingNotes.config.json'
 $cfg = @{
-  azure = @{ endpoint = 'wss://westeurope.stt.speech.microsoft.com/speech/universal/v2'; region = 'westeurope'; speechKey = 'dummy-key-for-screenshot-capture'; interimResults = $true }
+  azure = @{ endpoint = 'https://westeurope.stt.speech.microsoft.com'; region = 'westeurope'; speechKey = 'dummy-key-for-screenshot-capture'; interimResults = $true }
   user = @{ language = 'de-DE'; transcription = @{ mic = $true; speaker = $true }; diarization = @{ mic = $true; speaker = $true }; devices = @{ micId = $null; speakerLoopbackId = $null }; transcript = @{ markdownExport = @{ enabled = $true; path = $null } }; autoStart = @{ enabled = $true; processes = @() }; window = @{ minimizeToTrayOnClose = $true } }
 } | ConvertTo-Json -Depth 8
 [System.IO.File]::WriteAllText($configPath, $cfg, (New-Object System.Text.UTF8Encoding($false)))
@@ -253,43 +253,55 @@ L '=== 2 settings allgemein ==='
 Click 'Einstellungsdialog' $null | Out-Null
 Grab '03-einstellungen-allgemein'
 
-L '=== 3 azure tab ==='
-Click 'Azure-Konfiguration' 'ControlType.TabItem' | Out-Null
-Grab '04-einstellungen-azure'
+L '=== 3 settings audio ==='
+Click 'Audio' 'ControlType.Button' | Out-Null
+Start-Sleep -Milliseconds 900
+Grab '04-einstellungen-audio'
 
-L '=== 4 connection test ==='
+L '=== 4 settings azure ==='
+Click 'Azure' 'ControlType.Button' | Out-Null
+Start-Sleep -Milliseconds 900
+Grab '05-einstellungen-azure'
+
+L '=== 5 settings proxy ==='
+Click 'Proxy' 'ControlType.Button' | Out-Null
+Start-Sleep -Milliseconds 900
+Grab '06-einstellungen-proxy'
+
+L '=== 6 connection test ==='
+Click 'Azure' 'ControlType.Button' | Out-Null
+Start-Sleep -Milliseconds 900
 Click 'Verbindung testen' $null | Out-Null
-for ($i = 0; $i -lt 12; $i++) {
+for ($i = 0; $i -lt 18; $i++) {
   Start-Sleep -Seconds 5
   if (Find-El 'Verbindungstest anzeigen' $null) { L ('  test finished after ' + (($i + 1) * 5) + 's'); break }
 }
 Click 'Verbindungstest anzeigen' $null | Out-Null
 Start-Sleep -Seconds 2
-Grab '06-verbindungstest'
+Grab '07-verbindungstest'
+# Erst den Verbindungsdialog, dann den Settings-Dialog schliessen.
 Click 'Dialog schlie' $null | Out-Null
-Start-Sleep -Milliseconds 800
-
-L '=== 5 proxy tab ==='
-Click 'Proxy' 'ControlType.TabItem' | Out-Null
-Grab '05-einstellungen-proxy'
+Start-Sleep -Milliseconds 900
 Click 'Dialog schlie' $null | Out-Null
-Start-Sleep -Milliseconds 800
+Start-Sleep -Milliseconds 900
 
-L '=== 6 speakers ==='
+L '=== 7 speakers ==='
 Click 'Sprecherzuordnung' $null | Out-Null
-Grab '07-sprecherzuordnung'
+Grab '08-sprecherzuordnung'
 
-L '=== 7 debug log ==='
+L '=== 8 debug log ==='
 Click 'Weitere Aktionen' $null | Out-Null
 Click 'Debug-Log' $null | Out-Null
 Start-Sleep -Milliseconds 800
-Grab '08-debug-log'
+Grab '09-debug-log'
 
 L '=== 8 tray acceptance ==='
 try {
   $root = [System.Windows.Automation.AutomationElement]::RootElement
   $trayCond = New-Object System.Windows.Automation.PropertyCondition ([System.Windows.Automation.AutomationElement]::ClassNameProperty), 'Shell_TrayWnd'
   $tray = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $trayCond)
+  # Die echte Windows-Taskleiste mit dem Icon der laufenden App als Beleg.
+  if ($tray) { Grab-Hwnd $tray.Current.NativeWindowHandle '10-taskbar-mit-app-icon' }
   $icon = $null
   # The overflow flyout is a separate top level window, so search the whole tree first.
   foreach ($e in $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
@@ -332,7 +344,7 @@ try {
       if ($t.V -and $t.Cls -eq '#32768') { $menuHwnd = $t.H; L ('  context menu window: ' + $t.H); break }
     }
     if ($menuHwnd -ne [IntPtr]::Zero) {
-      Grab-Hwnd $menuHwnd '09-systray-kontextmenu'
+      Grab-Hwnd $menuHwnd '10-systray-kontextmenu'
       $hMenu = [NC]::GetMenu($menuHwnd)
       $count = [NC]::GetMenuItemCount($hMenu)
       L ('  menu items: ' + $count)

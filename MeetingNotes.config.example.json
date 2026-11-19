@@ -36,6 +36,7 @@
     },
     "autoStart": {
       "enabled": true,
+      "autoStop": true,
       "processes": []
     },
     "window": {

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AudioPanel } from './components/AudioPanel'
 import { ConfigPanel } from './components/ConfigPanel'
 import { ConnectivityDialog } from './components/ConnectivityDialog'
 import { DebugLogPanel } from './components/DebugLogPanel'
@@ -135,7 +136,7 @@ export function App() {
         isOpen={settingsDialogOpen}
         busy={isSavingSettings || isChoosingDirectory}
         onClose={closeSettingsDialog}
-        tabs={['Allgemein', 'Azure-Konfiguration', 'Proxy']}
+        sections={['Allgemein', 'Audio', 'Azure', 'Proxy']}
         footer={
           <div className="settings-dialog-footer-content">
             <div className="settings-dialog-footer-copy">
@@ -161,6 +162,13 @@ export function App() {
           setSettings={setSettings}
           onChooseDirectory={onChooseTranscriptDirectory}
           choosingDirectory={isChoosingDirectory}
+        />
+
+        <AudioPanel
+          statusRunning={status.running}
+          settings={settings}
+          devices={devices}
+          setSettings={setSettings}
         />
 
         <ConfigPanel

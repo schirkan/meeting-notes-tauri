@@ -6,7 +6,11 @@ type SettingsDialogProps = {
   onClose: () => void
   children: React.ReactNode
   title?: string
-  tabs?: string[]
+  /**
+   * Names of the sections. All sections live on one page; the navigation
+   * only scrolls to the selected section.
+   */
+  sections?: string[]
   footer?: React.ReactNode
   busy?: boolean
 }
@@ -21,9 +25,14 @@ const FOCUSABLE_SELECTOR = [
 ].join(',')
 
 export function SettingsDialog(props: SettingsDialogProps) {
-  const { isOpen, onClose, children, title = 'Einstellungen', tabs, footer, busy = false } = props
-  const [activeTab, setActiveTab] = useState(0)
-  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const { isOpen, onClose, children, title = 'Einstellungen', sections, footer, busy = false } = props
+  const [activeSection, setActiveSection] = useState(0)
+  const navRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const sectionRefs = useRef<Array<HTMLElement | null>>([])
+  const gridRef = useRef<HTMLDivElement | null>(null)
+  // While a programmatic scroll runs, the scroll spy must not override the
+  // section the user just chose.
+  const scrollLock = useRef(false)
   const dialogRef = useRef<HTMLElement | null>(null)
   // Ref statt State, damit onClose-Wechsel den Initial-Focus-Effekt nicht
   // erneut auslösen. Außerdem den Initial-Fokus nur einmalig pro Open-Phase
@@ -33,7 +42,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
   onCloseRef.current = onClose
 
   // Escape-Handler und Focus-Trap: laufen während des gesamten Dialog-Lebens,
-  // hängen aber nur an document-Listener, die in einem einzigen Effect pro
+  // hängen aber nur an document-Listenern, die in einem einzigen Effect pro
   // Open-Phase registriert werden (Dependency nur: isOpen).
   useEffect(() => {
     if (!isOpen) return
@@ -110,6 +119,39 @@ export function SettingsDialog(props: SettingsDialogProps) {
     }
   }, [isOpen])
 
+  // Die Bereiche liegen alle auf einer Seite. Die Navigation scrollt nur zum
+  // gewaehlten Abschnitt.
+  const scrollToSection = (index: number) => {
+    const section = sectionRefs.current[index]
+    const grid = gridRef.current
+    if (!section || !grid) return
+    scrollLock.current = true
+    setActiveSection(index)
+    window.setTimeout(() => { scrollLock.current = false }, 600)
+    const gridTop = grid.getBoundingClientRect().top
+    const sectionTop = section.getBoundingClientRect().top
+    grid.scrollTo({ top: grid.scrollTop + (sectionTop - gridTop) - 8, behavior: 'smooth' })
+  }
+
+  // Scroll-Spy: markiert den Abschnitt, der gerade oben steht.
+  useEffect(() => {
+    if (!isOpen || !sections) return
+    const grid = gridRef.current
+    if (!grid) return
+    const update = () => {
+      if (scrollLock.current) return
+      const gridTop = grid.getBoundingClientRect().top
+      let current = 0
+      sectionRefs.current.forEach((section, index) => {
+        if (section && section.getBoundingClientRect().top - gridTop <= 40) current = index
+      })
+      setActiveSection(current)
+    }
+    update()
+    grid.addEventListener('scroll', update, { passive: true })
+    return () => grid.removeEventListener('scroll', update)
+  }, [isOpen, sections])
+
   if (!isOpen) {
     return null
   }
@@ -118,7 +160,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
     <div className="settings-dialog-overlay" role="presentation" onClick={onClose}>
       <section
         ref={dialogRef}
-        className={`settings-dialog ${tabs ? 'settings-dialog-tabbed' : ''}`}
+        className={`settings-dialog ${sections ? 'settings-dialog-scroll' : ''}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -132,25 +174,34 @@ export function SettingsDialog(props: SettingsDialogProps) {
           </button>
         </div>
 
-        {tabs && <div className="settings-tabs" role="tablist" aria-label="Einstellungsbereiche">
-          {tabs.map((tab, index) => <button key={tab} type="button" role="tab" id={`settings-tab-${index}`}
-            ref={(element) => { tabRefs.current[index] = element }} aria-controls={`settings-panel-${index}`}
-            aria-selected={activeTab === index} tabIndex={activeTab === index ? 0 : -1}
-            onClick={() => setActiveTab(index)} onKeyDown={(event) => {
+        {sections && <nav className="settings-sections" aria-label="Einstellungsbereiche">
+          {sections.map((section, index) => <button
+            key={section}
+            type="button"
+            ref={(element) => { navRefs.current[index] = element }}
+            aria-current={activeSection === index ? 'true' : undefined}
+            onClick={() => scrollToSection(index)}
+            onKeyDown={(event) => {
               let next = index
-              if (event.key === 'ArrowRight') next = (index + 1) % tabs.length
-              else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length
+              if (event.key === 'ArrowRight') next = (index + 1) % sections.length
+              else if (event.key === 'ArrowLeft') next = (index + sections.length - 1) % sections.length
               else if (event.key === 'Home') next = 0
-              else if (event.key === 'End') next = tabs.length - 1
+              else if (event.key === 'End') next = sections.length - 1
               else return
               event.preventDefault()
-              setActiveTab(next)
-              tabRefs.current[next]?.focus()
-            }}>{tab}</button>)}
-        </div>}
-        <div className="settings-dialog-grid" inert={busy}>
-          {tabs ? Children.toArray(children).map((child, index) => <div key={tabs[index]} role="tabpanel"
-            id={`settings-panel-${index}`} aria-labelledby={`settings-tab-${index}`} hidden={activeTab !== index}>{child}</div>) : children}
+              scrollToSection(next)
+              navRefs.current[next]?.focus()
+            }}>{section}</button>)}
+        </nav>}
+        <div className="settings-dialog-grid" ref={gridRef} inert={busy}>
+          {sections
+            ? Children.toArray(children).map((child, index) => <div
+              key={sections[index] ?? `settings-section-${index}`}
+              className="settings-section"
+              id={`settings-section-${index}`}
+              ref={(element) => { sectionRefs.current[index] = element }}
+            >{child}</div>)
+            : children}
         </div>
 
         {footer && <div className="settings-dialog-footer">{footer}</div>}

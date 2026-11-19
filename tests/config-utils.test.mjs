@@ -76,6 +76,16 @@ test('automatic capture and matching auto-stop default on but preserve explicit 
   assert.equal(contract.normalizeUserSettings({ autoStart: { enabled: true } }).autoStart.enabled, true)
 })
 
+test('the automatic stop defaults on and an explicit false is preserved', () => {
+  assert.equal(contract.DEFAULT_USER_SETTINGS.autoStart.autoStop, true)
+  for (const input of [undefined, {}, { autoStart: null }, { autoStart: {} },
+    { autoStart: { autoStop: 'false' } }]) {
+    assert.equal(contract.normalizeUserSettings(input).autoStart.autoStop, true)
+  }
+  assert.equal(contract.normalizeUserSettings({ autoStart: { autoStop: false } }).autoStart.autoStop, false)
+  assert.equal(contract.normalizeUserSettings({ autoStart: { enabled: true, autoStop: false } }).autoStart.autoStop, false)
+})
+
 test('isValidBcp47Language accepts canonical codes', () => {
   assert.equal(contract.isValidBcp47Language('de-DE'), true)
   assert.equal(contract.isValidBcp47Language('en-US'), true)

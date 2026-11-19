@@ -47,6 +47,8 @@ export interface AutoStartSettings {
   enabled: boolean
   /** Process names that count as a meeting. Empty: the built-in default list. */
   processes: string[]
+  /** End an automatically started recording when the meeting session ends. */
+  autoStop: boolean
 }
 
 export interface WindowSettings {
@@ -90,7 +92,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   transcript: {
     markdownExport: { enabled: true, path: null }
   },
-  autoStart: { enabled: true, processes: [] },
+  autoStart: { enabled: true, processes: [], autoStop: true },
   window: { minimizeToTrayOnClose: true }
 }
 
@@ -158,7 +160,11 @@ export function normalizeUserSettings(input: UserSettingsInput | null | undefine
             .filter((name): name is string => typeof name === 'string')
             .map((name) => name.trim())
             .filter((name) => name.length > 0)
-        : DEFAULT_USER_SETTINGS.autoStart.processes
+        : DEFAULT_USER_SETTINGS.autoStart.processes,
+      autoStop:
+        typeof input?.autoStart?.autoStop === 'boolean'
+          ? input.autoStart.autoStop
+          : DEFAULT_USER_SETTINGS.autoStart.autoStop
     },
     window: {
       minimizeToTrayOnClose: typeof input?.window?.minimizeToTrayOnClose === 'boolean'

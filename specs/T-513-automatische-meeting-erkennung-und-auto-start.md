@@ -389,9 +389,10 @@ in `normalizeUserSettings`, Persistenz in `src-tauri/src/settings.rs`):
     }
 
 Entscheidung von Martin am 18.11.2026: Ab v0.1.2 ist `enabled: true`
-Standard fuer Auto-Aufnahme **und** deren Session-Ende-Stop. Beide nutzen
-weiterhin dieselbe Einstellungsachse, keinen separaten Auto-Stop-Schalter.
+Standard fuer Auto-Aufnahme **und** deren Session-Ende-Stop. Der Auto-Stop ist seit dem
+19.11.2026 mit `autoStop` in derselben Achse einzeln abschaltbar, ohne die Auto-Aufnahme zu deaktivieren.
 Explizit gespeichertes `false` bleibt erhalten; fehlende Felder erhalten `true`.
+- [x] Der Session-Ende-Stop ist einzeln abschaltbar, ohne die Auto-Aufnahme zu deaktivieren. Beleg: `user.autoStart.autoStop` in TS/Rust-AutoStartSettings und Beispielconfig, `commands.rs::auto_stop_allowed`. Testnachweis: Rust-Test `auto_stop_needs_both_the_auto_start_and_the_auto_stop_option` und Node-Test fuer Default an und explizites false.
 
 ### Reihenfolge der Umsetzung
 
@@ -457,6 +458,7 @@ Der Kalender ist **kein** Bestandteil (Entscheidung vom 2026-11-18).
   list_events).
 - [x] Kein Kalender und keine Cloud für den Start nötig: der Mechanismus nutzt ausschließlich lokale System-APIs. Beleg: kein Graph-/OAuth-Aufruf im geplanten Pfad (Abbruchbedingungen).
 - [x] Auto-Aufnahme und passender Auto-Stop sind ab v0.1.2 standardmaessig **aktiv** (`enabled: true`), explizites false bleibt erhalten. Beleg: normalizeUserSettings, TS/Rust AutoStartSettings und Beispielconfig; Entscheidung Martin 18.11.2026. Testnachweis: `auto_start_is_on_by_default_and_explicit_false_survives_a_save_cycle` sowie Node-Test fuer Default an und explizites false.
+- [x] Der automatische Stop des Session-Endes laesst sich ueber `user.autoStart.autoStop` abschalten; die automatisch gestartete Aufnahme laeuft dann bis zum manuellen Stop weiter. Beleg: TS/Rust-AutoStartSettings (`autoStop`), Beispielconfig, `commands.rs::auto_stop_allowed`. Testnachweis: Rust-Test `auto_stop_needs_both_the_auto_start_and_the_auto_stop_option`, Node-Test `the automatic stop defaults on and an explicit false is preserved`.
 - [x] Ohne vollstaendige Azure-Konfiguration startet die Aufnahme nicht automatisch. Beleg: src-tauri/src/lib.rs (start_recording_on_detection prueft load_azure_config, bricht ohne Konfiguration ab). Formnachweis: Code-Guard; der Settings-Default-Test ist kein Wirkungsnachweis dieses Guards.
 - [x] Die Erkennung läuft im **Sidecar** (nicht im Tauri-Main) und nimmt dabei nichts auf. Beleg: sidecar/MeetingDetector.cs (nur Session-Graph), sidecar/Program.cs (Modus `--detect-only`, Event `meeting_detected`), src-tauri/src/autostart.rs (eigener Erkennungsprozess). Testnachweis: C#-Validierung - der Detektor meldet die Capture-Sitzung eines fremden Prozesses als `meeting_detected`.
 - [x] Die Erkennung ist ereignisgesteuert, nicht per Timer. Beleg: sidecar/MeetingDetector.cs (`AudioSessionManager.OnSessionCreated`), src-tauri/src/autostart.rs (Ereignisstrom, kein Polling). Testnachweis: C#-Validierung - die Erkennung kommt als Ereignis an, nicht durch Abfragen.

@@ -78,7 +78,8 @@ impl Default for WindowSettings {
 /// Automatischer Aufnahmestart bei erkanntem Meeting (T-513).
 ///
 /// Seit v0.1.2 standardmaessig an: Start und passender Session-Ende-Stop.
-/// Explizit gespeichertes false bleibt erhalten.
+/// Explizit gespeichertes false bleibt erhalten. Der Session-Ende-Stop ist
+/// ueber `auto_stop` einzeln abschaltbar - der Start bleibt dann bestehen.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AutoStartSettings {
@@ -86,6 +87,8 @@ pub struct AutoStartSettings {
     pub enabled: bool,
     /// Prozessnamen, die als Meeting gelten. Leer: die Standardliste.
     pub processes: Vec<String>,
+    /// Automatisch gestartete Aufnahme beim Session-Ende beenden.
+    pub auto_stop: bool,
 }
 
 impl Default for AutoStartSettings {
@@ -93,6 +96,7 @@ impl Default for AutoStartSettings {
         Self {
             enabled: true,
             processes: Vec::new(),
+            auto_stop: true,
         }
     }
 }
@@ -521,22 +525,27 @@ mod config_tests {
     fn auto_start_is_on_by_default_and_explicit_false_survives_a_save_cycle() {
         let defaults = default_user_settings();
         assert!(defaults.auto_start.enabled, "Auto-Start samt Auto-Stop ist standardmaessig an");
+        assert!(defaults.auto_start.auto_stop, "Auto-Stop ist standardmaessig an");
         assert!(defaults.auto_start.processes.is_empty(), "Keine feste Prozessliste im Default");
 
         let mut settings = defaults.clone();
         settings.auto_start.enabled = false;
+        settings.auto_start.auto_stop = false;
         settings.auto_start.processes = vec!["teams".into(), "zoom".into()];
         let encoded = serde_json::to_string(&settings).expect("settings serialisieren");
         let decoded: UserSettings = serde_json::from_str(&encoded).expect("settings lesen");
         assert!(!decoded.auto_start.enabled, "Explizit gespeichertes false bleibt erhalten");
+        assert!(!decoded.auto_start.auto_stop, "Explizit gespeichertes false fuer den Auto-Stop bleibt erhalten");
         assert_eq!(decoded.auto_start.processes, vec!["teams".to_string(), "zoom".to_string()]);
 
         // Fehlt der Abschnitt, greifen die Defaults.
         let without_auto_start: UserSettings =
             serde_json::from_str(r#"{"language":"de-DE"}"#).expect("teilweise Settings lesen");
         assert!(without_auto_start.auto_start.enabled);
+        assert!(without_auto_start.auto_start.auto_stop);
         let partial: UserSettings = serde_json::from_str(r#"{"autoStart":{}}"#).unwrap();
         assert!(partial.auto_start.enabled);
+        assert!(partial.auto_start.auto_stop);
         assert!(without_auto_start.auto_start.processes.is_empty());
     }
 

@@ -159,6 +159,14 @@ pub async fn stop_recording(
 }
 
 /// Only the process that automatically started this recording can end it.
+/// Darf eine automatisch gestartete Aufnahme beim Session-Ende beendet werden?
+///
+/// Der automatische Stop haengt an zwei Optionen: der Auto-Start muss aktiv
+/// sein und der Auto-Stop darf nicht einzeln abgeschaltet sein.
+fn auto_stop_allowed(auto_start: &crate::settings::AutoStartSettings) -> bool {
+    auto_start.enabled && auto_start.auto_stop
+}
+
 pub async fn stop_recording_for_meeting(
     app: &AppHandle,
     ended: &crate::autostart::MeetingEndedPayload,
@@ -169,7 +177,10 @@ pub async fn stop_recording_for_meeting(
     if !lifecycle.matches_end(ended) || !state.snapshot_status().running {
         return Ok(false);
     }
-    if !settings::load_user_settings().await.map_err(|e| e.to_string())?.auto_start.enabled {
+    // Der automatische Stop ist einzeln abschaltbar: der Start bleibt dann
+    // bestehen, die Aufnahme laeuft aber bis zum manuellen Stop weiter.
+    let user = settings::load_user_settings().await.map_err(|e| e.to_string())?;
+    if !auto_stop_allowed(&user.auto_start) {
         return Ok(false);
     }
     lifecycle.auto_origin = None;
@@ -226,6 +237,26 @@ mod lifecycle_tests {
         assert!(pause.await.unwrap().is_err());
         assert!(!state.snapshot_status().running);
         assert!(require_running_recording(&state).is_err(), "resume uses the same guard");
+    }
+
+    #[test]
+    fn auto_stop_needs_both_the_auto_start_and_the_auto_stop_option() {
+        let mut auto_start = crate::settings::AutoStartSettings::default();
+        assert!(
+            auto_stop_allowed(&auto_start),
+            "Auto-Start und Auto-Stop sind standardmaessig an"
+        );
+        auto_start.auto_stop = false;
+        assert!(
+            !auto_stop_allowed(&auto_start),
+            "Abgeschalteter Auto-Stop beendet die Aufnahme nicht"
+        );
+        auto_start.auto_stop = true;
+        auto_start.enabled = false;
+        assert!(
+            !auto_stop_allowed(&auto_start),
+            "Ohne Auto-Start gibt es nichts automatisch zu beenden"
+        );
     }
 }
 

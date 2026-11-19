@@ -163,16 +163,16 @@ summary::-webkit-details-marker { display: none; }
 
 .settings-dialog-overlay { position: fixed; inset: 0; z-index: 980; display: grid; place-items: center; padding: 24px; background: #10121680; backdrop-filter: blur(3px); }
 .settings-dialog { display: flex; flex-direction: column; width: min(620px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--text); box-shadow: 0 24px 100px #00000060; }
-.settings-dialog-tabbed { height: min(620px, calc(100dvh - 48px)); }
+.settings-dialog-scroll { height: min(620px, calc(100dvh - 48px)); }
 .settings-dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .settings-dialog-header h2 { font-size: 16px; }
 .settings-dialog-close { width: 32px; padding: 6px; border: 0; background: transparent; color: var(--muted); }
-.settings-tabs { display: flex; flex-shrink: 0; border-bottom: 1px solid var(--line); gap: 4px; padding: 0 6px; margin: 10px 22px 0; }
-.settings-tabs button { border: 0; border-radius: 0; padding: 10px 14px; color: var(--muted); }
-.settings-tabs button[aria-selected="true"] { color: var(--accent); box-shadow: 0 2px 0 var(--accent); }
-.settings-tabs button:focus-visible { outline: none; background: var(--hover); box-shadow: 0 2px 0 var(--accent); }
+.settings-sections { display: flex; flex-shrink: 0; border-bottom: 1px solid var(--line); gap: 4px; padding: 0 6px; margin: 10px 22px 0; }
+.settings-sections button { border: 0; border-radius: 0; padding: 10px 14px; color: var(--muted); }
+.settings-sections button[aria-current="true"] { color: var(--accent); box-shadow: 0 2px 0 var(--accent); }
+.settings-sections button:focus-visible { outline: none; background: var(--hover); box-shadow: 0 2px 0 var(--accent); }
 .settings-dialog-grid { padding: 22px; flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
-.settings-dialog-tabbed .panel-header { display: none; }
+.settings-dialog-grid .settings-section + .settings-section { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--line); }
 .settings-dialog-footer { padding: 14px 22px; border-top: 1px solid var(--line); flex-shrink: 0; max-height: 40%; overflow-y: auto; }
 .settings-dialog-footer-content { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; align-items: stretch; }
 .settings-dialog-footer-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -240,8 +240,8 @@ input:disabled, select:disabled { opacity: .5; cursor: not-allowed; }
   .segment-heading { display: flex; align-items: center; gap: 8px; }
   .audio-settings-grid { grid-template-columns: minmax(0, 1fr); }
   .settings-dialog-overlay { padding: 16px; }
-  .settings-tabs { margin-left: 10px; margin-right: 10px; gap: 0; padding: 0; }
-  .settings-tabs button { padding: 10px; }
+  .settings-sections { margin-left: 10px; margin-right: 10px; gap: 0; padding: 0; }
+  .settings-sections button { padding: 10px; }
   .settings-dialog-grid { padding: 18px; }
   .idle-audio-panel { padding: 24px; }
   .debug-summary { padding: 0 10px; }

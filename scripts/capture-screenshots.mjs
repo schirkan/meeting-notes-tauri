@@ -35,7 +35,8 @@ const VIEWPORT = { width: 1280, height: 860 }
 const TXT = {
   openSettings: 'Einstellungsdialog \u00f6ffnen',
   settingsDialog: 'Einstellungen',
-  tabAzure: 'Azure-Konfiguration',
+  tabAzure: 'Azure',
+  tabAudio: 'Audio',
   tabProxy: 'Proxy',
   tabGeneral: 'Allgemein',
   testConnection: 'Verbindung testen',
@@ -56,7 +57,7 @@ const userSettings = {
   diarization: { mic: true, speaker: true },
   devices: { micId: 'mic-demo', speakerLoopbackId: 'speaker-demo' },
   transcript: { markdownExport: { enabled: true, path: null } },
-  autoStart: { enabled: true, processes: [] },
+  autoStart: { enabled: true, autoStop: true, processes: [] },
   window: { minimizeToTrayOnClose: true }
 }
 
@@ -213,27 +214,39 @@ async function main() {
     await page.getByRole('button', { name: TXT.openSettings }).click()
     const azureDialog = page.getByRole('dialog', { name: TXT.settingsDialog, exact: true })
     await azureDialog.waitFor()
-    await azureDialog.getByRole('tab', { name: TXT.tabAzure, exact: true }).click()
-    await capture(page, '04-einstellungen-azure.png', 'Einstellungen - Azure-Konfiguration')
+    await azureDialog.getByRole('button', { name: TXT.tabAudio, exact: true }).click()
+    await page.waitForTimeout(500)
+    await capture(page, '04-einstellungen-audio.png', 'Einstellungen - Audio')
+    await page.close()
+
+    page = await openApp(browser, baseUrl)
+    await page.getByRole('button', { name: TXT.openSettings }).click()
+    const azurePanel = page.getByRole('dialog', { name: TXT.settingsDialog, exact: true })
+    await azurePanel.waitFor()
+    await azurePanel.getByRole('button', { name: TXT.tabAzure, exact: true }).click()
+    await page.waitForTimeout(500)
+    await capture(page, '05-einstellungen-azure.png', 'Einstellungen - Azure')
     await page.close()
 
     page = await openApp(browser, baseUrl)
     await page.getByRole('button', { name: TXT.openSettings }).click()
     const proxyDialog = page.getByRole('dialog', { name: TXT.settingsDialog, exact: true })
     await proxyDialog.waitFor()
-    await proxyDialog.getByRole('tab', { name: TXT.tabProxy, exact: true }).click()
-    await capture(page, '05-einstellungen-proxy.png', 'Einstellungen - Proxy')
+    await proxyDialog.getByRole('button', { name: TXT.tabProxy, exact: true }).click()
+    await page.waitForTimeout(500)
+    await capture(page, '06-einstellungen-proxy.png', 'Einstellungen - Proxy')
     await page.close()
 
     page = await openApp(browser, baseUrl)
     await page.getByRole('button', { name: TXT.openSettings }).click()
     const testDialog = page.getByRole('dialog', { name: TXT.settingsDialog, exact: true })
     await testDialog.waitFor()
-    await testDialog.getByRole('tab', { name: TXT.tabAzure, exact: true }).click()
+    await testDialog.getByRole('button', { name: TXT.tabAzure, exact: true }).click()
+    await page.waitForTimeout(500)
     await testDialog.getByRole('button', { name: TXT.testConnection, exact: true }).click()
     await page.getByRole('dialog', { name: TXT.connectivityDialog, exact: true }).waitFor()
     await page.waitForTimeout(300)
-    await capture(page, '06-verbindungstest.png', 'Diagnose-Dialog Verbindungstest')
+    await capture(page, '07-verbindungstest.png', 'Diagnose-Dialog Verbindungstest')
     await page.close()
 
     page = await openApp(browser, baseUrl, { running: true, startedAt: new Date(2026, 10, 18, 9, 13, 0).toISOString() })
@@ -241,7 +254,7 @@ async function main() {
     await page.locator('.utility-actions button[aria-controls="console-speakers"]').click()
     await page.waitForSelector('#console-speakers:not([hidden])')
     await page.waitForTimeout(300)
-    await capture(page, '07-sprecherzuordnung.png', 'Sprecherzuordnung im Inspector')
+    await capture(page, '08-sprecherzuordnung.png', 'Sprecherzuordnung im Inspector')
     await page.close()
 
     page = await openApp(browser, baseUrl)
@@ -249,7 +262,7 @@ async function main() {
     await page.getByRole('button', { name: TXT.debugLog, exact: true }).click()
     await page.waitForSelector('.console-debug')
     await page.waitForTimeout(400)
-    await capture(page, '08-debug-log.png', 'Debug-Log-Dock')
+    await capture(page, '09-debug-log.png', 'Debug-Log-Dock')
     await page.close()
   } finally {
     await browser.close()
