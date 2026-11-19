@@ -45,6 +45,24 @@ function Add-Result {
     [void]$results.Add([PSCustomObject]@{ Status = $Status; Check = $Check; Detail = $Detail })
 }
 
+# SHA256 ohne Get-FileHash: das Cmdlet stammt aus dem Modul
+# Microsoft.PowerShell.Utility, das auf einem Build-Runner nicht zwingend
+# geladen ist. Die .NET-API ist ueberall vorhanden - auch unter
+# Windows PowerShell 5.1 ohne Utility-Modul.
+function Get-Sha256Hex {
+    param([string]$Path)
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $bytes = $sha.ComputeHash($stream)
+        }
+        finally { $sha.Dispose() }
+    }
+    finally { $stream.Dispose() }
+    return ([System.BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
+}
+
 function Get-PeSubsystem {
     # PE-Subsystem: 2 = Windows GUI, 3 = Konsole. Damit laesst sich pruefen,
     # ob die Haupt-EXE kein Konsolenfenster oeffnet.
@@ -166,7 +184,7 @@ if (-not (Test-Path $sumsFile)) {
                 [void]$bad.Add("$rel (fehlt)")
                 continue
             }
-            $actual = (Get-FileHash -Algorithm SHA256 -Path $file).Hash.ToLower()
+            $actual = Get-Sha256Hex -Path $file
             if ($actual -ne $expected) { [void]$bad.Add("$rel (Hash weicht ab)") }
         }
     }

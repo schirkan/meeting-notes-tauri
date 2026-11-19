@@ -75,7 +75,12 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $zip = Join-Path $env:RUNNER_TEMP "MeetingNotes-v$version-win-x64.zip"
           Compress-Archive -Path 'dist/portable/*' -DestinationPath $zip -CompressionLevel Optimal
-          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          # Kein Get-FileHash: das Utility-Modul ist auf einem Build-Runner
+          # nicht zwingend geladen. Die .NET-API ist ueberall vorhanden.
+          $sha = [System.Security.Cryptography.SHA256]::Create()
+          $stream = [System.IO.File]::OpenRead($zip)
+          try { $bytes = $sha.ComputeHash($stream) } finally { $stream.Dispose(); $sha.Dispose() }
+          $hash = ([System.BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
           "sha256:$hash  MeetingNotes-v$version-win-x64.zip" |
             Out-File -FilePath (Join-Path $env:RUNNER_TEMP 'SHA256SUMS.zip') -Encoding utf8
           Write-Host "ZIP: $zip ($((Get-Item $zip).Length) Bytes)"
