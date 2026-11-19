@@ -76,7 +76,7 @@ still needs a machine with an attached display.
 - An internet connection and an **Azure Speech resource** with an endpoint, region, and key
 - A microphone and/or an audio output device, depending on which source you want to transcribe
 
-> **Downloading a release?** The published **v0.1.1** release and tagged **v0.1.2** builds bundle the .NET
+> **Downloading a release?** The published **v0.1.1** release and all tagged builds from **v0.1.2** on bundle the .NET
 > runtime, so no separate .NET installation is needed; an existing .NET 8 or 10
 > installation does not interfere. The earlier **v0.1.0** release still requires the
 > [.NET 10 Runtime (x64)](https://dotnet.microsoft.com/en-us/download/dotnet/10.0).
@@ -84,7 +84,7 @@ still needs a machine with an attached display.
 > [release notes](https://github.com/schirkan/meeting-notes-tauri/releases)
 > for the requirements and features of a downloaded version.
 
-From **v0.1.2**, new or incomplete configurations default to automatic meeting capture, matching automatic stop, and close-to-tray. Previously saved `false` preferences are preserved. Auto-recording still requires a complete Azure configuration. See [the changelog](./CHANGELOG.md) for the tagged version's changes; a Git tag does not itself add a downloadable GitHub release asset.
+From **v0.1.2**, new or incomplete configurations default to automatic meeting capture, matching automatic stop, and close-to-tray. In **v0.1.3** the settings dialog is a single scrolling page (Allgemein, Audio, Azure, Proxy) and the matching automatic stop can be switched off separately; the tray icon turns red while recording and yellow while paused. Previously saved `false` preferences are preserved. Auto-recording still requires a complete Azure configuration. See [the changelog](./CHANGELOG.md) for the tagged version's changes; a Git tag does not itself add a downloadable GitHub release asset.
 
 ### Run the portable version
 

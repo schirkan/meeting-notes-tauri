@@ -1,13 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.1.3 - 2026-11-19
 
 ### Neu
-- **Settings-Dialog auf einer Seite:** Alle Einstellungen stehen untereinander auf einer scrollenden Seite. Die Navigation am oberen Rand scrollt nur zum jeweiligen Abschnitt (**Allgemein**, **Audio**, **Azure**, **Proxy**) und schaltet nichts mehr um.
-- **Eigener Abschnitt Audio:** Mikrofon und Speaker-Loopback liegen jetzt dort mit ihren Geraete-Auswahlen und der Sprechererkennung.
+- **Settings-Dialog auf einer Seite:** Alle Einstellungen stehen untereinander auf einer scrollenden Seite. Die Abschnitte **Allgemein**, **Audio**, **Azure**, **Proxy** erscheinen als Ueberschriften in dieser Reihenfolge - ohne Tabs und ohne Bereichsnavigation; alles bleibt gleichzeitig sichtbar und wird nur gescrollt.
+- **Eigener Abschnitt Audio:** Mikrofon und Speaker-Loopback liegen dort mit ihren Geraete-Auswahlen und der Sprechererkennung.
 - **Auto-Stop einzeln abschaltbar:** neue Option `user.autoStart.autoStop` ("Aufnahme automatisch beenden, wenn das Meeting automatisch gestartet wurde"). Ausgeschaltet bleibt die automatisch gestartete Aufnahme laufen, bis sie manuell gestoppt wird. Standardmaessig aktiv; fehlende Felder erhalten `true`, explizit gespeichertes `false` bleibt erhalten.
 
 ### Geaendert
+- **Verbindung testen** liegt jetzt im Dialog-Footer neben **Speichern** statt im Azure-Abschnitt; das Wiederoeffnen des laufenden/letzten Tests bleibt dort ebenfalls erreichbar.
+- Das Tray-Icon faerbt sich **rot** waehrend einer Aufnahme und **gelb** waehrend der Pause; nach Stop oder Sidecar-Crash kehrt es zur Originalfarbe zurueck.
 - Der Speicherpfad fuer den Markdown-Export steht direkt unter seiner Checkbox "Transkript automatisch als Markdown speichern".
 
 ## v0.1.2 - 18.11.2026

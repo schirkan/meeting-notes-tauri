@@ -243,15 +243,65 @@ function Click([string]$needle, [string]$type) {
   return $true
 }
 
-function Scroll-To([string]$name) {
-  $el = Find-El $name 'ControlType.Text'
-  if ($null -eq $el) { throw ('Section not found: ' + $name) }
-  $pattern = $null
-  if (-not $el.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$pattern)) {
-    throw ('ScrollItemPattern unavailable for section: ' + $name)
+# Exact name match. A substring match would hit 'Audio Einstellungen' in the
+# background panel behind the dialog and scroll the wrong element.
+function Find-El-Exact([string]$name, [string]$type) {
+  $all = All-Elements
+  if ($all -eq $null) { return $null }
+  foreach ($e in $all) {
+    if ($e.Current.Name -ne $name) { continue }
+    $t = $e.Current.ControlType.ProgrammaticName
+    if (-not $type -or $t -eq $type) { return $e }
   }
-  $pattern.ScrollIntoView()
-  L ('scrolled to ' + $name)
+  return $null
+}
+
+# Scroll position of a section heading in screen pixels, or $null when it is not
+# in the accessibility tree.
+function Section-Y([string]$name) {
+  $el = Find-El-Exact $name 'ControlType.Text'
+  if ($null -eq $el) { return $null }
+  return [int]$el.Current.BoundingRectangle.Top
+}
+
+# Scroll the dialog with the mouse wheel. The WebView2 document exposes a
+# ScrollPattern without usable values, and ScrollItemPattern.ScrollIntoView
+# scrolls the page root instead of the settings grid, so the wheel message is
+# the reliable way to move the content.
+function Wheel([int]$notches) {
+  $delta = -120 * $notches
+  $w = (($delta -band 0xFFFF) -shl 16)
+  $cr = New-Object NC+RECT
+  [void][NC]::GetClientRect($render.H, [ref]$cr)
+  $cx = [int](($cr.Right - $cr.Left) / 2)
+  $cy = [int](($cr.Bottom - $cr.Top) * 0.55)
+  $sx = $origin.X + $cx
+  $sy = $origin.Y + $cy
+  $l = (($sy -band 0xFFFF) -shl 16) -bor ($sx -band 0xFFFF)
+  for ($i = 0; $i -lt [math]::Abs($notches); $i++) {
+    [void][NC]::PostMessage($render.H, 0x020A, [IntPtr]$w, [IntPtr]$l)
+    Start-Sleep -Milliseconds 150
+  }
+}
+
+# Bring a section heading into the upper part of the settings grid. The wheel
+# step is about 190 px at this window size, so the position is checked after
+# every step and corrected in both directions.
+function Scroll-To([string]$name, [int]$band) {
+  for ($i = 0; $i -lt 24; $i++) {
+    $y = Section-Y $name
+    if ($null -eq $y) { throw ('Section not found: ' + $name) }
+    if ($y -le $band -and $y -gt ($band - 170)) { L ('  ' + $name + ' at y=' + $y); return }
+    $before = $y
+    if ($y -gt $band) { Wheel 1 } else { Wheel -1 }
+    Start-Sleep -Milliseconds 250
+    $after = Section-Y $name
+    if ($null -eq $after -or $after -eq $before) {
+      L ('  ' + $name + ' stuck at y=' + $before + ' (scroll limit reached)')
+      return
+    }
+  }
+  L ('  ' + $name + ' not aligned after 24 steps')
 }
 
 L '=== 1 main window ==='
@@ -265,17 +315,17 @@ Click 'Einstellungsdialog' $null | Out-Null
 Grab '03-einstellungen-allgemein'
 
 L '=== 3 settings audio ==='
-Scroll-To 'Audio'
+Scroll-To 'Audio' 300
 Start-Sleep -Milliseconds 900
 Grab '04-einstellungen-audio'
 
 L '=== 4 settings azure ==='
-Scroll-To 'Azure'
+Scroll-To 'Azure' 300
 Start-Sleep -Milliseconds 900
 Grab '05-einstellungen-azure'
 
 L '=== 5 settings proxy ==='
-Scroll-To 'Proxy'
+Scroll-To 'Proxy' 300
 Start-Sleep -Milliseconds 900
 Grab '06-einstellungen-proxy'
 
