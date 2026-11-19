@@ -138,6 +138,8 @@ jobs:
             gh release upload $tag $zip $sums --clobber
             gh release edit $tag --notes-file (Join-Path $env:RUNNER_TEMP 'notes.md') --title "Meeting Notes v$version"
           } else {
-            gh release create $tag $zip $sums --title "Meeting Notes v$version" --notes-file (Join-Path $env:RUNNER_TEMP 'notes.md') --target $tag
+            # Kein --target: das Tag existiert bereits, und die API lehnt
+            # einen Tag-Namen als target_commitish ab.
+            gh release create $tag $zip $sums --title "Meeting Notes v$version" --notes-file (Join-Path $env:RUNNER_TEMP 'notes.md')
           }
           gh release view $tag --json url,tagName,assets
