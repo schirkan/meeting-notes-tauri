@@ -29,8 +29,8 @@ used on its own.
 The images below are **captures of the real application**: the built `MeetingNotes.exe`
 runs in the interactive Windows session and the real window is recorded with
 `PrintWindow(PW_RENDERFULLCONTENT)`. They therefore show the native window frame, the
-real app icon, the real WebView2 content and the real Windows taskbar with the tray
-icon. The one exception is the live transcript: a real recording needs Azure Speech
+real app icon and the real WebView2 content. The one exception is the live
+transcript: a real recording needs Azure Speech
 credentials, so that view comes from the headless renderer (`npm run screenshots`).
 See [docs/README.md](./docs/README.md) for the details of both sets.
 
@@ -68,14 +68,6 @@ so two captures - from the top and from the bottom - show the whole dialog.
 
 ![Debug log dock](docs/native/06-debug-log.png)
 
-### Taskbar
-
-![Windows taskbar with the Meeting Notes app icon](docs/native/08-taskbar-mit-app-icon.png)
-
-The notification-area icon, context menu, double-click and closing with X under
-both close-to-tray settings were manually confirmed on 2026-11-19. Alt+F4 and
-exiting during a recording remain untested; see [T-514](./specs/T-514-systray-und-schliessen-verhalten.md).
-
 ## 📦 Installation
 
 ### Requirements
@@ -84,20 +76,6 @@ exiting during a recording remain untested; see [T-514](./specs/T-514-systray-un
 - [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) — already installed on many Windows 11 systems
 - An internet connection and an **Azure Speech resource** with an endpoint, region, and key
 - A microphone and/or an audio output device, depending on which source you want to transcribe
-
-> **Downloading a release?** The published **v0.1.1** release and all tagged builds from **v0.1.2** on bundle the .NET
-> runtime, so no separate .NET installation is needed; an existing .NET 8 or 10
-> installation does not interfere. The earlier **v0.1.0** release still requires the
-> [.NET 10 Runtime (x64)](https://dotnet.microsoft.com/en-us/download/dotnet/10.0).
-> This README describes the current version. Check the
-> [release notes](https://github.com/schirkan/meeting-notes-tauri/releases)
-> for the requirements and features of a downloaded version.
-
-From **v0.1.2**, new or incomplete configurations default to automatic meeting capture, matching automatic stop, and close-to-tray. In **v0.1.3** the settings dialog is a single scrolling page (General, Audio, Azure, Proxy) and the matching automatic stop can be switched off separately; the tray icon turns red while recording and yellow while paused. Previously saved `false` preferences are preserved. Auto-recording still requires a complete Azure configuration. See [the changelog](./CHANGELOG.md) for the tagged version's changes; a Git tag does not itself add a downloadable GitHub release asset.
-
-The current development version uses **General**, **Transcription**, **Azure**
-and **Proxy** in the dialog. Audio controls appear only on the start page;
-**About** and **Dev-Tools (F12)** are available in the three-dot menu.
 
 ### Run the portable version
 
