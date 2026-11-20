@@ -35,7 +35,9 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
   der naechste Start beginnt ein neues Transkript. Sprecheraliase und Segment-Merge
   sind sitzungsgebunden. Siehe [T-507](./specs/T-507-pause-stop-und-sitzungsgebundene-sprecherzuordnung.md).
 - Automatischer Start beobachtet lokale Core-Audio-Sessions erlaubter Prozesse,
-  ohne Kalender. Auto-Stop betrifft nur die passend automatisch gestartete Aufnahme.
+  ohne Kalender. Der Entwicklungsstand umfasst neben `teams` auch `ms-teams`
+  in der Standardliste (noch nicht in v0.1.4); die Live-Teams-Abnahme ist offen.
+  Auto-Stop betrifft nur die passend automatisch gestartete Aufnahme.
   `user.autoStart.enabled` und `user.autoStart.autoStop` sind standardmaessig aktiv;
   gespeichertes `false` bleibt erhalten. Die Erkennung ist eine Heuristik.
   Siehe [T-513](./specs/T-513-automatische-meeting-erkennung-und-auto-start.md).

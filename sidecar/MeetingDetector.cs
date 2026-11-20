@@ -20,7 +20,7 @@ public sealed class MeetingDetector : IDisposable
     private static readonly TimeSpan EndGracePeriod = TimeSpan.FromSeconds(3);
     private static readonly string[] DefaultMeetingProcesses =
     {
-        "teams", "zoom", "whatsapp", "slack", "discord", "skype", "webex", "gotomeeting", "zoomify"
+        "teams", "ms-teams", "zoom", "whatsapp", "slack", "discord", "skype", "webex", "gotomeeting", "zoomify"
     };
     private readonly HashSet<string> _meetingProcesses;
     private readonly Action<MeetingDetection> _onDetected;
@@ -44,7 +44,7 @@ public sealed class MeetingDetector : IDisposable
     {
         _onDetected = onDetected;
         _onEnded = onEnded ?? (_ => { });
-        _meetingProcesses = new(meetingProcesses ?? DefaultMeetingProcesses, StringComparer.OrdinalIgnoreCase);
+        _meetingProcesses = CreateProcessFilter(meetingProcesses);
         try
         {
             using var enumerator = new MMDeviceEnumerator();
@@ -60,6 +60,9 @@ public sealed class MeetingDetector : IDisposable
             throw;
         }
     }
+
+    internal static HashSet<string> CreateProcessFilter(IEnumerable<string>? meetingProcesses = null) =>
+        new(meetingProcesses ?? DefaultMeetingProcesses, StringComparer.OrdinalIgnoreCase);
 
     private void Watch(MMDevice device, string signal)
     {

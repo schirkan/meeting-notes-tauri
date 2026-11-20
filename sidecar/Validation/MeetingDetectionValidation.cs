@@ -4,6 +4,14 @@ internal static class MeetingDetectionValidation
 {
     public static void Run(Action<bool, string> check)
     {
+        var defaults = MeetingDetector.CreateProcessFilter();
+        check(defaults.Contains("MS-Teams"), "Default process filter recognizes new Microsoft Teams case-insensitively");
+        check(defaults.Contains("teams"), "Default process filter still recognizes classic Teams");
+        check(!defaults.Contains("ms-teamsupdate") && !defaults.Contains("msedgewebview2"),
+            "Default process filter does not match the Teams updater or shared WebView2 process");
+        var custom = MeetingDetector.CreateProcessFilter(new[] { "zoom" });
+        check(custom.Contains("zoom") && !custom.Contains("ms-teams"), "Custom process filter replaces defaults");
+
         var tracker = new MeetingSessionTracker();
         tracker.Track(1, 100, "teams", "mic");
         tracker.Track(2, 100, "teams", "speaker");

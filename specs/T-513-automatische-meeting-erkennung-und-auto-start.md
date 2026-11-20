@@ -427,7 +427,9 @@ Der Kalender ist **kein** Bestandteil (Entscheidung vom 2026-11-18).
 ## Datenfelder
 - `user.autoStart.enabled` (Default `true` ab v0.1.2, steuert Start und passenden Stop)
 - `user.autoStart.processes` (konfigurierbare Prozess-Allowlist; Defaults:
-  Teams, Zoom, WhatsApp, Slack, Discord, Skype, Webex, GoToMeeting, Zoomify)
+  klassisches Teams (`teams`), neues Teams (`ms-teams`), Zoom, WhatsApp,
+  Slack, Discord, Skype, Webex, GoToMeeting, Zoomify). Eine nichtleere
+  konfigurierte Liste ersetzt die Defaults.
 - Keine Felder `mode`, `confirmSeconds` oder `allowedProcesses`.
 
 ## Done When
@@ -473,6 +475,15 @@ Der Kalender ist **kein** Bestandteil (Entscheidung vom 2026-11-18).
 - [x] Verifikation: Node-Tests, Rust-Tests und C#-Validierung gruen. Beleg: Typecheck, 85 Node-Tests, 41 Rust-Tests, 539 C#-Assertions gegen Quellen und 552 gegen den publizierten/getrimmten Sidecar (18.11.2026); bekannte MF-Stichprobe SKIPPED, neue Session-Proben bestanden. Testnachweis: npm run typecheck, npm run test:unit, cargo test --manifest-path src-tauri/Cargo.toml, npm run test:sidecar, npm run test:sidecar:published, npm run check:specs.
 - [ ] Live-Abnahme: ein echtes Meeting (Teams oder Zoom) startet die Aufnahme ohne Nutzeraktion, und ein normales Podcast-Playback löst **keinen** Auto-Start aus. Beleg: manuelle Abnahme am Zielrechner - die Zielrechner-Abnahme ist eine bewusste Lücke in diesem Spec. - **offen**: braucht einen echten Rechner mit Teams oder Zoom und einen Podcast-Playback als Gegenprobe.
 - [ ] Der Fenster-/Applikations-Fallback (Stufe 2) ist gebaut, falls Stufe 1 nicht ausreicht. Beleg: EnumWindows/GetWindowTextW mit PID-Korrelation. - **offen**: laut Entscheidung vom 2026-11-18 erst umsetzen, **wenn** die Session-Erkennung in der Praxis nicht trägt.
+
+## Neues Microsoft Teams (20.11.2026)
+
+Das installierte `MSTeams`-Paket deklariert `ms-teams.exe`, v0.1.4 kannte
+standardmaessig nur `teams`. `MeetingDetector` akzeptiert jetzt beide exakten
+Prozessnamen (ohne `.exe`, ohne Beachtung der Gross-/Kleinschreibung).
+`MeetingDetectionValidation` prueft beide Namen, schliesst den Updater und den
+allgemeinen WebView2-Prozess aus und sichert die benutzerdefinierte Liste ab.
+Die Live-Abnahme in einem Teams-Anruf bleibt offen.
 
 ## Aktualisierung v0.1.2 (18.11.2026)
 Auto-Aufnahme samt passendem Auto-Stop ist jetzt standardmaessig an.
