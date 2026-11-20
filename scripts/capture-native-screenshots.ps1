@@ -288,10 +288,18 @@ function Wheel([int]$notches) {
 # step is about 190 px at this window size, so the position is checked after
 # every step and corrected in both directions.
 function Scroll-To([string]$name, [int]$band) {
+  # Ein Mausrad-Schritt bewegt etwa 190 px. Das Zielband ist so breit wie ein
+  # Schritt, damit das Raster nicht zwischen zwei Positionen pendelt.
+  $seen = @{}
   for ($i = 0; $i -lt 24; $i++) {
     $y = Section-Y $name
     if ($null -eq $y) { throw ('Section not found: ' + $name) }
-    if ($y -le $band -and $y -gt ($band - 170)) { L ('  ' + $name + ' at y=' + $y); return }
+    if ($seen.ContainsKey($y)) {
+      L ('  ' + $name + ' bei y=' + $y + ' (naechstliegende Position erreicht)')
+      return
+    }
+    $seen[$y] = $true
+    if ($y -le $band -and $y -gt ($band - 190)) { L ('  ' + $name + ' at y=' + $y); return }
     $before = $y
     if ($y -gt $band) { Wheel 1 } else { Wheel -1 }
     Start-Sleep -Milliseconds 250
@@ -312,22 +320,12 @@ Grab '01-startbildschirm'
 
 L '=== 2 settings allgemein ==='
 Click 'Einstellungsdialog' $null | Out-Null
-Grab '03-einstellungen-allgemein'
+Grab '02-einstellungen-oben'
 
-L '=== 3 settings audio ==='
-Scroll-To 'Audio' 300
+L '=== 3 settings unten ==='
+Wheel 10
 Start-Sleep -Milliseconds 900
-Grab '04-einstellungen-audio'
-
-L '=== 4 settings azure ==='
-Scroll-To 'Azure' 300
-Start-Sleep -Milliseconds 900
-Grab '05-einstellungen-azure'
-
-L '=== 5 settings proxy ==='
-Scroll-To 'Proxy' 300
-Start-Sleep -Milliseconds 900
-Grab '06-einstellungen-proxy'
+Grab '03-einstellungen-unten'
 
 L '=== 6 connection test ==='
 Click 'Verbindung testen' $null | Out-Null
@@ -337,7 +335,7 @@ for ($i = 0; $i -lt 18; $i++) {
 }
 Click 'Verbindungstest anzeigen' $null | Out-Null
 Start-Sleep -Seconds 2
-Grab '07-verbindungstest'
+Grab '04-verbindungstest'
 # Erst den Verbindungsdialog, dann den Settings-Dialog schliessen.
 Click 'Dialog schlie' $null | Out-Null
 Start-Sleep -Milliseconds 900
@@ -346,13 +344,19 @@ Start-Sleep -Milliseconds 900
 
 L '=== 7 speakers ==='
 Click 'Sprecherzuordnung' $null | Out-Null
-Grab '08-sprecherzuordnung'
+Grab '05-sprecherzuordnung'
 
 L '=== 8 debug log ==='
 Click 'Weitere Aktionen' $null | Out-Null
 Click 'Debug-Log' $null | Out-Null
 Start-Sleep -Milliseconds 800
-Grab '09-debug-log'
+Grab '06-debug-log'
+
+L '=== 9 about dialog ==='
+Click 'Weitere Aktionen' $null | Out-Null
+Click 'About' $null | Out-Null
+Start-Sleep -Milliseconds 900
+Grab '07-about-dialog'
 
 L '=== 8 tray acceptance ==='
 try {
@@ -360,7 +364,7 @@ try {
   $trayCond = New-Object System.Windows.Automation.PropertyCondition ([System.Windows.Automation.AutomationElement]::ClassNameProperty), 'Shell_TrayWnd'
   $tray = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $trayCond)
   # Die echte Windows-Taskleiste mit dem Icon der laufenden App als Beleg.
-  if ($tray) { Grab-Hwnd $tray.Current.NativeWindowHandle '10-taskbar-mit-app-icon' }
+  if ($tray) { Grab-Hwnd $tray.Current.NativeWindowHandle '08-taskbar-mit-app-icon' }
   $icon = $null
   # The overflow flyout is a separate top level window, so search the whole tree first.
   foreach ($e in $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {

@@ -100,7 +100,7 @@ summary::-webkit-details-marker { display: none; }
 .floating-follow { position: absolute; bottom: 16px; right: 24px; z-index: 2; background: #363044; color: #d4c5ff; border-color: #655282; box-shadow: 0 5px 20px #00000040; }
 .floating-follow:hover { background: #4a3d62; }
 .idle-audio-panel { width: 100%; max-width: 720px; padding: 28px; margin: auto; min-height: 0; overflow: auto; flex-shrink: 1; transform: translateX(150px); }
-@media (max-width: 800px) { .idle-audio-panel { transform: none; } }
+@media (max-width: 1100px) { .idle-audio-panel { transform: none; } }
 .idle-audio-panel + .transcript-list { display: none; }
 .idle-audio-panel h2 { font-size: 16px; }
 .empty { color: var(--muted); padding: 24px 12px; margin: 0; }

@@ -44,28 +44,33 @@ See [docs/README.md](./docs/README.md) for the details of both sets.
 
 ### Settings
 
-The following settings captures predate the current **Transkription** section,
-start-page-only audio controls and temporary dialog drafts.
+The dialog is one compact scrolling page with the sections **Allgemein**,
+**Transkription**, **Azure** and **Proxy**. Audio controls live on the start page,
+so two captures - from the top and from the bottom - show the whole dialog.
 
-| Allgemein | Audio | Azure | Proxy |
-|---|---|---|---|
-| ![Settings section Allgemein](docs/native/03-einstellungen-allgemein.png) | ![Settings section Audio](docs/native/04-einstellungen-audio.png) | ![Settings section Azure](docs/native/05-einstellungen-azure.png) | ![Settings section Proxy](docs/native/06-einstellungen-proxy.png) |
+| Settings (top) | Settings (bottom) |
+|---|---|
+| ![Settings dialog from the top](docs/native/02-einstellungen-oben.png) | ![Settings dialog from the bottom](docs/native/03-einstellungen-unten.png) |
+
+### About
+
+![About dialog with app icon and repository link](docs/native/07-about-dialog.png)
 
 ### Connection diagnostics
 
-![Connection test dialog with step table](docs/native/07-verbindungstest.png)
+![Connection test dialog with step table](docs/native/04-verbindungstest.png)
 
 ### Speaker mapping
 
-![Speaker mapping panel with per-source aliases](docs/native/08-sprecherzuordnung.png)
+![Speaker mapping panel with per-source aliases](docs/native/05-sprecherzuordnung.png)
 
 ### Debug log
 
-![Debug log dock](docs/native/09-debug-log.png)
+![Debug log dock](docs/native/06-debug-log.png)
 
 ### Taskbar
 
-![Windows taskbar with the Meeting Notes app icon](docs/native/10-taskbar-mit-app-icon.png)
+![Windows taskbar with the Meeting Notes app icon](docs/native/08-taskbar-mit-app-icon.png)
 
 The notification-area icon, context menu, double-click and closing with X under
 both close-to-tray settings were manually confirmed on 2026-11-19. Alt+F4 and

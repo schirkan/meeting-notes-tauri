@@ -36,7 +36,7 @@ const TXT = {
   openSettings: 'Einstellungsdialog \u00f6ffnen',
   settingsDialog: 'Einstellungen',
   tabAzure: 'Azure',
-  tabAudio: 'Audio',
+  tabTranscription: 'Transkription',
   tabProxy: 'Proxy',
   tabGeneral: 'Allgemein',
   testConnection: 'Verbindung testen',
@@ -171,6 +171,16 @@ async function emitDummyTranscript(page) {
 
 const failures = []
 
+// Scrollt den Dialog-Inhalt ans Ende. Der Dialog ist nach dem Umbau kompakt:
+// mehrere Abschnitte passen in ein Bild, deshalb zwei Zustaende statt vier.
+async function scrollDialogToBottom(page) {
+  await page.getByRole('dialog', { name: TXT.settingsDialog, exact: true }).evaluate((dialog) => {
+    const grid = dialog.querySelector('.settings-dialog-grid')
+    if (grid) grid.scrollTop = grid.scrollHeight
+  })
+  await page.waitForTimeout(400)
+}
+
 async function capture(page, file, description) {
   try {
     await page.screenshot({ path: join(OUTPUT_DIR, file) })
@@ -207,34 +217,15 @@ async function main() {
     page = await openApp(browser, baseUrl)
     await page.getByRole('button', { name: TXT.openSettings }).click()
     await page.getByRole('dialog', { name: TXT.settingsDialog, exact: true }).waitFor()
-    await capture(page, '03-einstellungen-allgemein.png', 'Einstellungen - Allgemein')
+    await capture(page, '03-einstellungen-oben.png', 'Einstellungen - Allgemein, Transkription, Azure')
     await page.close()
 
     page = await openApp(browser, baseUrl)
     await page.getByRole('button', { name: TXT.openSettings }).click()
-    const azureDialog = page.getByRole('dialog', { name: TXT.settingsDialog, exact: true })
-    await azureDialog.waitFor()
-    await azureDialog.getByRole('heading', { name: TXT.tabAudio, exact: true }).scrollIntoViewIfNeeded()
-    await page.waitForTimeout(500)
-    await capture(page, '04-einstellungen-audio.png', 'Einstellungen - Audio')
-    await page.close()
-
-    page = await openApp(browser, baseUrl)
-    await page.getByRole('button', { name: TXT.openSettings }).click()
-    const azurePanel = page.getByRole('dialog', { name: TXT.settingsDialog, exact: true })
-    await azurePanel.waitFor()
-    await azurePanel.getByRole('heading', { name: TXT.tabAzure, exact: true }).scrollIntoViewIfNeeded()
-    await page.waitForTimeout(500)
-    await capture(page, '05-einstellungen-azure.png', 'Einstellungen - Azure')
-    await page.close()
-
-    page = await openApp(browser, baseUrl)
-    await page.getByRole('button', { name: TXT.openSettings }).click()
-    const proxyDialog = page.getByRole('dialog', { name: TXT.settingsDialog, exact: true })
-    await proxyDialog.waitFor()
-    await proxyDialog.getByRole('heading', { name: TXT.tabProxy, exact: true }).scrollIntoViewIfNeeded()
-    await page.waitForTimeout(500)
-    await capture(page, '06-einstellungen-proxy.png', 'Einstellungen - Proxy')
+    const settingsDialog = page.getByRole('dialog', { name: TXT.settingsDialog, exact: true })
+    await settingsDialog.waitFor()
+    await scrollDialogToBottom(page)
+    await capture(page, '04-einstellungen-unten.png', 'Einstellungen - Azure und Proxy')
     await page.close()
 
     page = await openApp(browser, baseUrl)
@@ -245,7 +236,7 @@ async function main() {
     await testDialog.getByRole('button', { name: TXT.testConnection, exact: true }).click()
     await page.getByRole('dialog', { name: TXT.connectivityDialog, exact: true }).waitFor()
     await page.waitForTimeout(300)
-    await capture(page, '07-verbindungstest.png', 'Diagnose-Dialog Verbindungstest')
+    await capture(page, '05-verbindungstest.png', 'Diagnose-Dialog Verbindungstest')
     await page.close()
 
     page = await openApp(browser, baseUrl, { running: true, startedAt: new Date(2026, 10, 18, 9, 13, 0).toISOString() })
@@ -253,7 +244,7 @@ async function main() {
     await page.locator('.utility-actions button[aria-controls="console-speakers"]').click()
     await page.waitForSelector('#console-speakers:not([hidden])')
     await page.waitForTimeout(300)
-    await capture(page, '08-sprecherzuordnung.png', 'Sprecherzuordnung im Inspector')
+    await capture(page, '06-sprecherzuordnung.png', 'Sprecherzuordnung im Inspector')
     await page.close()
 
     page = await openApp(browser, baseUrl)
@@ -261,7 +252,15 @@ async function main() {
     await page.getByRole('button', { name: TXT.debugLog, exact: true }).click()
     await page.waitForSelector('.console-debug')
     await page.waitForTimeout(400)
-    await capture(page, '09-debug-log.png', 'Debug-Log-Dock')
+    await capture(page, '07-debug-log.png', 'Debug-Log-Dock')
+    await page.close()
+
+    page = await openApp(browser, baseUrl)
+    await page.locator('.overflow-menu > summary').click()
+    await page.getByRole('button', { name: 'About', exact: true }).click()
+    await page.getByRole('dialog', { name: 'About', exact: true }).waitFor()
+    await page.waitForTimeout(400)
+    await capture(page, '08-about-dialog.png', 'About-Dialog')
     await page.close()
   } finally {
     await browser.close()

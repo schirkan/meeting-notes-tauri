@@ -827,9 +827,11 @@ test('saved close-to-tray preference loads and is disabled during recording', as
 test('saved disabled diarization options remain disabled on startup', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, diarization: { mic: false, speaker: false } })
   try {
-    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
-    assert.equal(await page.getByRole('checkbox', { name: 'Sprechererkennung für Mikrofon', exact: true }).isChecked(), false)
-    assert.equal(await page.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).isChecked(), false)
+    // Die Diarization-Schalter stehen seit dem Dialog-Umbau nur auf der Startseite.
+    const idle = page.locator('.idle-audio-panel')
+    await idle.waitFor()
+    assert.equal(await idle.getByRole('checkbox', { name: 'Sprechererkennung für Mikrofon', exact: true }).isChecked(), false)
+    assert.equal(await idle.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).isChecked(), false)
   } finally {
     await page.close()
   }

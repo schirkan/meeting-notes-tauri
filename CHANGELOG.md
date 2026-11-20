@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Neu
+- **About-Dialog:** Im Drei-Punkte-Menue gibt es jetzt **About** mit App-Icon, Repository-Link, Autor und Lizenz. Der Link oeffnet die Repository-Seite ueber die neue Shell-Integration (`open_repository`).
+- **Dev-Tools (F12):** Ueber das Drei-Punkte-Menue lassen sich die WebView2-Entwicklerwerkzeuge direkt oeffnen.
+- **Abschnitt Transkription:** Die primaere Sprache liegt in einem eigenen Dialogabschnitt **Transkription**; **Allgemein** enthaelt nur noch die Systray-Einstellung.
+- **Audio-Schalter nur auf der Startseite:** Mikrofon, Speaker-Loopback und Sprechererkennung stehen nur noch im Leerzustand der Startseite.
+- **Temporaerer Dialog-Entwurf:** Dialogaenderungen bleiben bis zum **Speichern** im Entwurf. Beim Schliessen mit X, Escape oder Backdrop fragt die App nach ungespeicherten Aenderungen; der Verbindungstest nutzt den Entwurf, ohne ihn zu speichern.
+
+### Geaendert
+- Das Audio-Panel der Startseite ist auf breiten Fenstern um 150 px nach rechts versetzt, damit es nicht unter dem Inspector verschwindet; schmale Fenster (<= 1100 px) bleiben zentriert.
+- Webseiten-Kontextmenues sind ausserhalb editierbarer Textfelder unterdrueckt; native Menues bleiben erhalten.
+
+### Behoben
+- Zwei Regressionen aus dem Umbau behoben: die Diarization-Schalter werden jetzt auf der Startseite geprueft (sie liegen nicht mehr im Dialog), und der 150-px-Versatz des Audio-Panels greift erst ab 1100 px Breite - passend zum dokumentierten Verhalten.
+
 ## v0.1.3 - 19.11.2026
 
 ### Neu
