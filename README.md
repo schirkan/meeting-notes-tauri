@@ -36,11 +36,11 @@ See [docs/README.md](./docs/README.md) for the details of both sets.
 
 ### Main window
 
-![Native main window with source settings](docs/native/01-startbildschirm.png)
+![Native main window with source settings](docs/native/01-start-screen.png)
 
 ### Live transcript
 
-![Live transcript with speakers and interim text](docs/renderer/02-aufnahme-transkript.png)
+![Live transcript with speakers and interim text](docs/renderer/02-recording-transcript.png)
 
 ### Settings
 
@@ -50,7 +50,7 @@ so two captures - from the top and from the bottom - show the whole dialog.
 
 | Settings (top) | Settings (bottom) |
 |---|---|
-| ![Settings dialog from the top](docs/native/02-einstellungen-oben.png) | ![Settings dialog from the bottom](docs/native/03-einstellungen-unten.png) |
+| ![Settings dialog from the top](docs/native/02-settings-top.png) | ![Settings dialog from the bottom](docs/native/03-settings-bottom.png) |
 
 ### About
 
@@ -58,11 +58,11 @@ so two captures - from the top and from the bottom - show the whole dialog.
 
 ### Connection diagnostics
 
-![Connection test dialog with step table](docs/native/04-verbindungstest.png)
+![Connection test dialog with step table](docs/native/04-connection-test.png)
 
 ### Speaker mapping
 
-![Speaker mapping panel with per-source aliases](docs/native/05-sprecherzuordnung.png)
+![Speaker mapping panel with per-source aliases](docs/native/05-speaker-mapping.png)
 
 ### Debug log
 
@@ -95,6 +95,8 @@ Only use downloads from a trusted source.
 The instructions below refer to the labels shown in the app.
 
 ### Connect to Azure
+
+Azure Speech: [Documentation](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/) · [Product information](https://azure.microsoft.com/en-us/products/ai-foundry/tools/speech).
 
 Settings open automatically on first launch if the Azure configuration is missing.
 

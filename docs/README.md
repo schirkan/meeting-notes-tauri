@@ -16,11 +16,11 @@ Run: `npm run screenshots:native` (see `scripts/run-native-capture.ps1`).
 
 | File | Content |
 |---|---|
-| [native/01-startbildschirm.png](native/01-startbildschirm.png) | Main window with the audio settings of the start page |
-| [native/02-einstellungen-oben.png](native/02-einstellungen-oben.png) | Settings from the top: General, Transcription, Azure |
-| [native/03-einstellungen-unten.png](native/03-einstellungen-unten.png) | Settings from the bottom: Azure and Proxy |
-| [native/04-verbindungstest.png](native/04-verbindungstest.png) | Connection test against the real Azure endpoint (dummy key -> HTTP 401) |
-| [native/05-sprecherzuordnung.png](native/05-sprecherzuordnung.png) | Speaker mapping in the inspector |
+| [native/01-start-screen.png](native/01-start-screen.png) | Main window with the audio settings of the start page |
+| [native/02-settings-top.png](native/02-settings-top.png) | Settings from the top: General, Transcription, Azure |
+| [native/03-settings-bottom.png](native/03-settings-bottom.png) | Settings from the bottom: Azure and Proxy |
+| [native/04-connection-test.png](native/04-connection-test.png) | Connection test against the real Azure endpoint (dummy key -> HTTP 401) |
+| [native/05-speaker-mapping.png](native/05-speaker-mapping.png) | Speaker mapping in the inspector |
 | [native/06-debug-log.png](native/06-debug-log.png) | Debug log with real log lines |
 | [native/07-about-dialog.png](native/07-about-dialog.png) | About dialog with app icon and repository link |
 
@@ -34,12 +34,12 @@ recording requires Azure Speech credentials.
 
 | File | Content |
 |---|---|
-| [renderer/01-startbildschirm.png](renderer/01-startbildschirm.png) | Start screen with the audio settings |
-| [renderer/02-aufnahme-transkript.png](renderer/02-aufnahme-transkript.png) | Running recording with transcript and speakers |
-| [renderer/03-einstellungen-oben.png](renderer/03-einstellungen-oben.png) | Settings from the top: General, Transcription, Azure |
-| [renderer/04-einstellungen-unten.png](renderer/04-einstellungen-unten.png) | Settings from the bottom: Azure and Proxy |
-| [renderer/05-verbindungstest.png](renderer/05-verbindungstest.png) | Connection test diagnostics dialog |
-| [renderer/06-sprecherzuordnung.png](renderer/06-sprecherzuordnung.png) | Speaker mapping in the inspector |
+| [renderer/01-start-screen.png](renderer/01-start-screen.png) | Start screen with the audio settings |
+| [renderer/02-recording-transcript.png](renderer/02-recording-transcript.png) | Running recording with transcript and speakers |
+| [renderer/03-settings-top.png](renderer/03-settings-top.png) | Settings from the top: General, Transcription, Azure |
+| [renderer/04-settings-bottom.png](renderer/04-settings-bottom.png) | Settings from the bottom: Azure and Proxy |
+| [renderer/05-connection-test.png](renderer/05-connection-test.png) | Connection test diagnostics dialog |
+| [renderer/06-speaker-mapping.png](renderer/06-speaker-mapping.png) | Speaker mapping in the inspector |
 | [renderer/07-debug-log.png](renderer/07-debug-log.png) | Debug log dock |
 | [renderer/08-about-dialog.png](renderer/08-about-dialog.png) | About dialog |
 

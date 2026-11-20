@@ -205,19 +205,19 @@ async function main() {
   try {
     let page = await openApp(browser, baseUrl)
     await page.waitForSelector('.idle-audio-panel')
-    await capture(page, '01-startbildschirm.png', 'Start screen with the audio settings')
+    await capture(page, '01-start-screen.png', 'Start screen with the audio settings')
     await page.close()
 
     page = await openApp(browser, baseUrl, { running: true, startedAt: new Date(Date.now() - 83000).toISOString() })
     await emitDummyTranscript(page)
     await page.waitForTimeout(400)
-    await capture(page, '02-aufnahme-transkript.png', 'Running recording with transcript and speakers')
+    await capture(page, '02-recording-transcript.png', 'Running recording with transcript and speakers')
     await page.close()
 
     page = await openApp(browser, baseUrl)
     await page.getByRole('button', { name: TXT.openSettings }).click()
     await page.getByRole('dialog', { name: TXT.settingsDialog, exact: true }).waitFor()
-    await capture(page, '03-einstellungen-oben.png', 'Settings - General, Transcription, Azure')
+    await capture(page, '03-settings-top.png', 'Settings - General, Transcription, Azure')
     await page.close()
 
     page = await openApp(browser, baseUrl)
@@ -225,7 +225,7 @@ async function main() {
     const settingsDialog = page.getByRole('dialog', { name: TXT.settingsDialog, exact: true })
     await settingsDialog.waitFor()
     await scrollDialogToBottom(page)
-    await capture(page, '04-einstellungen-unten.png', 'Settings - Azure and Proxy')
+    await capture(page, '04-settings-bottom.png', 'Settings - Azure and Proxy')
     await page.close()
 
     page = await openApp(browser, baseUrl)
@@ -236,7 +236,7 @@ async function main() {
     await testDialog.getByRole('button', { name: TXT.testConnection, exact: true }).click()
     await page.getByRole('dialog', { name: TXT.connectivityDialog, exact: true }).waitFor()
     await page.waitForTimeout(300)
-    await capture(page, '05-verbindungstest.png', 'Connection test diagnostics dialog')
+    await capture(page, '05-connection-test.png', 'Connection test diagnostics dialog')
     await page.close()
 
     page = await openApp(browser, baseUrl, { running: true, startedAt: new Date(Date.now() - 83000).toISOString() })
@@ -244,7 +244,7 @@ async function main() {
     await page.locator('.utility-actions button[aria-controls="console-speakers"]').click()
     await page.waitForSelector('#console-speakers:not([hidden])')
     await page.waitForTimeout(300)
-    await capture(page, '06-sprecherzuordnung.png', 'Speaker mapping in the inspector')
+    await capture(page, '06-speaker-mapping.png', 'Speaker mapping in the inspector')
     await page.close()
 
     page = await openApp(browser, baseUrl)

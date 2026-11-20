@@ -23,7 +23,11 @@ CHANGELOG waren deutsch.
   fuer die Agenten ist.
 
 Die Uebersetzung aendert **keine** Funktionalitaet: keine neuen Felder, keine geaenderten
-Schwellwerte, keine geaenderten Protokoll-Keys, keine geaenderten Dateinamen. Maschinen-
+Schwellwerte, keine geaenderten Protokoll-Keys, keine geaenderten Produktdateinamen.
+Auf Martins Wunsch vom 20.11.2026 tragen Screenshot-Dateien dagegen englische
+Namen (`start-screen`, `recording-transcript`, `settings-top`, `settings-bottom`,
+`connection-test`, `speaker-mapping`). README, Bilduebersicht und beide Capture-
+Skripte nutzen diese Namen; die Bildinhalte bleiben hash-identisch. Maschinen-
 lesbare Schluessel (JSON-Feldnamen, Protokoll-Versionen, Fehlercodes, Sprachcodes
 `de-DE`, `en-US`, Step-IDs `config`, `transport`, `https-tls`, `endpoint`,
 `dns-system`, `tcp`, `https-probe`) bleiben unveraendert. Der Default der primaeren

@@ -316,16 +316,16 @@ L '=== 1 main window ==='
 Click 'Close error message' $null | Out-Null
 Click 'Close dialog' $null | Out-Null
 Start-Sleep -Seconds 1
-Grab '01-startbildschirm'
+Grab '01-start-screen'
 
 L '=== 2 settings general ==='
 Click 'Open settings dialog' $null | Out-Null
-Grab '02-einstellungen-oben'
+Grab '02-settings-top'
 
 L '=== 3 settings unten ==='
 Wheel 10
 Start-Sleep -Milliseconds 900
-Grab '03-einstellungen-unten'
+Grab '03-settings-bottom'
 
 L '=== 6 connection test ==='
 Click 'Test connection' $null | Out-Null
@@ -336,7 +336,7 @@ if (-not (Find-El 'Connection test' $null)) {
   throw 'Connection test dialog not found; refusing to capture the wrong state.'
 }
 L '  connection dialog open; capturing live diagnostics (not a completed-test assertion)'
-Grab '04-verbindungstest'
+Grab '04-connection-test'
 # First close the connection dialog, then the settings dialog.
 Click 'Close dialog' $null | Out-Null
 Start-Sleep -Milliseconds 900
@@ -345,7 +345,7 @@ Start-Sleep -Milliseconds 900
 
 L '=== 7 speakers ==='
 Click 'Speaker mapping' $null | Out-Null
-Grab '05-sprecherzuordnung'
+Grab '05-speaker-mapping'
 
 L '=== 8 debug log ==='
 Click 'More actions' $null | Out-Null
