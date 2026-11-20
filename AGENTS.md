@@ -22,7 +22,7 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
 
 ## Aktueller Produktstand
 
-- **Meeting Notes**, zuletzt veroeffentlicht **0.1.3**, Arbeitsstand **0.1.4**, ist eine portable Windows-11-x64-Anwendung
+- **Meeting Notes**, veroeffentlichte Version **0.1.4**, ist eine portable Windows-11-x64-Anwendung
   fuer Live-Transkripte mit Azure Speech. Implementierung vorhanden; offene
   Live-/Hardware-/Zielsystem-Abnahmen sind in den Specs ausgewiesen.
 - Die gesamte Oberflaeche, alle Meldungen und die oeffentliche Doku sind
@@ -127,6 +127,26 @@ Audiogeraeten und Credentials jeweils pruefen, nicht aus frueheren Sessions able
 Offene Abnahmen und Messverfahren: [T-500](./specs/T-500-qualitaetssicherung-und-akzeptanztests.md),
 [T-502](./specs/T-502-latency-messung.md), [T-510](./specs/T-510-clean-machine-deployment-windows-11.md).
 
-Repository: [schirkan/meeting-notes-tauri](https://github.com/schirkan/meeting-notes-tauri),
-Standard-Branch `main`, Lizenz [MIT](./LICENSE). Aufgaben werden in den Specs
-gefuehrt; kein Workboard.
+## Git
+
+- **Repo-Typ:** bestehendes GitHub-Repository (geklont).
+- **Pfad:** `C:\Users\Admin\.openclaw\workspace\projects\meeting-notes-tauri`.
+- **Remote:** `origin` = https://github.com/schirkan/meeting-notes-tauri.git.
+- **Eingerichtet am:** historisches Klondatum nicht dokumentiert.
+- **`.gitignore`-Status:** vorhanden; persoenliche Config und Build-Artefakte ausgeschlossen.
+- **Standard-Branch:** `main`; Lizenz [MIT](./LICENSE). Aufgaben stehen in Specs,
+  kein Workboard.
+
+## CI/CD
+
+- **Plattform:** GitHub Actions; `.github/workflows/release.yml`.
+- **Trigger:** `v*`-Tag-Push oder manueller `workflow_dispatch`; keine normalen
+  Push-/PR-Builds.
+- **Build/Output:** Tauri-App mit self-contained C#-Sidecar, Portable-ZIP und
+  `SHA256SUMS.txt` als GitHub-Release-Assets.
+- **Letzter Lauf:** 20.11.2026, Commit `37f0bab6d731602f7878c05c7b17251124157000`,
+  [Run 44790203600](https://github.com/schirkan/meeting-notes-tauri/actions/runs/44790203600), **success**.
+- **Release:** [v0.1.4](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.4),
+  Download-/Hash-/Versions-/Deployment-Nachweis in [T-516](./specs/T-516-englische-oberflaeche-und-oeffentliche-doku.md).
+  Gesamtpruefung 9 Schritte gruen; 98 Node- und 47 Rust-Tests, 539/552 C#-Assertions.
+  Nichtinteraktive MF-Stichprobe bleibt SKIPPED; keine neue Hardware-/Azure-Abnahme.

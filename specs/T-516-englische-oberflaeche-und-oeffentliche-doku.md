@@ -1,7 +1,7 @@
 # T-516: Englische Oberflaeche, Meldungen und oeffentliche Dokumentation
 
 ## Kontext
-Status: teils umgesetzt (1 Punkt offen: Release-Veroeffentlichung und Asset-Nachweis)
+Status: umgesetzt
 Prioritaet: hoch
 Abhaengigkeiten: T-513, T-514, T-515
 
@@ -105,14 +105,40 @@ wechselt von `lang="de"` auf `lang="en"`.
 - [x] **Screenshots zeigen die englische Oberflaeche.** Beleg: `npm run screenshots` und
       `npm run screenshots:native` erzeugen je 8 Aufnahmen in `docs/renderer/` und
       `docs/native/` mit englischen UI-Texten.
-- [ ] **Release v0.1.4 veroeffentlicht.** **offen**:  GitHub-Release `v0.1.4` mit Asset
-      `MeetingNotes-v0.1.4-win-x64.zip` und Pruefsumme veroeffentlichen,
-      herunterladen, hash-verifizieren und entpackt pruefen.
+- [x] **Release v0.1.4 veroeffentlicht.** Beleg: [GitHub-Release v0.1.4](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.4)
+      aus Commit `37f0bab6d731602f7878c05c7b17251124157000`; [Workflow 44790203600](https://github.com/schirkan/meeting-notes-tauri/actions/runs/44790203600)
+      erfolgreich. ZIP und `SHA256SUMS.txt` heruntergeladen, Hash und Versions-
+      ressourcen geprueft; Details im Release-Nachweis unten.
 - [x] **Vollverifikation gruen.** Beleg: `npm run verify -- --full` am 20.11.2026
       mit allen 9 Schritten gruen; 98 Node-Tests, 539 Quell-/552 Published-Sidecar-
       Assertions, Smoke gruen, Deployment PASS 9 / FAIL 0. Zusaetzlich 47 Rust-Tests
       gruen. MediaFoundation-Stichprobe wegen nichtinteraktiver Umgebung SKIPPED;
       keine neue Hardware-/Azure-/Clean-Machine-Abnahme behauptet.
+
+## Release-Nachweis (20.11.2026)
+
+- `v0.1.4` bleibt auf dem geprueften Produktcommit `37f0bab`; Nachweis-Doku
+  wird anschliessend auf `main` ergaenzt, ohne den Tag zu verschieben.
+- Workflow erfolgreich in 4m36s. GitHub-Release veroeffentlicht am
+  20.11.2026 um 18:14:29 UTC; Release-Notizen mit den 0.1.4-Aenderungen englisch.
+- Asset: `MeetingNotes-v0.1.4-win-x64.zip`, **16.499.074 Bytes**.
+- ZIP-SHA256: `10fbb0facda1460b9db431708f19e85aac1b86eb7510479ad35689394e2b73a5`.
+  Selbst berechneter Download-Hash, externe `SHA256SUMS.txt` und GitHub-Asset-Digest
+  stimmen ueberein; archivinterne Datei-Hashes **3/3 OK**.
+- Entpackt: **32.778.336 Bytes / 4 Dateien**, flaches Layout. Haupt-EXE
+  ProductVersion **0.1.4**, Sidecar FileVersion **0.1.4.0**. Kein persoenliches
+  Config-File und nur der englische Key-Platzhalter in der Beispielconfig.
+- Deployment-Pruefung gegen genau den heruntergeladenen Release: **PASS 9 /
+  FAIL 0 / INFO-MANUELL 3**. Kein neuer Clean-Machine- oder Live-Azure-Nachweis.
+- Beide Screenshot-Sets am 20.11.2026 neu erzeugt und alle **16 Bilder** visuell
+  geprueft; native Aufnahmen aus dem aktuellen Build in Windows-Session 1.
+  HTTP 401 im nativen Diagnosebild ist beim Dummy-Key erwartet. Renderer-
+  Aufnahme und erfolgreiche Diagnose sind ausdruecklich Demo-Zustaende.
+- GitHub-Repo-Beschreibung und die bestehenden Release-Notizen v0.1.0-v0.1.3
+  wurden englisch uebersetzt und erneut gelesen; historische Anforderungen
+  (insbesondere .NET-Runtime bei v0.1.0) und Abnahmegrenzen blieben erhalten.
+- Nichtblockierende CI-Annotation: Actions v4 nutzen laut GitHub Node-20-
+  Metadaten und werden auf Node 24 ausgefuehrt; alle Workflow-Schritte erfolgreich.
 
 ## Approach
 - Die Uebersetzung lief in vier getrennten, dateidisjunkten Pfaeden: Renderer inklusive

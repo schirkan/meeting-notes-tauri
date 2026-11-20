@@ -29,6 +29,15 @@
 - The noninteractive Media Foundation sample remains skipped. Existing hardware,
   live Azure, clean-machine and remaining tray acceptance limits are unchanged.
 
+### Release
+- [Release v0.1.4](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.4)
+  built from commit `37f0bab` by the successful release workflow.
+- `MeetingNotes-v0.1.4-win-x64.zip`: 16,499,074 bytes;
+  SHA256 `10fbb0facda1460b9db431708f19e85aac1b86eb7510479ad35689394e2b73a5`.
+- Independently downloaded and checked: ZIP digest matches GitHub and
+  `SHA256SUMS.txt`; all 3 internal hashes match. Four extracted files,
+  main EXE 0.1.4, sidecar 0.1.4.0; downloaded-release deployment PASS 9 / FAIL 0.
+
 ## v0.1.3 - 2026-11-19
 
 ### Added
