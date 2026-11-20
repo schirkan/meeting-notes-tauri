@@ -38,6 +38,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   } = props
 
   return (
+    <>
     <section className="panel settings">
       <div className="panel-header">
         <h2>{audioOnly ? 'Audio Einstellungen' : 'Allgemein'}</h2>
@@ -45,28 +46,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
       {statusRunning && <div className="settings-inline-hint">Aufnahme stoppen, um Einstellungen zu ändern.</div>}
 
-      {/* Nur der Leerzustand nutzt das Audio-Grid; im Dialog hat der Abschnitt "Audio" eigene Felder. */}
       <div className={audioOnly ? 'settings-block audio-settings-grid' : 'settings-block'}>
-        {!audioOnly && <label>
-          <span className="field-caption"><Icon name="flag" />Sprache</span>
-          <select
-            value={settings.language}
-            onChange={(event) => {
-              const language = event.currentTarget.value
-              setSettings((prev) => ({ ...prev, language }))
-            }}
-            disabled={statusRunning}
-          >
-            {!languageOptions.some((option) => option.value === settings.language) && (
-              <option value={settings.language}>{settings.language}</option>
-            )}
-            {languageOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </label>}
-
-        {/* Der Leerzustand auf der Startseite zeigt nur Audioquellen. */}
         {audioOnly && <AudioSources
           statusRunning={statusRunning}
           settings={settings}
@@ -90,7 +70,28 @@ export function SettingsPanel(props: SettingsPanelProps) {
             />
             <span>Beim Schließen in den Systray minimieren</span>
           </label>
+        </>}
+      </div>
+    </section>
 
+    {!audioOnly && <section className="panel settings">
+      <div className="panel-header"><h2>Transkription</h2></div>
+      <div className="settings-block">
+          <label className="language-field">
+            <span className="field-caption"><Icon name="flag" />Primäre Sprache</span>
+            <select value={settings.language} disabled={statusRunning}
+              onChange={(event) => {
+                const language = event.currentTarget.value
+                setSettings((prev) => ({ ...prev, language }))
+              }}>
+              {!languageOptions.some((option) => option.value === settings.language) && (
+                <option value={settings.language}>{settings.language}</option>
+              )}
+              {languageOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
           <label className="checkbox-field" title="Aufnahme bei erkanntem Meeting automatisch starten">
             <input
               type="checkbox"
@@ -158,8 +159,8 @@ export function SettingsPanel(props: SettingsPanelProps) {
               disabled={statusRunning || !settings.transcript.markdownExport.enabled || choosingDirectory}
               aria-label="Speicherordner auswählen" title="Ordner auswählen"><Icon name="folder" /></button>
           </div>
-        </>}
       </div>
-    </section>
+    </section>}
+    </>
   )
 }

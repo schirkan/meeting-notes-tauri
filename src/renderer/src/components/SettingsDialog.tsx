@@ -9,6 +9,7 @@ type SettingsDialogProps = {
   scrollable?: boolean
   footer?: React.ReactNode
   busy?: boolean
+  closeOnBackdrop?: boolean
 }
 
 const FOCUSABLE_SELECTOR = [
@@ -73,9 +74,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
     }
   }, [isOpen])
 
-  // Initialer Fokus: einmalig beim Öffnen, explizit nicht bei jedem Render.
-  // Wir fokussieren das erste Eingabefeld/Select (kein Schließen-Button), damit
-  // Tastatureingaben direkt in den Settings landen.
+  // Initialer Fokus nur einmal pro Open-Phase, nicht beim Bearbeiten.
   useEffect(() => {
     if (!isOpen) return
     const previousFocus = document.activeElement
@@ -86,20 +85,9 @@ export function SettingsDialog(props: SettingsDialogProps) {
       const dialog = dialogRef.current
       if (!dialog) return
 
-      // Erstes echtes Eingabe-Element (input/select/textarea) im Dialog suchen.
-      // Bewusst NICHT den Schließen-Button, da dieser Fokus bei jedem Re-Render
-      // der Settings den Nutzer aus Eingabefeldern reißen würde.
-      const firstInput = Array.from(dialog.querySelectorAll<HTMLElement>(
-        'input:not([type="checkbox"]):not([type="radio"]):not([disabled]), select:not([disabled]), textarea:not([disabled])'
-      )).find((element) => element.offsetParent !== null)
-
-      if (firstInput instanceof HTMLElement) {
-        firstInput.focus()
-      } else {
-        // Fallback: nur wenn keine Eingabefelder existieren (z. B. reiner Read-only-Dialog)
-        const closeButton = dialog.querySelector<HTMLElement>('.settings-dialog-close')
-        closeButton?.focus()
-      }
+      const initialFocus = dialog.querySelector<HTMLElement>('.settings-save-button:not([disabled])')
+        ?? dialog.querySelector<HTMLElement>('.settings-dialog-close')
+      initialFocus?.focus()
     })
 
     return () => {
@@ -113,7 +101,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
   }
 
   return (
-    <div className="settings-dialog-overlay" role="presentation" onClick={onClose}>
+    <div className="settings-dialog-overlay" role="presentation" onClick={props.closeOnBackdrop === false ? undefined : onClose}>
       <section
         ref={dialogRef}
         className={`settings-dialog ${scrollable ? 'settings-dialog-scroll' : ''}`}

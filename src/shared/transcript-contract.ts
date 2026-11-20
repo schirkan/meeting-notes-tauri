@@ -169,6 +169,8 @@ export interface MeetingDetected {
 }
 
 export interface TranscriptApi {
+  toggleDevtools: () => Promise<void>
+  openRepository: () => Promise<void>
   start: () => Promise<TranscriptStatus>
   stop: () => Promise<TranscriptStatus>
   pause: () => Promise<TranscriptStatus>

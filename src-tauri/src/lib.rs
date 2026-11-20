@@ -91,6 +91,7 @@ pub fn run() {
     })
     .invoke_handler(tauri::generate_handler![
       commands::toggle_devtools,
+      commands::open_repository,
       commands::start_recording,
       commands::stop_recording,
       commands::pause_recording,

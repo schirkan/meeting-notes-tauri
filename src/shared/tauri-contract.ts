@@ -6,6 +6,7 @@
 
 export const TAURI_COMMANDS = {
   toggleDevtools: 'toggle_devtools',
+  openRepository: 'open_repository',
   startRecording: 'start_recording',
   stopRecording: 'stop_recording',
   pauseRecording: 'pause_recording',

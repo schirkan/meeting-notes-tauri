@@ -42,6 +42,11 @@ async function openApp(options) {
     window.settingsSaveError = input.saveSettingsError
     window.directoryPickerResult = input.directoryPickerResult ?? null
     window.transcriptApi = {
+      toggleDevtools: async () => {
+        if (input.devtoolsError) throw new Error(input.devtoolsError)
+        window.devtoolsToggleCalls = (window.devtoolsToggleCalls ?? 0) + 1
+      },
+      openRepository: async () => { window.repositoryOpened = true },
       getStatus: async () => currentStatus,
       start: async () => { window.lastStartCalled = true; return currentStatus = { running: true, startedAt: new Date().toISOString() } },
       stop: async () => {
@@ -51,7 +56,8 @@ async function openApp(options) {
       },
       pause: async () => { window.lastPauseCalled = true; return currentStatus = { ...currentStatus, running: true, paused: true } },
       resume: async () => { window.lastResumeCalled = true; return currentStatus = { ...currentStatus, running: true, paused: false } },
-        getSettings: async () => ({
+      getSettings: async () => {
+        const settings = {
           language: input.language ?? 'de-DE',
           devices: {},
           transcription: input.transcription,
@@ -59,7 +65,12 @@ async function openApp(options) {
           transcript: input.transcript,
           autoStart: input.autoStart,
           window: input.windowSettings
-        }),
+        }
+        if (input.deferInitialSettings) {
+          return new Promise(resolve => { window.completeInitialSettings = () => resolve(settings) })
+        }
+        return settings
+      },
       saveSettings: async (settings) => {
         window.settingsSaveCalls ??= []
         window.settingsSaveCalls.push(settings)
@@ -130,6 +141,149 @@ async function reopenSettings(page) {
   await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
 }
 
+test('settings waits for initial data before presenting an editable draft and focuses save', async () => {
+  const page = await openApp({ configState: { exists: false, path: 'test-config', config: null }, language: 'nl-NL', deferInitialSettings: true })
+  try {
+    await page.waitForFunction(() => typeof window.completeInitialSettings === 'function')
+    const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
+    assert.equal(await dialog.count(), 0)
+    await page.evaluate(() => window.completeInitialSettings())
+    await dialog.waitFor()
+    await page.waitForFunction(() => document.activeElement?.classList.contains('settings-save-button'))
+    assert.equal(await dialog.getByRole('combobox', { name: 'Primäre Sprache', exact: true }).inputValue(), 'nl-NL')
+    await dialog.getByRole('button', { name: 'Dialog schließen', exact: true }).click()
+    await dialog.waitFor({ state: 'hidden' })
+  } finally { await page.close() }
+})
+
+test('settings drafts are isolated, warn on close, discard and only persist on save', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
+    const close = dialog.getByRole('button', { name: 'Dialog schließen', exact: true })
+    const language = dialog.getByRole('combobox', { name: 'Primäre Sprache', exact: true })
+    await page.waitForFunction(() => document.activeElement?.classList.contains('settings-save-button'))
+    await language.selectOption('en-US')
+    await dialog.getByLabel('Endpoint', { exact: true }).fill('https://draft.test')
+    await dialog.getByRole('checkbox', { name: 'Transkript automatisch speichern', exact: true }).uncheck()
+    assert.equal(await page.evaluate(() => window.lastSavedSettings), undefined)
+    assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
+    page.once('dialog', confirmation => {
+      assert.match(confirmation.message(), /Ungespeicherte Änderungen/)
+      return confirmation.dismiss()
+    })
+    await close.click()
+    assert.equal(await dialog.isVisible(), true)
+    assert.equal(await language.inputValue(), 'en-US')
+    page.once('dialog', confirmation => confirmation.accept())
+    await close.click()
+    await dialog.waitFor({ state: 'hidden' })
+    // An idle autosave must not include any abandoned dialog values.
+    await page.getByRole('checkbox', { name: 'Sprechererkennung für Mikrofon', exact: true }).uncheck()
+    await page.waitForFunction(() => window.lastSavedSettings?.diarization.mic === false)
+    assert.equal(await page.evaluate(() => window.lastSavedSettings.language), 'de-DE')
+    assert.equal(await page.evaluate(() => window.lastSavedSettings.transcript.markdownExport.enabled), true)
+    assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
+    await reopenSettings(page)
+    assert.equal(await language.inputValue(), 'de-DE')
+    assert.equal(await dialog.getByLabel('Endpoint', { exact: true }).inputValue(), validConfig.endpoint)
+    await language.selectOption('fr-FR')
+    await dialog.getByRole('button', { name: 'Speichern', exact: true }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    await reopenSettings(page)
+    assert.equal(await language.inputValue(), 'fr-FR')
+    let prompted = false
+    page.once('dialog', confirmation => { prompted = true; return confirmation.dismiss() })
+    await close.click()
+    assert.equal(prompted, false)
+    await dialog.waitFor({ state: 'hidden' })
+  } finally { await page.close() }
+})
+
+test('testing unsaved settings preserves drafts without persisting and footer buttons have equal height', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, connectivityError: 'test' })
+  try {
+    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
+    await dialog.getByRole('combobox', { name: 'Primäre Sprache', exact: true }).selectOption('en-US')
+    await dialog.getByLabel('Proxy verwenden').check()
+    await dialog.getByLabel('Proxy Host', { exact: true }).fill('draft.proxy')
+    await dialog.getByLabel('Proxy Port', { exact: true }).fill('8080')
+    await dialog.getByRole('button', { name: 'Verbindung testen', exact: true }).click()
+    const diagnostic = page.getByRole('dialog', { name: 'Verbindungstest', exact: true })
+    await diagnostic.waitFor()
+    assert.equal(await page.evaluate(() => window.lastConnectivityPayload.language), 'en-US')
+    assert.equal(await page.evaluate(() => window.lastConnectivityPayload.proxy.host), 'draft.proxy')
+    assert.equal(await page.evaluate(() => window.lastSavedSettings), undefined)
+    assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
+    await diagnostic.getByRole('button', { name: 'Dialog schließen', exact: true }).click()
+    assert.equal(await dialog.getByLabel('Proxy Host', { exact: true }).inputValue(), 'draft.proxy')
+    assert.equal(await dialog.getByRole('combobox', { name: 'Primäre Sprache', exact: true }).inputValue(), 'en-US')
+    for (const width of [1280, 950, 390]) {
+      await page.setViewportSize({ width, height: 860 })
+      const heights = await dialog.locator('.settings-dialog-footer-actions button').evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().height))
+      assert.deepEqual(heights, [32, 32, 32])
+      assert.equal(await dialog.locator('.settings-dialog-footer').evaluate(element => element.scrollWidth <= element.clientWidth), true)
+    }
+  } finally { await page.close() }
+})
+
+test('About has only a close button, repository link and focus trap; menu and F12 toggle DevTools', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.getByLabel('Weitere Aktionen', { exact: true }).click()
+    await page.getByRole('button', { name: 'Dev-Tools (F12)', exact: true }).click()
+    await page.keyboard.press('F12')
+    await page.waitForFunction(() => window.devtoolsToggleCalls === 2)
+    await page.getByLabel('Weitere Aktionen', { exact: true }).click()
+    await page.getByRole('button', { name: 'About', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'About', exact: true })
+    assert.equal(await dialog.getByRole('button').count(), 1)
+    await page.waitForFunction(() => document.activeElement?.classList.contains('settings-dialog-close'))
+    assert.equal(await dialog.getByRole('heading', { name: 'Meeting Notes', exact: true }).count(), 1)
+    assert.match(await dialog.innerText(), /Martin Pietschmann/)
+    assert.match(await dialog.innerText(), /Lizenz: MIT/)
+    const [icon, details] = await Promise.all([dialog.getByRole('img').boundingBox(), dialog.locator('.about-details').boundingBox()])
+    assert.ok(icon.width >= 96 && icon.x + icon.width < details.x)
+    await dialog.getByRole('link').click()
+    assert.equal(await page.evaluate(() => window.repositoryOpened), true)
+    await page.keyboard.press('Tab')
+    assert.equal(await dialog.getByRole('button').evaluate(element => element === document.activeElement), true)
+    await page.setViewportSize({ width: 390, height: 650 })
+    assert.equal(await dialog.locator('.settings-dialog-grid').evaluate(element => element.scrollWidth <= element.clientWidth), true)
+    await page.locator('.settings-dialog-overlay').click({ position: { x: 2, y: 2 } })
+    assert.equal(await dialog.count(), 0)
+    await page.getByLabel('Weitere Aktionen', { exact: true }).click()
+    await page.getByRole('button', { name: 'About', exact: true }).click()
+    await dialog.getByRole('button').click()
+    assert.equal(await dialog.count(), 0)
+  } finally { await page.close() }
+})
+
+test('web context menus are suppressed except in text fields and editable content', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    const prevented = locator => locator.evaluate(element => !element.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })))
+    assert.equal(await prevented(page.locator('.console-header')), true)
+    assert.equal(await prevented(page.getByRole('checkbox', { name: 'Mikrofon transkribieren', exact: true })), true)
+    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
+    assert.equal(await prevented(page.getByLabel('Endpoint', { exact: true })), false)
+    assert.equal(await prevented(page.getByLabel('Speech Key', { exact: true })), false)
+    assert.equal(await prevented(page.getByRole('combobox', { name: 'Primäre Sprache', exact: true })), true)
+    assert.equal(await page.locator('main').evaluate(element => {
+      const editable = document.createElement('div')
+      editable.contentEditable = 'true'
+      const child = document.createElement('span')
+      editable.append(child)
+      element.append(editable)
+      const prevented = !child.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+      editable.remove()
+      return prevented
+    }), false)
+  } finally { await page.close() }
+})
+
 for (const [name, configState] of [
   ['missing configuration', { exists: false, path: 'test-config', config: null }],
   ['unreadable configuration', { exists: true, path: 'test-config', config: null }],
@@ -181,14 +335,13 @@ test('settings shows all sections without navigation and preserves two-column la
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
     const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
     const panels = dialog.locator('.panel')
-    assert.deepEqual(await panels.locator('h2').allTextContents(), ['Allgemein', 'Audio', 'Azure', 'Proxy'])
-    const audio = panels.nth(1)
+    assert.deepEqual(await panels.locator('h2').allTextContents(), ['Allgemein', 'Transkription', 'Azure', 'Proxy'])
     const azure = panels.nth(2)
     const proxy = panels.nth(3)
     // Alle Abschnitte stehen gleichzeitig auf einer Seite.
     assert.equal(await dialog.getByRole('navigation').count(), 0)
     assert.equal(await dialog.getByRole('tab').count(), 0)
-    assert.equal(await audio.getByRole('combobox', { name: 'Mikrofon', exact: true }).count(), 1)
+    assert.equal(await dialog.getByRole('combobox', { name: 'Mikrofon', exact: true }).count(), 0)
     await azure.getByRole('heading', { name: 'Azure', exact: true }).scrollIntoViewIfNeeded()
     assert.equal(await azure.getByLabel('Proxy verwenden').count(), 0)
     assert.equal(await proxy.getByRole('button', { name: 'Verbindung testen', exact: true }).count(), 0)
@@ -209,9 +362,15 @@ test('settings shows all sections without navigation and preserves two-column la
     ])
     assert.equal(endpointBox.y, regionBox.y)
     assert.ok(endpointBox.x + endpointBox.width <= regionBox.x)
-    const general = panels.nth(0)
+    const general = panels.nth(1)
+    assert.equal(await panels.nth(0).getByRole('checkbox').count(), 1)
+    const languageField = general.locator('.language-field')
+    const [caption, languageBox] = await Promise.all([
+      languageField.locator('.field-caption').boundingBox(), languageField.getByRole('combobox').boundingBox()
+    ])
+    assert.ok(caption.x + caption.width <= languageBox.x)
+    assert.ok(Math.abs(caption.y + caption.height / 2 - languageBox.y - languageBox.height / 2) < 1)
     for (const [left, right] of [
-      [general.getByRole('combobox', { name: 'Sprache' }), general.getByRole('checkbox', { name: 'Beim Schließen in den Systray minimieren' }).locator('..')],
       [general.getByRole('checkbox', { name: 'Aufnahme automatisch starten', exact: true }).locator('..'), general.getByRole('checkbox', { name: 'Aufnahme automatisch beenden', exact: true }).locator('..')],
       [general.getByRole('checkbox', { name: 'Transkript automatisch speichern', exact: true }).locator('..'), general.locator('.directory-control')]
     ]) {
@@ -233,7 +392,7 @@ test('settings shows all sections without navigation and preserves two-column la
       assert.equal(box.width, 14)
       assert.equal(box.height, 14)
     }
-    const exportControl = panels.nth(0).locator('.directory-control')
+    const exportControl = general.locator('.directory-control')
     assert.equal(await exportControl.locator('label').count(), 0)
     const toggleBox = await general.getByRole('checkbox', { name: 'Transkript automatisch speichern', exact: true }).boundingBox()
     const pathBox = await exportControl.getByRole('textbox').boundingBox()
@@ -264,7 +423,7 @@ test('settings shows all sections without navigation and preserves two-column la
     for (const width of [1280, 800, 560, 390]) {
       await page.setViewportSize({ width, height: 860 })
       const before = await dialog.boundingBox()
-      for (const section of ['Allgemein', 'Audio', 'Azure', 'Proxy']) {
+      for (const section of ['Allgemein', 'Transkription', 'Azure', 'Proxy']) {
         await dialog.getByRole('heading', { name: section, exact: true }).scrollIntoViewIfNeeded()
         assert.deepEqual(await dialog.boundingBox(), before)
         assert.equal(await panels.count(), 4)
@@ -339,7 +498,7 @@ test('settings offers a single save button in the footer that persists config an
     assert.ok(footerBox.y >= bodyBox.y + bodyBox.height)
 
     // Ein Klick speichert beide Abschnitte: Benutzereinstellungen und Azure-Konfiguration.
-    await dialog.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('en-US')
+    await dialog.getByRole('combobox', { name: 'Primäre Sprache', exact: true }).selectOption('en-US')
     await dialog.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => !!window.lastSavedSettings && !!window.lastSavedConfig)
     assert.equal(await page.evaluate(() => window.lastSavedSettings.language), 'en-US')
@@ -354,7 +513,7 @@ test('language dropdown saves the selection and forwards it to connectivity test
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, deferConnectivity: true })
   try {
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
-    const language = page.getByRole('combobox', { name: 'Sprache', exact: true })
+    const language = page.getByRole('combobox', { name: 'Primäre Sprache', exact: true })
     assert.equal(await language.inputValue(), 'de-DE')
     assert.equal(await language.locator('option').count(), 10)
     assert.equal(await page.getByRole('radiogroup').count(), 0)
@@ -424,7 +583,7 @@ for (const failure of ['saveSettingsError', 'saveConfigError']) {
     try {
       await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
       const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
-      await dialog.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('en-US')
+      await dialog.getByRole('combobox', { name: 'Primäre Sprache', exact: true }).selectOption('en-US')
       assert.equal(await page.evaluate(() => window.lastSavedSettings), undefined)
       await dialog.getByRole('button', { name: 'Speichern', exact: true }).click()
       await page.getByRole('alert').waitFor()
@@ -439,7 +598,7 @@ test('language dropdown preserves a configured language outside the default opti
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, language: 'fr-CA' })
   try {
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
-    assert.equal(await page.getByRole('combobox', { name: 'Sprache', exact: true }).inputValue(), 'fr-CA')
+    assert.equal(await page.getByRole('combobox', { name: 'Primäre Sprache', exact: true }).inputValue(), 'fr-CA')
     await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.language === 'fr-CA')
   } finally {
@@ -491,9 +650,9 @@ test('language dropdown remains disabled during recording', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, running: true })
   try {
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
-    assert.equal(await page.getByRole('combobox', { name: 'Sprache', exact: true }).isDisabled(), true)
-    assert.equal(await page.getByRole('checkbox', { name: 'Sprechererkennung für Mikrofon', exact: true }).isDisabled(), true)
-    assert.equal(await page.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).isDisabled(), true)
+    assert.equal(await page.getByRole('combobox', { name: 'Primäre Sprache', exact: true }).isDisabled(), true)
+    assert.equal(await page.getByRole('checkbox', { name: 'Sprechererkennung für Mikrofon', exact: true }).count(), 0)
+    assert.equal(await page.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).count(), 0)
   } finally {
     await page.close()
   }
@@ -502,7 +661,6 @@ test('language dropdown remains disabled during recording', async () => {
 test('diarization settings default on and independently save all source combinations', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
   try {
-    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
     const mic = page.getByRole('checkbox', { name: 'Sprechererkennung für Mikrofon', exact: true })
     const speaker = page.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true })
     assert.equal(await mic.isChecked(), true)
@@ -510,14 +668,10 @@ test('diarization settings default on and independently save all source combinat
     for (const settings of [{ mic: false, speaker: true }, { mic: true, speaker: false }, { mic: false, speaker: false }, { mic: true, speaker: true }]) {
       await mic.setChecked(settings.mic)
       await speaker.setChecked(settings.speaker)
-      await page.getByRole('button', { name: 'Speichern', exact: true }).click()
       await page.waitForFunction((value) => window.lastSavedSettings?.diarization.mic === value.mic && window.lastSavedSettings?.diarization.speaker === value.speaker, settings)
-      await reopenSettings(page)
       assert.equal(await mic.isChecked(), settings.mic)
       assert.equal(await speaker.isChecked(), settings.speaker)
     }
-    await page.getByRole('button', { name: 'Dialog schließen', exact: true }).click()
-    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
     assert.equal(await mic.isChecked(), true)
     assert.equal(await speaker.isChecked(), true)
   } finally {
@@ -525,15 +679,10 @@ test('diarization settings default on and independently save all source combinat
   }
 })
 
-for (const inDialog of [false, true]) {
-  test(`microphone transcription toggles independently ${inDialog ? 'in settings' : 'in the idle panel'}`, async () => {
+  test('microphone transcription toggles independently in the idle panel', async () => {
     const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
     try {
-      if (inDialog) await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
-      const panel = inDialog ? page.getByRole('dialog', { name: 'Einstellungen', exact: true }) : page.locator('.idle-audio-panel')
-      if (inDialog) {
-        assert.equal(await panel.locator('.audio-settings-grid').evaluate(element => getComputedStyle(element).marginTop), '0px')
-      }
+      const panel = page.locator('.idle-audio-panel')
       const mic = panel.getByRole('checkbox', { name: 'Mikrofon transkribieren', exact: true })
       const speaker = panel.getByRole('checkbox', { name: 'Speaker-Loopback transkribieren', exact: true })
       for (const width of [950, 390]) {
@@ -586,21 +735,17 @@ for (const inDialog of [false, true]) {
       assert.equal(await speaker.isChecked(), false)
     } finally { await page.close() }
   })
-}
 
 test('transcription sources default on, persist independently and keep the last source enabled', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
   try {
-    await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
     const mic = page.getByRole('checkbox', { name: 'Mikrofon transkribieren', exact: true })
     const speaker = page.getByRole('checkbox', { name: 'Speaker-Loopback transkribieren', exact: true })
     assert.equal(await mic.isChecked(), true)
     assert.equal(await speaker.isChecked(), true)
     // Speaker abschalten: Mic bleibt aktiv, beide Checkboxen bleiben bedienbar.
     await speaker.uncheck()
-    await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.transcription?.speaker === false)
-    await reopenSettings(page)
     assert.equal(await mic.isChecked(), true)
     assert.equal(await speaker.isChecked(), false)
     assert.equal(await mic.isDisabled(), false)
@@ -609,20 +754,14 @@ test('transcription sources default on, persist independently and keep the last 
     await mic.uncheck()
     assert.equal(await mic.isChecked(), false)
     assert.equal(await speaker.isChecked(), true)
-    await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.transcription?.mic === false && window.lastSavedSettings?.transcription?.speaker === true)
-    await reopenSettings(page)
     await speaker.uncheck()
     assert.equal(await mic.isChecked(), true)
     assert.equal(await speaker.isChecked(), false)
-    await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.transcription?.mic === true && window.lastSavedSettings?.transcription?.speaker === false)
-    await reopenSettings(page)
     await speaker.check()
     assert.equal(await mic.isDisabled(), false)
-    await page.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.transcription?.speaker === true)
-    await reopenSettings(page)
     // Ein deaktiviertes Quellgeraet wird nicht mehr gebraucht.
     await speaker.uncheck()
     assert.equal(await page.getByRole('combobox', { name: 'Speaker Loopback', exact: true }).isDisabled(), true)
@@ -997,7 +1136,7 @@ test('idle audio settings stay centered in the available transcript area', async
         if (withSpeakers) await page.getByRole('button', { name: 'Sprecherzuordnung einblenden', exact: true }).click()
         const area = await page.locator('.console-transcript').boundingBox()
         const panel = await idle.boundingBox()
-        assert.ok(Math.abs(panel.x + panel.width / 2 - area.x - area.width / 2) < 1)
+        assert.ok(Math.abs(panel.x + panel.width / 2 - area.x - area.width / 2 - (width > 1100 ? 150 : 0)) < 1)
         assert.ok(Math.abs(panel.y + panel.height / 2 - area.y - area.height / 2) < 1)
         assert.ok(panel.height <= area.height + 1)
         assert.equal(await idle.evaluate(element => element.scrollWidth <= element.clientWidth), true)
@@ -1014,7 +1153,7 @@ test('idle audio settings synchronize with dialog, persist, and reset is stopped
     const idle = page.locator('.idle-audio-panel')
     assert.equal(await idle.locator('.panel-header').evaluate(element => getComputedStyle(element, '::after').content), 'none')
     assert.equal(await idle.getByRole('combobox').count(), 2)
-    assert.equal(await idle.getByRole('combobox', { name: 'Sprache', exact: true }).count(), 0)
+    assert.equal(await idle.getByRole('combobox', { name: 'Primäre Sprache', exact: true }).count(), 0)
     assert.equal(await idle.getByRole('checkbox').count(), 4)
     assert.equal(await idle.getByLabel('Speicherpfad (optional)', { exact: true }).count(), 0)
     assert.equal(await idle.getByRole('button', { name: 'Speichern', exact: true }).count(), 0)
@@ -1024,15 +1163,16 @@ test('idle audio settings synchronize with dialog, persist, and reset is stopped
     assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
     const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
-    assert.equal(await dialog.getByRole('combobox', { name: 'Sprache', exact: true }).inputValue(), 'de-DE')
-    assert.equal(await dialog.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).isChecked(), false)
-    await dialog.getByRole('combobox', { name: 'Sprache', exact: true }).selectOption('fr-FR')
+    assert.equal(await dialog.getByRole('combobox', { name: 'Primäre Sprache', exact: true }).inputValue(), 'de-DE')
+    assert.equal(await dialog.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).count(), 0)
+    await dialog.getByRole('combobox', { name: 'Primäre Sprache', exact: true }).selectOption('fr-FR')
     await dialog.getByRole('button', { name: 'Speichern', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.language === 'fr-FR')
     await dialog.waitFor({ state: 'hidden' })
-    assert.equal(await idle.getByRole('combobox', { name: 'Sprache', exact: true }).count(), 0)
+    assert.equal(await idle.getByRole('combobox', { name: 'Primäre Sprache', exact: true }).count(), 0)
+    assert.equal(await idle.getByRole('checkbox', { name: 'Sprechererkennung für Speaker', exact: true }).isChecked(), false)
     await reopenSettings(page)
-    assert.equal(await dialog.getByRole('combobox', { name: 'Sprache', exact: true }).inputValue(), 'fr-FR')
+    assert.equal(await dialog.getByRole('combobox', { name: 'Primäre Sprache', exact: true }).inputValue(), 'fr-FR')
     await dialog.getByRole('button', { name: 'Dialog schließen', exact: true }).click()
     assert.equal(await page.getByRole('button', { name: 'Transkript löschen', exact: true }).isDisabled(), true)
     await page.getByRole('button', { name: 'Start', exact: true }).click()
@@ -1141,6 +1281,7 @@ test('settings without navigation preserve input focus, scroll and trap focus', 
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
     const dialog = page.getByRole('dialog', { name: 'Einstellungen', exact: true })
     assert.equal(await dialog.getByRole('navigation').count(), 0)
+    await page.waitForFunction(() => document.activeElement?.classList.contains('settings-save-button'))
     const endpoint = dialog.getByRole('textbox', { name: 'Endpoint', exact: true })
     await endpoint.fill('https://changed.test')
     assert.equal(await endpoint.evaluate((element) => element === document.activeElement), true)
@@ -1152,10 +1293,11 @@ test('settings without navigation preserve input focus, scroll and trap focus', 
     assert.equal(await dialog.getByRole('button', { name: 'Dialog schließen', exact: true }).evaluate((element) => element === document.activeElement), true)
     await page.keyboard.press('Shift+Tab')
     assert.equal(await dialog.getByRole('button', { name: 'Speichern', exact: true }).evaluate((element) => element === document.activeElement), true)
+    page.once('dialog', confirmation => confirmation.accept())
     await page.keyboard.press('Escape')
     assert.equal(await page.getByRole('dialog').count(), 0)
     await page.getByRole('button', { name: 'Einstellungsdialog öffnen' }).click()
-    assert.equal(await page.getByRole('textbox', { name: 'Endpoint', exact: true }).inputValue(), 'https://changed.test')
+    assert.equal(await page.getByRole('textbox', { name: 'Endpoint', exact: true }).inputValue(), validConfig.endpoint)
   } finally { await page.close() }
 })
 

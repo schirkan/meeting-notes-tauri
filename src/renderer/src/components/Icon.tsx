@@ -14,7 +14,8 @@ const paths = {
   mic: 'M9 5a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0zM5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8',
   speaker: 'M3 9h4l5-4v14l-5-4H3zM16 8a6 6 0 0 1 0 8M19 5a10 10 0 0 1 0 14',
   flag: 'M5 22V3M5 3c5-4 9 4 14 0v10c-5 4-9-4-14 0',
-  close: 'M6 6l12 12M18 6L6 18'
+  close: 'M6 6l12 12M18 6L6 18',
+  info: 'M12 11v6M12 7v1M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0'
 } as const
 
 export function Icon({ name }: { name: keyof typeof paths }) {

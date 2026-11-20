@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AudioPanel } from './components/AudioPanel'
+import { AboutDialog } from './components/AboutDialog'
 import { ConfigPanel } from './components/ConfigPanel'
 import { ConnectivityDialog } from './components/ConnectivityDialog'
 import { DebugLogPanel } from './components/DebugLogPanel'
@@ -12,6 +12,7 @@ import { TranscriptPanel } from './components/TranscriptPanel'
 import { useAppState } from './use-app-state'
 
 export function App() {
+  const [aboutOpen, setAboutOpen] = useState(false)
   const [speakersOpen, setSpeakersOpen] = useState(false)
   const [debugVisible, setDebugVisible] = useState(false)
   const [debugShownBefore, setDebugShownBefore] = useState(false)
@@ -25,6 +26,7 @@ export function App() {
     finalCount,
     getSpeakerLabel,
     isConfigReady,
+    isLoadingInitialData,
     isStarting,
     knownSpeakers,
     onCopyTranscript,
@@ -53,7 +55,10 @@ export function App() {
     runtimeIssue,
     segments,
     setConfigDraft,
-    setSettings,
+    dialogSettings,
+    setDialogSettings,
+    onToggleDevtools,
+    onOpenRepository,
     setSpeakerAliases,
     settings,
     settingsDialogOpen,
@@ -72,15 +77,22 @@ export function App() {
   } = useAppState()
 
   return (
-    <main className="container">
-      <div className="console-shell" inert={settingsDialogOpen || connectivityDialogOpen} aria-hidden={settingsDialogOpen || connectivityDialogOpen}>
+    <main className="container" onContextMenu={(event) => {
+      const target = event.target
+      if (target instanceof HTMLElement && target.isContentEditable) return
+      const field = target instanceof Element ? target.closest('input, textarea') : null
+      if (field instanceof HTMLTextAreaElement || (field instanceof HTMLInputElement
+        && ['text', 'search', 'email', 'url', 'tel', 'password', 'number'].includes(field.type))) return
+      event.preventDefault()
+    }}>
+      <div className="console-shell" inert={settingsDialogOpen || connectivityDialogOpen || aboutOpen} aria-hidden={settingsDialogOpen || connectivityDialogOpen || aboutOpen}>
         <HeroStatusCard
           status={status}
           statusLabel={statusLabel}
           statusDescription={statusDescription}
           runtimeIssue={runtimeIssue}
           isStarting={isStarting}
-          startDisabled={!isConfigReady || isSavingSettings || settingsSaveFailed}
+          startDisabled={isLoadingInitialData || !isConfigReady || isSavingSettings || settingsSaveFailed}
           canCopyTranscript={finalCount > 0}
           canResetTranscript={!status.running && !isStarting && segments.length > 0}
           durationLabel={durationLabel}
@@ -88,6 +100,8 @@ export function App() {
           speakersOpen={speakersOpen}
           debugVisible={debugVisible}
           onToggleSpeakers={() => setSpeakersOpen((open) => !open)}
+          onOpenAbout={() => setAboutOpen(true)}
+          onToggleDevtools={onToggleDevtools}
           onToggleDebug={() => {
             if (!debugShownBefore) { openDebugPanel(); setDebugShownBefore(true) }
             setDebugVisible((visible) => !visible)
@@ -109,7 +123,7 @@ export function App() {
             setSpeakerAliases={setSpeakerAliases}
             following={autoScrollEnabled}
             onFollow={onFollowTranscript}
-            emptyContent={!status.running && !isStarting && <div className="idle-audio-panel">
+            emptyContent={!isLoadingInitialData && !status.running && !isStarting && <div className="idle-audio-panel">
               <SettingsPanel audioOnly statusRunning={false} settings={settings} devices={devices} setSettings={setIdleSettings} onChooseDirectory={onChooseTranscriptDirectory} />
             </div>}
           />
@@ -133,7 +147,7 @@ export function App() {
       </div>
 
       <SettingsDialog
-        isOpen={settingsDialogOpen}
+        isOpen={settingsDialogOpen && !isLoadingInitialData}
         busy={isSavingSettings || isChoosingDirectory}
         onClose={closeSettingsDialog}
         scrollable
@@ -172,18 +186,11 @@ export function App() {
       >
         <SettingsPanel
           statusRunning={status.running}
-          settings={settings}
+          settings={dialogSettings}
           devices={devices}
-          setSettings={setSettings}
+          setSettings={setDialogSettings}
           onChooseDirectory={onChooseTranscriptDirectory}
           choosingDirectory={isChoosingDirectory}
-        />
-
-        <AudioPanel
-          statusRunning={status.running}
-          settings={settings}
-          devices={devices}
-          setSettings={setSettings}
         />
 
         <ConfigPanel
@@ -199,6 +206,8 @@ export function App() {
           setConfigDraft={setConfigDraft}
         />
       </SettingsDialog>
+
+      <AboutDialog isOpen={aboutOpen} onClose={() => setAboutOpen(false)} onOpenRepository={onOpenRepository} />
 
       <ConnectivityDialog
         isOpen={connectivityDialogOpen}

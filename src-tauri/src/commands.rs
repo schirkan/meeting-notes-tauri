@@ -8,7 +8,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tokio::sync::Mutex;
-use tauri_plugin_shell::process::CommandChild;
+use tauri_plugin_shell::{process::CommandChild, ShellExt};
 
 use crate::connectivity;
 use crate::events;
@@ -30,6 +30,14 @@ pub fn toggle_devtools(window: tauri::WebviewWindow) {
     } else {
         window.open_devtools();
     }
+}
+
+#[tauri::command]
+pub fn open_repository(app: AppHandle) -> Result<(), String> {
+    #[allow(deprecated)]
+    app.shell()
+        .open("https://github.com/schirkan/meeting-notes-tauri", None)
+        .map_err(|error| format!("Repository konnte nicht geoeffnet werden: {error}"))
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

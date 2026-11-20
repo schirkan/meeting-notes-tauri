@@ -41,10 +41,16 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
   bei Pause gelb, nach Stop wieder in Originalfarbe.
   Siehe [T-514](./specs/T-514-systray-und-schliessen-verhalten.md).
 - Einstellungen stehen auf einer scrollenden Seite ohne Tabs oder Bereichsnavigation:
-  **Allgemein**, **Audio**, **Azure**, **Proxy**. Audiooptionen im Leerzustand werden
-  sofort gespeichert; der Dialog speichert explizit. **Verbindung testen**, letzte
-  Ergebnisse und **Speichern** liegen im Footer.
+  **Allgemein**, **Transkription**, **Azure**, **Proxy**. Audiooptionen stehen nur
+  im Leerzustand der Startseite und werden sofort gespeichert. Der Dialog hat
+  einen temporaeren Store, initialen Speichern-Fokus und fragt beim Schliessen
+  nach ungespeicherten Aenderungen. Nur **Speichern** persistiert den Dialog-Draft.
+  **Verbindung testen**, letzte Ergebnisse und **Speichern** liegen im Footer.
   Siehe [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md).
+- Das Drei-Punkte-Menue bietet **About** (Icon, Repo, Author, MIT-Lizenz) und
+  **Dev-Tools (F12)**. Webseiten-Kontextmenues sind ausser in editierbaren
+  Textfeldern unterdrueckt; native Menues bleiben erhalten.
+  Siehe [T-402](./specs/T-402-ui-komponenten-portieren.md).
 - Automatischer Markdown-Export ist standardmaessig aktiv; Datei und Clipboard
   nutzen denselben Builder mit YAML-Frontmatter. Siehe [T-506](./specs/T-506-transkript-markdown-export-und-frontmatter.md).
 - HTTPS- und native Speech/WSS-Diagnose sind getrennte Pruefungen mit aktiver

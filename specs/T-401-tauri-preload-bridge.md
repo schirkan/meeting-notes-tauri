@@ -14,6 +14,7 @@ Typisierte Bridge zwischen React-Renderer und Tauri-Rust-Main, die Electron-IPC-
 - [x] Renderer-Komponenten verwenden ausschließlich die Wrapper (`useAppState` ruft `api.start()`, `api.onSegment(...)` etc. auf — kein direkter `invoke()`). Beleg: src/renderer/src/App.tsx (useAppState) (geprueft).
 - [x] TypeScript-Strict-Mode ist aktiv (`tsc --noEmit` läuft im `npm run build`-Skript), alle Wrapper sind vollständig typisiert. Beleg: package.json (run) (geprueft).
 - [x] Single-source-of-truth: Command- und Event-Namen werden über `src/shared/tauri-contract.ts` geteilt; `transcript-contract.ts` definiert die Datentypen. Beleg: src/shared/tauri-contract.ts, src/shared/transcript-contract.ts (geprueft).
+- [x] About-Repository und DevTools-Toggle sind als `openRepository(): Promise<void>` und `toggleDevtools(): Promise<void>` typisiert; Komponenten importieren dafuer kein direktes `invoke`. Native Abnahme siehe [T-402](./T-402-ui-komponenten-portieren.md). Beleg: src/preload/index.ts, src/shared/transcript-contract.ts und use-app-state.ts; `npm run typecheck` erfolgreich.
 - [ ] Mock-Implementierung für Unit-Tests (siehe T-500) - **offen**: Die Unit-Tests laufen gegen die echte App (Playwright-CLI-Browserlauf), nicht gegen einen Mock.
 
 ## Approach

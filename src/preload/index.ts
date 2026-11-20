@@ -66,6 +66,8 @@ function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
 }
 
 const api: TranscriptApi = {
+  toggleDevtools: () => invoke<void>(TAURI_COMMANDS.toggleDevtools),
+  openRepository: () => invoke<void>(TAURI_COMMANDS.openRepository),
   start: () => invoke<TranscriptStatus>(TAURI_COMMANDS.startRecording),
   stop: () => invoke<TranscriptStatus>(TAURI_COMMANDS.stopRecording),
   pause: () => invoke<TranscriptStatus>(TAURI_COMMANDS.pauseRecording),

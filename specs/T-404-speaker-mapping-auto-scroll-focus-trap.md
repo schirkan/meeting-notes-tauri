@@ -14,14 +14,14 @@ Verhaltensfeinheiten aus `../meeting-notes` 1:1 portieren und gegen Validierungs
 - [x] **Mic-Parität:** Bei Mic-Diarization werden verschiedene erkannte Sprecher wie beim Loopback einzeln dargestellt und zugeordnet. Aliase gelten in Badges, letzter-Sprecher-Anzeige und Clipboard-Export; Rohsegmente behalten Quelle und SDK-ID. Beleg: src/renderer/src/speaker-utils.ts (eigene Palette je Quelle, Mic und Loopback gleich behandelt).
 - [x] **Interim-Korrektur:** Neue Interim-/Final-Events entfernen ältere Interims nur derselben Quelle, auch wenn das SDK die Sprecher-ID korrigiert. Andere Quellen und finale Sprechersegmente bleiben erhalten. Beleg: src/renderer/src/use-app-state.ts (entfernt Interim-Events nur derselben Quelle).
 - [x] **Auto-Scroll:** pausiert, sobald Nutzer ≥32 px vom Listenende hochgescrollt hat, reaktiviert beim Zurückscrollen. Beleg: Node-UI-Test zum Follow-Verhalten.
-- [x] **Focus-Trap im Settings-Dialog:** Tab/Shift+Tab zyklisch innerhalb der Dialog-Elemente; Escape schließt den Dialog. Beleg: Node-UI-Test zum Fokus- und Trap-Verhalten.
-- [x] **Initial-Fokus:** beim Öffnen des Settings-Dialogs wird das erste Eingabefeld fokussiert (nicht der Schließen-Button). Beleg: Node-UI-Test zum Fokus beim Oeffnen.
+- [x] **Focus-Trap im Settings-Dialog:** Tab/Shift+Tab zyklisch innerhalb der Dialog-Elemente; Escape schliesst nach der Pending-Changes-Pruefung aus [T-403](./T-403-settings-dialog-mit-verbindung-testen-button.md). Beleg: SettingsDialog.tsx und use-app-state.ts; bestehende Node-UI-Regressionen zum Trap-Verhalten.
+- [x] **Initial-Fokus:** beim Oeffnen des Settings-Dialogs wird **Speichern** fokussiert, nicht das Sprach-Dropdown. Bei deaktiviertem Speichern und im About-Dialog liegt der Fokus auf **x**. Beleg: SettingsDialog.tsx (initialFocus); Speichern- und About-Fokus im integrierten Browser geprueft, aktuelle native Abnahme in T-403/T-402 offen.
 - [x] **Re-Render-Fokus-Schutz:** Tastendrücke in Eingabefeldern reißen den Fokus nicht mehr weg (zwei separate `useEffect`-Blöcke mit `[isOpen]`-Dependency). Beleg: Node-UI-Tests zu Fokus und Eingabefeldern.
 
 ## Approach
 - Bestehenden Renderer portieren; quellenspezifisches Mapping in [speaker-utils.ts](../src/renderer/src/speaker-utils.ts), Event-/Alias-Verarbeitung in [use-app-state.ts](../src/renderer/src/use-app-state.ts).
 - Speaker-Keys, Labels und Farbzyklen sind durch Unit-Tests abgedeckt. Die neuen Szenarien für Mic-/Speaker-Badges, Aliase, korrigierte Interims, Hero-Anzeige und Export wurden im integrierten Browser mit gemockter Bridge erfolgreich geprüft. Der aktuelle CLI-Lauf der [UI-Regressionstests](../tests/startup-ui.test.mjs) ist durch headless-Edge-Startfehler (Exit 21) blockiert.
-- Übrige Kriterien und reale Mehrsprecheraufnahme weiterhin im Tauri-Dev-Modus validieren; Status bleibt `draft`.
+- Reale Mehrsprecheraufnahme und neue native Fokus-/Dialog-Regeln weiterhin im Tauri-Dev-Modus validieren; Abnahmegrenzen siehe T-402/T-403.
 - Falls Tauri-WebView2 ein abweichendes Verhalten zeigt (z. B. bei Focus-Trap), gezielt nachjustieren — Spec-Eintrag aktualisieren.
 
 ## Log

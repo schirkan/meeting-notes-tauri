@@ -46,7 +46,7 @@ Config-Datei `MeetingNotes.config.json`:
       ohne Speaker-Transkription wird kein Ausgabegerät gesucht.
 - [x] Beide Quellen ausgeschaltet ist ein Fehlerfall (Exit-Code 23), weil Beleg: sidecar/Program.cs (Exit-Code 23, wenn beide Quellen ausgeschaltet sind).
       dann nichts transkribiert würde.
-- [x] Zwei Checkboxen im Settings-Dialog; die Geräteauswahl und die Beleg: src/renderer/src/components/SettingsPanel.tsx (Checkboxen; die Geraeteauswahl wird deaktiviert). Testnachweis: Node-UI-Test "transcription sources default on, persist independently and keep the last source enabled".
+- [x] Zwei Checkboxen ausschliesslich unter **Audio Einstellungen** auf der Startseite, nicht im Settings-Dialog; die Geraeteauswahl und die Beleg: src/renderer/src/components/AudioPanel.tsx und SettingsPanel.tsx (Audio-only); Layout/Draft-Trennung siehe [T-403](./T-403-settings-dialog-mit-verbindung-testen-button.md).
       Diarization-Checkboxen der jeweiligen Quelle werden deaktiviert, wenn
       die Quelle nicht transkribiert wird.
 - [x] Beim Abwaehlen der letzten aktiven Quelle wird die andere automatisch aktiviert; beide Checkboxen bleiben ausserhalb einer Aufnahme bedienbar. Beleg: src/renderer/src/components/SettingsPanel.tsx (atomare Quellenauswahl). Testnachweis: Node-UI-Test "transcription sources default on, persist independently and keep the last source enabled".
@@ -78,7 +78,9 @@ Config-Datei `MeetingNotes.config.json`:
 
 ### Oberfläche
 - `src/renderer/src/components/SettingsPanel.tsx`: zwei Checkboxen
-  („Mikrofon transkribieren“, „Speaker-Loopback transkribieren“). Die
+  („Mikrofon transkribieren“, „Speaker-Loopback transkribieren“) ueber
+  `AudioSources` ausschliesslich auf der Startseite. Aenderungen speichern
+  sofort; keine Kopie dieser Audiofelder im Settings-Dialog (siehe T-403). Die
   zugehörige Geräteauswahl und die zugehörige Diarization-Checkbox sind
   deaktiviert, wenn die Quelle nicht transkribiert wird.
 

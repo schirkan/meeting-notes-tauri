@@ -20,6 +20,7 @@ used on its own.
 - **Markdown export:** Save or copy finalized transcripts with timestamps, speakers, and session metadata.
 - **Portable app:** Extract the complete folder and run it without an installer. The .NET runtime ships with the app.
 - **Connection diagnostics:** Test Azure connectivity and an optional corporate proxy from the settings dialog.
+- **Application information and diagnostics:** **About** in the three-dot menu shows the app icon, repository, author and MIT license. **Dev-Tools (F12)** toggles developer tools, as does F12. Webpage right-click menus are suppressed except in text fields and editable content; native window and tray menus are unaffected.
 - **System tray:** The tray icon turns **red while recording**, **yellow while paused**, and returns to its original color after stopping or a sidecar crash. Right-click it for **Anzeigen** or **Beenden**. **Anzeigen** and a left double-click restore and focus the main window. **Beim Schließen in den Systray minimieren** under **Allgemein** keeps the app, recording and meeting detection running when closing the window. Enabled by default from **v0.1.2**; **Beenden** always exits. The preference applies after saving, without restarting.
 - **Automatic recording:** "Aufnahme bei erkanntem Meeting automatisch starten" is enabled by default from **v0.1.2** and the app watches the Windows audio session graph in the background. An active audio session from an allowed meeting application starts recording. When all of that process's microphone/output sessions remain inactive for 3 seconds, its automatically started recording stops via the normal stop/export path. Manual recordings are never stopped by the detector. Automatic start and matching session-end stop share the same enabled setting. This is an audio-session heuristic, not a definitive meeting signal; real Teams/Zoom acceptance remains open.
 
@@ -42,6 +43,9 @@ See [docs/README.md](./docs/README.md) for the details of both sets.
 ![Live transcript with speakers and interim text](docs/renderer/02-aufnahme-transkript.png)
 
 ### Settings
+
+The following settings captures predate the current **Transkription** section,
+start-page-only audio controls and temporary dialog drafts.
 
 | Allgemein | Audio | Azure | Proxy |
 |---|---|---|---|
@@ -86,6 +90,10 @@ exiting during a recording remain untested; see [T-514](./specs/T-514-systray-un
 
 From **v0.1.2**, new or incomplete configurations default to automatic meeting capture, matching automatic stop, and close-to-tray. In **v0.1.3** the settings dialog is a single scrolling page (Allgemein, Audio, Azure, Proxy) and the matching automatic stop can be switched off separately; the tray icon turns red while recording and yellow while paused. Previously saved `false` preferences are preserved. Auto-recording still requires a complete Azure configuration. See [the changelog](./CHANGELOG.md) for the tagged version's changes; a Git tag does not itself add a downloadable GitHub release asset.
 
+The current development version uses **Allgemein**, **Transkription**, **Azure**
+and **Proxy** in the dialog. Audio controls appear only on the start page;
+**About** and **Dev-Tools (F12)** are available in the three-dot menu.
+
 ### Run the portable version
 
 1. Download the portable ZIP from [Releases](https://github.com/schirkan/meeting-notes-tauri/releases). Every tagged version is published there as `MeetingNotes-v<version>-win-x64.zip`, together with a `SHA256SUMS.txt` for verification (`sha256sum -c SHA256SUMS.txt`).
@@ -113,9 +121,15 @@ Settings open automatically on first launch if the Azure configuration is missin
 3. Use **Verbindung testen** (Test connection) to check connectivity. This test does not capture microphone or system audio, but it does connect to Azure.
 4. Click **Speichern** (Save). Successful saving closes the dialog; errors leave it open with an explanation.
 
+The dialog initially focuses **Speichern**. All footer actions have the same
+height. Edits, including export-folder selection, remain in a temporary draft
+until **Speichern** is clicked. Closing with **x**, Escape or the backdrop asks
+to discard unsaved changes; cancelling keeps the draft. Connection tests use
+the draft without saving it and return to it when the test dialog closes.
+
 ### Transcribe a conversation
 
-1. Select audio devices under **Audio Einstellungen**, centered in the empty transcript area on the start page; changes are saved immediately. Select the language under **Allgemein** in the settings dialog and confirm with **Speichern**. The dialog keeps its sections on one scrolling page without tabs, with consistently spaced two-column fields; **Verbindung testen** is available in its footer when the required Azure fields are filled in. **Transkript automatisch speichern** enables automatic Markdown export; the adjacent path and folder icon select its destination.
+1. Select audio devices under **Audio Einstellungen** in the empty transcript area on the start page; changes are saved immediately. The panel is shifted 150 px to the right on windows wider than 1100 px; narrower windows retain centered placement to avoid clipping. Select **Primäre Sprache** under **Transkription** in the settings dialog and confirm with **Speichern**. **Allgemein** contains only the close-to-tray preference. The dialog keeps its sections on one scrolling page without tabs; **Verbindung testen** is available in its footer when the required Azure fields are filled in. **Transkript automatisch speichern** enables automatic Markdown export; the adjacent path and folder icon select its destination.
 2. Use the checkboxes next to the device selectors to enable microphone audio, speaker playback, or both. At least one source stays enabled.
 3. Enable **Sprechererkennung** (Speaker recognition) for either source if needed. Each source has its own checkbox beside its device selector.
 4. Click **Start**. The live transcript appears in the main area.
@@ -129,7 +143,7 @@ transcript, or click **Sprecher** to open the mapping overview.
 
 - **Kopieren** copies the finalized transcript to the clipboard as Markdown.
 - **Markdown exportieren** in the three-dot menu saves it to a file.
-- Automatic export when a recording ends is enabled by default. Disable it or change the output folder under **Allgemein**.
+- Automatic export when a recording ends is enabled by default. Disable it or change the output folder under **Transkription**, then click **Speichern**.
 - Use **Ordner auswählen** to choose an export folder with the native folder picker, or enter a path manually.
 
 With no custom path, exports are saved next to the EXE. Relative paths are

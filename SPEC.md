@@ -12,12 +12,12 @@ Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1
 
 ---
 
-## Stand der Specs (Abgleich 19.11.2026)
+## Stand der Specs (Abgleich 20.11.2026)
 
 Die Checkboxen wurden gegen den **Code** geprueft, nicht gegen den Spec-Status:
 jeder abgehakte Punkt traegt den Beleg im Klartext (`Beleg: …`), jeder offene
 Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **40 Specs** als
-`umgesetzt` bzw. `teils umgesetzt` markiert, **21 offene Punkte in 15 Specs**.
+`umgesetzt` bzw. `teils umgesetzt` markiert, **23 offene Punkte in 17 Specs**.
 Vorher waren ueber 70 Checkboxen offen, obwohl die Funktion ueberwiegend fertig
 und verifiziert war - die Specs sind jetzt mit dem Stand der Implementierung
 deckungsgleich.
@@ -40,7 +40,7 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-510 | Befunde sind in `T-504`, `T-500`, `SPEC.md` und `AGENTS.md` nachgezogen. |
 | T-514 | Native Windows-Abnahme: Alt+F4 bei beiden Optionen sowie echter Exit mit laufender Aufnahme, s… |
 
-### Offen als bewusste Entscheidung (10 Punkte)
+### Offen als bewusste Entscheidung (12 Punkte)
 
 | Spec | Punkt | Warum offen |
 |---|---|---|
@@ -49,6 +49,8 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-203 | Smoke-Test: 48-kHz-Stereo-Input führt zu korrektem 16-kHz-Mono-Output… | Der Stichprobentest ist implementiert (`ResamplingValidation`: 48-kHz-Stereo-Ton → 16-kHz-Mono, Länge, Pegel, Übersteuerung, Drop… |
 | T-400 | Visuelles Verhalten ist identisch zur Electron-Variante. | Bewusst nicht 1:1: die Darstellung folgt auf Nutzerwunsch dem Console-Design statt der urspruenglichen Portierung (siehe T-402).… |
 | T-401 | Mock-Implementierung für Unit-Tests (siehe T-500) | Die Unit-Tests laufen gegen die echte App (Playwright-CLI-Browserlauf), nicht gegen einen Mock. |
+| T-402 | Native About-/Repository-/DevTools-/Kontextmenue-Abnahme | Browser-Checks verwenden Mock-IPC und synthetische Contextmenu-Events, pruefen keine echten WebView2-Menues oder Systembrowser-Au… |
+| T-403 | Native WebView2-Abnahme der neuen Fokus-/Discard-/Layout-Regeln | integrierter Browser nutzt eine gemockte Bridge; CLI-UI-Lauf scheitert vor den Assertions am Edge-Start (Exit 21), Rust-Lauf am S… |
 | T-501 | Voller End-to-End-Test mit WebDriver + App-Start + `start_recording()… | WebDriver-Setup für Tauri 2 ist aufwendig; die headless Smoke-Stufen 1–5 decken die kritischen Artefakt-Invarianten ab. |
 | T-503 | `npm run lint` (sofern konfiguriert) ist grün | kein Lint-Setup im Projekt. |
 | T-513 | Das Ende nutzt mehrere Signale (Stille, Session-Ende), nicht nur eine… | Session-Ende ist umgesetzt, Pegel-/Stille-Erkennung hingegen nicht. Der Detektor beobachtet Session-Metadaten, keine Audiodaten. |

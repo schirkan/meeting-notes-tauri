@@ -52,6 +52,9 @@ export function useAppState() {
   const [lastError, setLastError] = useState<TranscriptError | null>(null)
   const [runtimeIssue, setRuntimeIssue] = useState<string | null>(null)
   const [settings, setSettings] = useState(DEFAULT_USER_SETTINGS)
+  const [isLoadingInitialData, setIsLoadingInitialData] = useState(true)
+  const [dialogSettings, setDialogSettings] = useState(DEFAULT_USER_SETTINGS)
+  const dialogSettingsBaselineRef = useRef(DEFAULT_USER_SETTINGS)
   const settingsRef = useRef(settings)
   settingsRef.current = settings
   const settingsSaveQueueRef = useRef<Promise<void>>(Promise.resolve())
@@ -77,6 +80,32 @@ export function useAppState() {
   const autoScrollEnabledRef = useRef(true)
   const transcriptListRef = useRef<HTMLUListElement | null>(null)
 
+  const onToggleDevtools = async () => {
+    try {
+      await window.transcriptApi.toggleDevtools()
+    } catch (error) {
+      setToast({ message: errorDetail(error, 'Dev-Tools konnten nicht umgeschaltet werden.'), variant: 'error', persistent: true })
+    }
+  }
+
+  const onOpenRepository = async () => {
+    try {
+      await window.transcriptApi.openRepository()
+    } catch (error) {
+      setToast({ message: errorDetail(error, 'Repository konnte nicht geöffnet werden.'), variant: 'error', persistent: true })
+    }
+  }
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'F12') return
+      event.preventDefault()
+      if (!event.repeat) void onToggleDevtools()
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [])
+
   useEffect(() => {
     const transcriptApi = window.transcriptApi
 
@@ -92,7 +121,7 @@ export function useAppState() {
 
     let disposed = false
 
-    void transcriptApi.getConfig()
+    const configLoad = transcriptApi.getConfig()
       .then((nextConfig) => {
         if (disposed) return
         setConfigState(nextConfig)
@@ -120,13 +149,17 @@ export function useAppState() {
       transcriptApi.getStatus(),
       transcriptApi.getSettings(),
       transcriptApi.getDevices(),
-      transcriptApi.getDebugLog()
+      transcriptApi.getDebugLog(),
+      configLoad
     ])
       .then(([nextStatus, nextSettings, nextDevices, nextDebugLog]) => {
         if (disposed) return
         setStatus(nextStatus)
         setSessionStartedAt(nextStatus.startedAt ?? null)
-        setSettings(normalizeUserSettings(nextSettings))
+        const normalized = normalizeUserSettings(nextSettings)
+        setSettings(normalized)
+        setDialogSettings(normalized)
+        dialogSettingsBaselineRef.current = normalized
         setDevices(nextDevices)
         setDebugLog(nextDebugLog)
       })
@@ -135,6 +168,9 @@ export function useAppState() {
         const message = error instanceof Error ? error.message : 'Initialdaten konnten nicht geladen werden.'
         setRuntimeIssue(message)
         setToast({ message, variant: 'error', persistent: true })
+      })
+      .finally(() => {
+        if (!disposed) setIsLoadingInitialData(false)
       })
 
     const unsubSegment = transcriptApi.onSegment((segment) => {
@@ -569,14 +605,18 @@ export function useAppState() {
   const onSaveAll = async () => {
     if (isSavingSettings) return
     setIsSavingSettings(true)
-    const snapshot = settingsRef.current
+    const snapshot = dialogSettings
     const revision = settingsSaveRevisionRef.current
     const save = settingsSaveQueueRef.current.then(async () => {
       const errors: string[] = []
 
       try {
         const saved = await window.transcriptApi.saveSettings(snapshot)
-        if (settingsRef.current === snapshot) setSettings(normalizeUserSettings(saved))
+        const normalized = normalizeUserSettings(saved)
+        settingsRef.current = normalized
+        setSettings(normalized)
+        setDialogSettings(normalized)
+        dialogSettingsBaselineRef.current = normalized
         settingsSaveErrorRef.current = null
         setSettingsSaveFailed(false)
         const refreshedDevices = await window.transcriptApi.getDevices()
@@ -619,7 +659,7 @@ export function useAppState() {
     try {
       const path = await window.transcriptApi.selectTranscriptDirectory()
       if (path === null) return
-      setSettings((previous) => ({
+      setDialogSettings((previous) => ({
         ...previous,
         transcript: {
           ...previous.transcript,
@@ -649,7 +689,7 @@ export function useAppState() {
     let requestSubmitted = false
     try {
       // Aktuelle Draft-Werte (auch ungespeicherte Änderungen) testen.
-      const payload = { ...draftToConfig(configDraft), language: settings.language }
+      const payload = { ...draftToConfig(configDraft), language: dialogSettings.language }
       requestSubmitted = true
       const result = await window.transcriptApi.testAzureConnectivity(payload)
       setConnectivityResult({
@@ -814,6 +854,8 @@ export function useAppState() {
   }, [saveRequest, settings.transcript.markdownExport.enabled])
 
   return {
+    onToggleDevtools,
+    onOpenRepository,
     configDraft,
     configState,
     debugLog,
@@ -823,6 +865,7 @@ export function useAppState() {
     finalCount,
     getSpeakerLabel,
     isConfigReady,
+    isLoadingInitialData,
     isStarting,
     knownSpeakers,
     lastError,
@@ -836,7 +879,12 @@ export function useAppState() {
       const list = transcriptListRef.current
       if (list) list.scrollTop = list.scrollHeight
     },
-    onOpenSettingsDialog: () => setSettingsDialogOpen(true),
+    onOpenSettingsDialog: () => {
+      setDialogSettings(settingsRef.current)
+      dialogSettingsBaselineRef.current = settingsRef.current
+      setConfigDraft(toConfigDraft(configState?.config ?? null))
+      setSettingsDialogOpen(true)
+    },
     onResetTranscript,
     onSaveAll,
     isSavingSettings,
@@ -862,7 +910,8 @@ export function useAppState() {
     runtimeIssue,
     segments,
     setConfigDraft,
-    setSettings,
+    dialogSettings,
+    setDialogSettings,
     setSpeakerAliases,
     settings,
     settingsDialogOpen,
@@ -878,7 +927,15 @@ export function useAppState() {
     openDebugPanel: () => setDebugOpen(true),
     closeDebugPanel: () => setDebugOpen(false),
     onClearDebugLog,
-    closeSettingsDialog: () => setSettingsDialogOpen(false),
+    closeSettingsDialog: () => {
+      if (isSavingSettings || isChoosingDirectory) return
+      const dirty = JSON.stringify(dialogSettings) !== JSON.stringify(dialogSettingsBaselineRef.current)
+        || JSON.stringify(configDraft) !== JSON.stringify(toConfigDraft(configState?.config ?? null))
+      if (dirty && !window.confirm('Ungespeicherte Änderungen verwerfen?')) return
+      setDialogSettings(settingsRef.current)
+      setConfigDraft(toConfigDraft(configState?.config ?? null))
+      setSettingsDialogOpen(false)
+    },
     dismissToast: () => setToast(null)
   }
 }

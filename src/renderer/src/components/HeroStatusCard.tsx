@@ -17,6 +17,8 @@ type HeroStatusCardProps = {
   debugVisible: boolean
   onToggleSpeakers: () => void
   onToggleDebug: () => void
+  onOpenAbout: () => void
+  onToggleDevtools: () => Promise<void>
   onCopyTranscript: () => Promise<void>
   onExportTranscript: () => Promise<void>
   onOpenSettingsDialog: () => void
@@ -93,6 +95,12 @@ export function HeroStatusCard(props: HeroStatusCardProps) {
             </button>
             <button type="button" onClick={() => { closeMenu(); props.onToggleDebug() }} aria-controls="console-debug" aria-pressed={props.debugVisible}>
               <Icon name="terminal" />Debug-Log
+            </button>
+            <button type="button" onClick={() => { closeMenu(); void props.onToggleDevtools() }}>
+              <Icon name="terminal" />Dev-Tools (F12)
+            </button>
+            <button type="button" onClick={() => { closeMenu(); props.onOpenAbout() }}>
+              <Icon name="info" />About
             </button>
           </div>
         </details>
