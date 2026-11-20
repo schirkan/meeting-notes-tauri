@@ -364,8 +364,6 @@ try {
   $root = [System.Windows.Automation.AutomationElement]::RootElement
   $trayCond = New-Object System.Windows.Automation.PropertyCondition ([System.Windows.Automation.AutomationElement]::ClassNameProperty), 'Shell_TrayWnd'
   $tray = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $trayCond)
-  # Die echte Windows-Taskleiste mit dem Icon der laufenden App als Beleg.
-  if ($tray) { Grab-Hwnd $tray.Current.NativeWindowHandle '08-taskbar-mit-app-icon' }
   $icon = $null
   # The overflow flyout is a separate top level window, so search the whole tree first.
   foreach ($e in $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {

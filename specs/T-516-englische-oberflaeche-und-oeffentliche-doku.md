@@ -103,8 +103,10 @@ wechselt von `lang="de"` auf `lang="en"`.
       `Save transcript automatically`, ...); `tests/config-utils.test.mjs` prueft die
       englischen Fehlermeldungen.
 - [x] **Screenshots zeigen die englische Oberflaeche.** Beleg: `npm run screenshots` und
-      `npm run screenshots:native` erzeugen je 8 Aufnahmen in `docs/renderer/` und
-      `docs/native/` mit englischen UI-Texten.
+      `npm run screenshots:native` erzeugen 8 Renderer- und 7 native Aufnahmen
+      mit englischen UI-Texten. Auf Martins Wunsch vom 20.11.2026 ist das
+      Taskbar-Bild samt Caption und Erzeugungsstelle entfernt; alle 15 verbleibenden
+      Bilder sind in `docs/README.md` direkt verlinkt.
 - [x] **Release v0.1.4 veroeffentlicht.** Beleg: [GitHub-Release v0.1.4](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.4)
       aus Commit `37f0bab6d731602f7878c05c7b17251124157000`; [Workflow 44790203600](https://github.com/schirkan/meeting-notes-tauri/actions/runs/44790203600)
       erfolgreich. ZIP und `SHA256SUMS.txt` heruntergeladen, Hash und Versions-
