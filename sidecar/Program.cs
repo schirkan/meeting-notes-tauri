@@ -90,13 +90,13 @@ static async Task<int> RunDetectionModeAsync(Dictionary<string, string?> argsMap
             var command = SidecarCommands.ReadType(line);
             if (command == SidecarCommands.Shutdown)
             {
-                Logger.Info("sidecar", "shutdown", "Shutdown-Kommando empfangen.");
+                Logger.Info("sidecar", "shutdown", "Shutdown command received.");
                 cts.Cancel();
                 break;
             }
             if (command == SidecarCommands.HandshakeAck)
             {
-                Logger.Info("sidecar", "handshake_ack", "Protokoll-Handshake bestätigt.");
+                Logger.Info("sidecar", "handshake_ack", "Protocol handshake confirmed.");
             }
         }
     }
@@ -107,7 +107,7 @@ static async Task<int> RunDetectionModeAsync(Dictionary<string, string?> argsMap
         cts.Dispose();
     }
 
-    Logger.Info("status", "stopped", "Erkennungsmodus beendet.");
+    Logger.Info("status", "stopped", "Detection mode ended.");
     return 0;
 }
 
@@ -179,10 +179,10 @@ catch (ArgumentException)
 }
 if (!transcription.Mic && !transcription.Speaker)
 {
-    Logger.Error("SIDECAR_START_FAILED", "Keine Aufnahmequelle zum Transkribieren ausgewaehlt: --transcription-mic oder --transcription-speaker muss true sein.");
+    Logger.Error("SIDECAR_START_FAILED", "No recording source selected for transcription: --transcription-mic or --transcription-speaker must be true.");
     return 23;
 }
-Logger.Info("config", "transcription", $"Transkribierte Quellen: mic={transcription.Mic}, speaker={transcription.Speaker}.");
+Logger.Info("config", "transcription", $"Transcribed sources: mic={transcription.Mic}, speaker={transcription.Speaker}.");
 
 AzureProxyConfig? proxy;
 try
@@ -198,11 +198,11 @@ catch (ArgumentException)
 if (!argsMap.TryGetValue("--sample-rate", out var srRaw) || string.IsNullOrWhiteSpace(srRaw))
 {
     srRaw = "16000";
-    Logger.Info("config", "sample_rate_default", $"--sample-rate nicht gesetzt, verwende Default {srRaw} Hz.");
+    Logger.Info("config", "sample_rate_default", $"--sample-rate is not set, using the default {srRaw} Hz.");
 }
 if (!int.TryParse(srRaw, out var sampleRate) || sampleRate < 8000 || sampleRate > 48000)
 {
-    Logger.Error("SIDECAR_START_FAILED", $"Parameter --sample-rate ist ungültig: '{srRaw}'. Erwartet 8000-48000.");
+    Logger.Error("SIDECAR_START_FAILED", $"The --sample-rate parameter is invalid: '{srRaw}'. Expected 8000-48000.");
     return 11;
 }
 
@@ -221,7 +221,7 @@ if (!azureEnabled)
     Logger.Warn(
         "config",
         "azure_incomplete",
-        "Azure-Konfiguration unvollständig (speech-key/region/endpoint fehlt). Audio-Capture läuft, Azure-Start übersprungen.");
+        "The Azure configuration is incomplete (speech-key/region/endpoint missing). Audio capture runs, the Azure start is skipped.");
 }
 
 if (!string.IsNullOrWhiteSpace(micId))
@@ -243,14 +243,14 @@ try
 
     // T-511: Nur transkribierte Quellen brauchen ein Geraet. Ohne
     // Speaker-Transkription wird kein Ausgabegeraet vorausgesetzt - sonst
-    // waere "nur Mikrofon" auf einem Rechner ohne Ausgabe nicht moeglich.
+    // waere "mic only" auf einem Rechner ohne Ausgabe nicht moeglich.
     MMDevice? micDevice = null;
     if (transcription.Mic)
     {
         micDevice = DeviceResolver.ResolveInputDevice(mm, micId);
         if (micDevice is null)
         {
-            Logger.Error("SIDECAR_START_FAILED", "Kein Mikrofon-Device gefunden.");
+            Logger.Error("SIDECAR_START_FAILED", "No microphone device found.");
             return 22;
         }
     }
@@ -260,7 +260,7 @@ try
         speakerDevice = DeviceResolver.ResolveOutputDevice(mm, speakerId);
         if (speakerDevice is null)
         {
-            Logger.Error("LOOPBACK_DEVICE_NOT_FOUND", "Kein Speaker-Device für Loopback gefunden.");
+            Logger.Error("LOOPBACK_DEVICE_NOT_FOUND", "No speaker device for the loopback found.");
             return 21;
         }
     }
@@ -318,7 +318,7 @@ try
             }
             catch (Exception ex)
             {
-                Logger.Error("SIDECAR_UNAVAILABLE", $"Mic-Frame Fehler: {ex.Message}");
+                Logger.Error("SIDECAR_UNAVAILABLE", $"Mic frame error: {ex.Message}");
             }
         });
 
@@ -346,7 +346,7 @@ try
             }
             catch (Exception ex)
             {
-                Logger.Error("LOOPBACK_INIT_FAILED", $"Loopback-Frame Fehler: {ex.Message}");
+                Logger.Error("LOOPBACK_INIT_FAILED", $"Loopback frame error: {ex.Message}");
             }
         });
 
@@ -358,13 +358,13 @@ try
     if (speakerSource is not null) activeSources.Add("Speaker-Loopback");
 
     Logger.Info("format", "mic_format", micSource is null
-        ? "Mic: nicht transkribiert."
-        : $"Mic Capture Format: {micSource.Format} (Modus: {micSource.ModeLabel})");
+        ? "Mic: not transcribed."
+        : $"Mic capture format: {micSource.Format} (mode: {micSource.ModeLabel})");
     Logger.Info("format", "speaker_format", speakerSource is null
-        ? "Speaker-Loopback: nicht transkribiert."
-        : $"Speaker Capture Format: {speakerSource.Format} (Modus: {speakerSource.ModeLabel})");
+        ? "Speaker loopback: not transcribed."
+        : $"Speaker capture format: {speakerSource.Format} (mode: {speakerSource.ModeLabel})");
     Logger.Info("format", "azure_target", $"Azure Target Format: {targetWaveFormat}");
-    Logger.Info("status", "capturing", $"Aktiv: {string.Join(" + ", activeSources)}.");
+    Logger.Info("status", "capturing", $"Active: {string.Join(" + ", activeSources)}.");
     Logger.Event("status", new { phase = "started", running = true });
 
     // ---- stdin-Kommandoschale (T-507) ---------------------------------
@@ -391,34 +391,34 @@ try
                 switch (command)
                 {
                     case SidecarCommands.HandshakeAck:
-                        Logger.Info("sidecar", "handshake_ack", "Protokoll-Handshake bestätigt.");
+                        Logger.Info("sidecar", "handshake_ack", "Protocol handshake confirmed.");
                         break;
                     case SidecarCommands.Pause:
                         azure?.SetPaused(true);
-                        Logger.Info("sidecar", "pause", "Aufnahme pausiert; Azure-Session bleibt verbunden.");
+                        Logger.Info("sidecar", "pause", "Recording paused; the Azure session stays connected.");
                         Logger.Event("status", new { phase = "paused", running = true });
                         break;
                     case SidecarCommands.Resume:
                         {
                             var restarted = azure is null ? Array.Empty<string>() : await azure.ReconnectDeadStreamsAsync();
                             azure?.SetPaused(false);
-                            Logger.Info("sidecar", "resume", "Aufnahme fortgesetzt.");
+                            Logger.Info("sidecar", "resume", "Recording resumed.");
                             Logger.Event("status", new { phase = "resumed", running = true });
                             foreach (var source in restarted)
                                 Logger.Warn("azure", "speaker_ids_reset",
-                                    $"Azure-Session fuer {source} war beendet und wurde neu verbunden. " +
-                                    "Die Sprecher-IDs wurden neu vergeben.");
+                                    $"The Azure session for {source} had ended and was reconnected. " +
+                                    "The speaker IDs were reassigned.");
                             break;
                         }
                     case SidecarCommands.Reset:
-                        Logger.Info("sidecar", "reset", "Reset-Kommando empfangen.");
+                        Logger.Info("sidecar", "reset", "Reset command received.");
                         break;
                     case SidecarCommands.Shutdown:
-                        Logger.Info("sidecar", "shutdown", "Shutdown-Kommando empfangen.");
+                        Logger.Info("sidecar", "shutdown", "Shutdown command received.");
                         cts.Cancel();
                         break;
                     default:
-                        Logger.Warn("sidecar", "unknown_command", $"Unbekanntes Kommando: {command}");
+                        Logger.Warn("sidecar", "unknown_command", $"Unknown command: {command}");
                         break;
                 }
             }
@@ -426,7 +426,7 @@ try
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            Logger.Error("SIDECAR_UNAVAILABLE", $"stdin-Reader beendet: {ex.Message}");
+            Logger.Error("SIDECAR_UNAVAILABLE", $"The stdin reader stopped: {ex.Message}");
         }
     });
 
@@ -452,21 +452,21 @@ try
             var restarted = await azure.ReconnectDeadStreamsAsync();
             foreach (var source in restarted)
                 Logger.Warn("azure", "speaker_ids_reset",
-                    $"Azure-Session fuer {source} wurde vom Dienst beendet und neu verbunden. " +
-                    "Die Sprecher-IDs wurden neu vergeben.");
+                    $"The Azure session for {source} was ended by the service and reconnected. " +
+                    "The speaker IDs were reassigned.");
         }
     }
 
     micSource?.Stop();
     speakerSource?.Stop();
     if (azure is not null) await azure.StopAsync();
-    Logger.Info("status", "stopped", "Graceful shutdown abgeschlossen.");
+    Logger.Info("status", "stopped", "Graceful shutdown completed.");
     Logger.Event("status", new { phase = "stopped", running = false });
     return 0;
 }
 catch (OperationCanceledException)
 {
-    Logger.Info("status", "cancelled", "Beendet durch Cancellation.");
+    Logger.Info("status", "cancelled", "Stopped by cancellation.");
     return 0;
 }
 catch (Exception ex)

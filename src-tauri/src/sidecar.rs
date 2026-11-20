@@ -145,7 +145,7 @@ pub async fn diagnose_speech<R: Runtime>(
                 _ => {}
             }
         }
-        let mut detail = format!("Speech/WSS-Diagnose lieferte kein Ergebnis (Exit-Code: {exit_code:?}). {}", stderr.trim());
+        let mut detail = format!("The Speech/WSS diagnostic returned no result (exit code: {exit_code:?}). {}", stderr.trim());
         for secret in [Some(config.speech_key.as_str()),
             config.proxy.as_ref().and_then(|p| p.username.as_deref()),
             config.proxy.as_ref().and_then(|p| p.password.as_deref())].into_iter().flatten() {
@@ -156,7 +156,7 @@ pub async fn diagnose_speech<R: Runtime>(
         Err(detail)
     }).await;
     let _ = child.kill();
-    result.map_err(|_| "Speech/WSS-Diagnose: Timeout nach 45 s".to_string())?
+    result.map_err(|_| "Speech/WSS diagnostic: timeout after 45 s".to_string())?
 }
 
 fn parse_speech_result(line: &[u8]) -> Option<SpeechConnectivityResult> {
@@ -293,7 +293,7 @@ pub async fn send_command(handle: &SidecarHandle, command: &str) -> Result<(), S
     line.push(b'\n');
     let mut guard = handle.child.lock().await;
     let child = guard.as_mut().ok_or_else(|| {
-        SidecarError::Spawn("Sidecar bereits beendet — Schreiben nicht möglich.".into())
+        SidecarError::Spawn("The sidecar has already exited - writing is not possible.".into())
     })?;
     child
         .write(&line)
@@ -355,6 +355,6 @@ pub fn resolve_sidecar_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, S
     }
 
     Err(SidecarError::Spawn(format!(
-        "Sidecar-EXE '{exe}' nicht gefunden. Erwartet als Bundle-Resource oder im Entwicklungs-Publish unter src-tauri/target/sidecar-publish/."
+        "The sidecar EXE '{exe}' was not found. Expected as a bundle resource or in the development publish under src-tauri/target/sidecar-publish/."
     )))
 }

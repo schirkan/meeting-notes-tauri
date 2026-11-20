@@ -58,13 +58,13 @@ fn probe_url_from_endpoint(endpoint: &str, language: &str) -> Result<url::Url, S
     } else {
         format!("https://{endpoint}")
     };
-    let mut url = url::Url::parse(&normalized).map_err(|_| "Ungültiger Endpoint".to_string())?;
+    let mut url = url::Url::parse(&normalized).map_err(|_| "Invalid endpoint".to_string())?;
     if !matches!(url.scheme(), "https" | "wss") || url.host_str().is_none()
         || !url.username().is_empty() || url.password().is_some()
     {
-        return Err("Endpoint muss HTTPS/WSS ohne Zugangsdaten verwenden".into());
+        return Err("The endpoint must use HTTPS/WSS without credentials".into());
     }
-    url.set_scheme("https").map_err(|_| "Ungültiger Endpoint".to_string())?;
+    url.set_scheme("https").map_err(|_| "Invalid endpoint".to_string())?;
     url.set_path("/speech/recognition/interactive/cognitiveservices/v1");
     url.set_query(None);
     url.set_fragment(None);
@@ -77,7 +77,7 @@ pub fn configured_proxy(proxy: &AzureProxyConfig) -> Result<reqwest::Proxy, Stri
     if host.is_empty() || proxy.port == 0 || host.contains("://")
         || host.contains('/') || host.contains('@') || host.contains('?') || host.contains('#')
     {
-        return Err("Proxy benötigt einen Host ohne Schema/Pfad und Port 1–65535".into());
+        return Err("The proxy needs a host without scheme/path and a port between 1 and 65535".into());
     }
     let host = if host.contains(':') && !host.starts_with('[') {
         format!("[{host}]")
@@ -85,7 +85,7 @@ pub fn configured_proxy(proxy: &AzureProxyConfig) -> Result<reqwest::Proxy, Stri
         host.to_string()
     };
     let mut configured = reqwest::Proxy::all(format!("http://{host}:{}", proxy.port))
-        .map_err(|_| "Ungültiger Proxy-Host".to_string())?;
+        .map_err(|_| "Invalid proxy host".to_string())?;
     if let Some(username) = proxy.username.as_deref() {
         configured = configured.basic_auth(username, proxy.password.as_deref().unwrap_or(""));
     }
@@ -194,22 +194,22 @@ pub async fn diagnose(
         step: "transport".into(),
         status: StepStatus::Ok,
         detail: if proxy.is_some() {
-            format!("HTTP-Proxy {host}:{port}; HTTPS via CONNECT. Endpoint-DNS erfolgt am Proxy.")
+            format!("HTTP proxy {host}:{port}; HTTPS via CONNECT. The endpoint DNS is resolved at the proxy.")
         } else {
-            "Direktverbindung; Umgebungsproxies werden nicht übernommen.".into()
+            "Direct connection; environment proxies are not inherited.".into()
         },
     });
     steps.push(Step {
         step: "https-tls".into(),
         status: StepStatus::Ok,
-        detail: "HTTPS-Diagnose prüft TLS-Zertifikate gegen den System-Vertrauensspeicher. \
-Bei TLS-Inspection muss das Firmen-Root-CA dort vertrauenswürdig sein."
+        detail: "The HTTPS diagnostic checks TLS certificates against the system trust store. \
+With TLS inspection the corporate root CA must be trusted there."
             .into(),
     });
     steps.push(Step {
         step: "endpoint".into(),
         status: StepStatus::Ok,
-        detail: format!("Endpoint-Host: {endpoint_host}; DNS/TCP-Ziel: {host}:{port}"),
+        detail: format!("Endpoint host: {endpoint_host}; DNS/TCP target: {host}:{port}"),
     });
 
     let mut resolved_ip: Option<std::net::IpAddr> = None;
@@ -220,13 +220,13 @@ Bei TLS-Inspection muss das Firmen-Root-CA dort vertrauenswürdig sein."
             steps.push(Step {
                 step: "dns-system".into(),
                 status: StepStatus::Ok,
-                detail: format!("System-DNS liefert {ip} ({} ms)", dns_start.elapsed().as_millis()),
+                detail: format!("System DNS returns {ip} ({} ms)", dns_start.elapsed().as_millis()),
             });
         }
         None => steps.push(Step {
             step: "dns-system".into(),
             status: StepStatus::Warn,
-            detail: "System-DNS-Auflösung fehlgeschlagen; maßgeblich ist die HTTPS-Probe.".into(),
+            detail: "System DNS resolution failed; the HTTPS probe is authoritative.".into(),
         }),
     }
 
@@ -235,12 +235,12 @@ Bei TLS-Inspection muss das Firmen-Root-CA dort vertrauenswürdig sein."
             Ok(ms) => steps.push(Step {
                 step: "tcp".into(),
                 status: StepStatus::Ok,
-                detail: format!("TCP {port} zu {ip} offen ({ms} ms)"),
+                detail: format!("TCP {port} to {ip} open ({ms} ms)"),
             }),
             Err(e) => steps.push(Step {
                 step: "tcp".into(),
                 status: StepStatus::Warn,
-                detail: format!("TCP {port} zu {ip} fehlgeschlagen ({e}); maßgeblich ist die nachfolgende HTTPS-Probe."),
+                detail: format!("TCP {port} to {ip} failed ({e}); the following HTTPS probe is authoritative."),
             }),
         }
     }
@@ -252,13 +252,13 @@ Bei TLS-Inspection muss das Firmen-Root-CA dort vertrauenswürdig sein."
             let latency = https_start.elapsed().as_millis() as u64;
             let status_label = https_status_step_status(status);
             let hint = match status {
-                401 | 403 => " — Endpoint erreichbar, Speech-Key fehlt oder ist ungültig",
+                401 | 403 => " - endpoint reachable, the speech key is missing or invalid",
                 _ => "",
             };
             steps.push(Step {
                 step: "https-probe".into(),
                 status: status_label,
-                detail: format!("HTTPS-Probe HTTP {status} {text} ({latency} ms){hint}"),
+                detail: format!("HTTPS probe HTTP {status} {text} ({latency} ms){hint}"),
             });
             ConnectivityResult {
                 probe_url,
@@ -277,7 +277,7 @@ Bei TLS-Inspection muss das Firmen-Root-CA dort vertrauenswürdig sein."
             steps.push(Step {
                 step: "https-probe".into(),
                 status: StepStatus::Error,
-                detail: format!("HTTPS-Probe fehlgeschlagen: {e} ({latency} ms)"),
+                detail: format!("HTTPS probe failed: {e} ({latency} ms)"),
             });
             ConnectivityResult {
                 probe_url,

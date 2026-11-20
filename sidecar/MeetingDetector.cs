@@ -56,7 +56,7 @@ public sealed class MeetingDetector : IDisposable
         catch (Exception ex)
         {
             Dispose();
-            Logger.Error("MEETING_DETECTOR_UNAVAILABLE", $"Endpoint-Ueberwachung nicht moeglich: {ex.Message}");
+            Logger.Error("MEETING_DETECTOR_UNAVAILABLE", $"Endpoint monitoring is not possible: {ex.Message}");
             throw;
         }
     }
@@ -70,7 +70,7 @@ public sealed class MeetingDetector : IDisposable
         manager.RefreshSessions();
         var existing = manager.Sessions;
         for (var i = 0; i < existing.Count; i++) Track(existing[i], signal);
-        Logger.Info("meeting_detector", "watching", $"Endpoint '{signal}' wird beobachtet.");
+        Logger.Info("meeting_detector", "watching", $"The endpoint '{signal}' is being watched.");
     }
 
     private void Track(AudioSessionControl session, string signal)
@@ -100,7 +100,7 @@ public sealed class MeetingDetector : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Error("MEETING_DETECTOR_FAILED", $"Sitzung konnte nicht ausgewertet werden: {ex.Message}");
+            Logger.Error("MEETING_DETECTOR_FAILED", $"The session could not be evaluated: {ex.Message}");
         }
     }
 
@@ -113,7 +113,7 @@ public sealed class MeetingDetector : IDisposable
             if (change.Started is { } detection)
             {
                 Logger.Info("meeting_detector", "detected",
-                    $"Meeting-Signal '{detection.Signal}' von Prozess '{detection.ProcessName}' (PID {detection.ProcessId}).");
+                    $"Meeting signal '{detection.Signal}' from process '{detection.ProcessName}' (PID {detection.ProcessId}).");
                 _onDetected(detection);
             }
             if (change.EndCandidate)
@@ -130,14 +130,14 @@ public sealed class MeetingDetector : IDisposable
             {
                 if (_disposed || _tracker.ConfirmEnd(processId, revision) is not { } ended) return;
                 Logger.Info("meeting_detector", "ended",
-                    $"Audiositzungen von '{ended.ProcessName}' (PID {ended.ProcessId}) seit 3 Sekunden inaktiv.");
+                    $"The audio sessions of '{ended.ProcessName}' (PID {ended.ProcessId}) have been inactive for 3 seconds.");
                 _onEnded(ended);
             }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            Logger.Error("MEETING_DETECTOR_FAILED", $"Sitzungsende konnte nicht ausgewertet werden: {ex.Message}");
+            Logger.Error("MEETING_DETECTOR_FAILED", $"The session end could not be evaluated: {ex.Message}");
         }
     }
 

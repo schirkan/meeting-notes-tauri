@@ -1,90 +1,103 @@
 # Changelog
 
-## Unreleased
+## v0.1.4 - 2026-11-20
 
-### Neu
-- **About-Dialog:** Im Drei-Punkte-Menue gibt es jetzt **About** mit App-Icon, Repository-Link, Autor und Lizenz. Der Link oeffnet die Repository-Seite ueber die neue Shell-Integration (`open_repository`).
-- **Dev-Tools (F12):** Ueber das Drei-Punkte-Menue lassen sich die WebView2-Entwicklerwerkzeuge direkt oeffnen.
-- **Abschnitt Transkription:** Die primaere Sprache liegt in einem eigenen Dialogabschnitt **Transkription**; **Allgemein** enthaelt nur noch die Systray-Einstellung.
-- **Audio-Schalter nur auf der Startseite:** Mikrofon, Speaker-Loopback und Sprechererkennung stehen nur noch im Leerzustand der Startseite.
-- **Temporaerer Dialog-Entwurf:** Dialogaenderungen bleiben bis zum **Speichern** im Entwurf. Beim Schliessen mit X, Escape oder Backdrop fragt die App nach ungespeicherten Aenderungen; der Verbindungstest nutzt den Entwurf, ohne ihn zu speichern.
+### Added
+- **About dialog:** The three-dot menu now offers **About** with the app icon, repository link, author and license. The link opens the repository page through the new shell integration (`open_repository`).
+- **Dev tools (F12):** The WebView2 developer tools can be opened directly from the three-dot menu.
+- **Transcription section:** The primary language now lives in its own dialog section **Transcription**; **General** contains only the system tray setting.
+- **Audio controls on the start page only:** Microphone, speaker loopback and speaker recognition are now only available in the idle state of the start page.
+- **Temporary dialog draft:** Dialog changes stay in a draft until **Save** is clicked. Closing with X, Escape or the backdrop asks about unsaved changes; the connection test uses the draft without saving it.
 
-### Geaendert
-- Das Audio-Panel der Startseite ist auf breiten Fenstern um 150 px nach rechts versetzt, damit es nicht unter dem Inspector verschwindet; schmale Fenster (<= 1100 px) bleiben zentriert.
-- Webseiten-Kontextmenues sind ausserhalb editierbarer Textfelder unterdrueckt; native Menues bleiben erhalten.
+### Changed
+- **English throughout:** UI labels, accessibility text, notifications, diagnostics, error/recovery messages and tray text are now English.
+- README, end-user documentation, the configuration example, GitHub description and release notes are now English. Internal specs and agent documentation remain German.
+- Display dates and times use `en-US`. The default transcription language remains `de-DE`; existing settings, protocol keys and filenames are unchanged.
+- New native and renderer screenshots show the English interface; renderer demo transcripts and diagnostics are also English.
+- The start page audio panel is shifted 150 px to the right on wide windows so it does not disappear behind the inspector; narrow windows (<= 1100 px) stay centered.
+- Webpage context menus are suppressed outside editable text fields; native menus are unaffected.
 
-### Behoben
-- Zwei Regressionen aus dem Umbau behoben: die Diarization-Schalter werden jetzt auf der Startseite geprueft (sie liegen nicht mehr im Dialog), und der 150-px-Versatz des Audio-Panels greift erst ab 1100 px Breite - passend zum dokumentierten Verhalten.
+### Fixed
+- Updated the diarization regression test to find audio controls on the start page, not in the settings dialog. The 150 px audio-panel offset now only applies above 1100 px, matching the responsive layout.
+- Updated UI-test and screenshot selectors for the English labels, including Resume, Follow and debug controls.
+- The debug error count uses the correct singular/plural form; demo recording timers no longer suggest multi-day recordings.
 
-## v0.1.3 - 19.11.2026
+### Verification
+- Full local verification: 9 successful steps; 98 Node tests, 47 Rust tests,
+  539 source / 552 published-sidecar C# assertions; smoke test passed,
+  deployment PASS 9 / FAIL 0.
+- The noninteractive Media Foundation sample remains skipped. Existing hardware,
+  live Azure, clean-machine and remaining tray acceptance limits are unchanged.
 
-### Neu
-- **Settings-Dialog auf einer Seite:** Alle Einstellungen stehen untereinander auf einer scrollenden Seite. Die Abschnitte **Allgemein**, **Audio**, **Azure**, **Proxy** erscheinen als Ueberschriften in dieser Reihenfolge - ohne Tabs und ohne Bereichsnavigation; alles bleibt gleichzeitig sichtbar und wird nur gescrollt.
-- **Eigener Abschnitt Audio:** Mikrofon und Speaker-Loopback liegen dort mit ihren Geraete-Auswahlen und der Sprechererkennung.
-- **Auto-Stop einzeln abschaltbar:** neue Option `user.autoStart.autoStop` ("Aufnahme automatisch beenden, wenn das Meeting automatisch gestartet wurde"). Ausgeschaltet bleibt die automatisch gestartete Aufnahme laufen, bis sie manuell gestoppt wird. Standardmaessig aktiv; fehlende Felder erhalten `true`, explizit gespeichertes `false` bleibt erhalten.
+## v0.1.3 - 2026-11-19
 
-### Geaendert
-- **Verbindung testen** liegt jetzt im Dialog-Footer neben **Speichern** statt im Azure-Abschnitt; das Wiederoeffnen des laufenden/letzten Tests bleibt dort ebenfalls erreichbar.
-- Das Tray-Icon faerbt sich **rot** waehrend einer Aufnahme und **gelb** waehrend der Pause; nach Stop oder Sidecar-Crash kehrt es zur Originalfarbe zurueck.
-- Der Speicherpfad fuer den Markdown-Export steht direkt unter seiner Checkbox "Transkript automatisch als Markdown speichern".
+### Added
+- **Settings dialog on a single page:** All settings are stacked on one scrolling page. The sections **General**, **Audio**, **Azure** and **Proxy** appear as headings in that order - without tabs and without section navigation; everything stays visible at the same time and is merely scrolled.
+- **Dedicated Audio section:** Microphone and speaker loopback live there with their device selection and the speaker recognition.
+- **Auto-stop separately switchable:** new option `user.autoStart.autoStop` ("Stop recording automatically when the meeting was started automatically"). When switched off, the automatically started recording keeps running until it is stopped manually. Enabled by default; missing fields receive `true`, an explicitly saved `false` is preserved.
 
-### Verifikation
-- `npm run verify -- --full`: 9 Schritte gruen; 94 Node-Tests, 47 Rust-Tests,
-  539 C#-Assertions gegen Quellen / 552 gegen den publizierten Sidecar.
-- Portable-Build: Haupt-EXE `ProductVersion` 0.1.3; Sidecar `FileVersion` 0.1.3.0.
-  Smoke bestanden; Deployment PASS 9 / FAIL 0.
-- Manuelle Nutzerabnahme am 19.11.2026: Tray-Icon, Kontextmenue, Doppelklick und
-  Schliessen per X bei beiden Einstellungen bestaetigt. Alt+F4 und Beenden
-  waehrend einer Aufnahme bleiben offen
+### Changed
+- **Test connection** now sits in the dialog footer next to **Save** instead of in the Azure section; reopening the running/last test remains reachable there as well.
+- The tray icon turns **red** while recording and **yellow** while paused; after a stop or a sidecar crash it returns to its original color.
+- The save path for the Markdown export sits directly below its checkbox "Save transcript automatically as Markdown".
+
+### Verification
+- `npm run verify -- --full`: 9 steps green; 94 Node tests, 47 Rust tests,
+  539 C# assertions against the sources / 552 against the published sidecar.
+- Portable build: main EXE `ProductVersion` 0.1.3; sidecar `FileVersion` 0.1.3.0.
+  Smoke test passed; deployment PASS 9 / FAIL 0.
+- Manual user acceptance on 2026-11-19: tray icon, context menu, double-click and
+  closing via X with both settings confirmed. Alt+F4 and quitting during a
+  recording remain open
   ([T-514](./specs/T-514-systray-und-schliessen-verhalten.md)).
 
 ### Release
-- [Veroeffentlichung v0.1.3](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.3)
-  mit `MeetingNotes-v0.1.3-win-x64.zip` (16.496.793 Bytes) und `SHA256SUMS.txt`.
-- ZIP-SHA256: `e84d5a58fdb69d0724bb7755428cdf21a5ecc2e85fab24b2c0891fdea1c4cbf7`.
+- [Release v0.1.3](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.3)
+  with `MeetingNotes-v0.1.3-win-x64.zip` (16,496,793 bytes) and `SHA256SUMS.txt`.
+- ZIP SHA256: `e84d5a58fdb69d0724bb7755428cdf21a5ecc2e85fab24b2c0891fdea1c4cbf7`.
 
-## v0.1.2 - 18.11.2026
+## v0.1.2 - 2026-11-18
 
-### Neu
-- Automatische Meeting-Aufnahme ueber den Windows-AudioSessionManager.
-- Zugehoeriger Auto-Stop, wenn alle Capture-/Render-Sessions des ausloesenden
-  Prozesses mindestens 3 Sekunden inaktiv bleiben. Manuelle Aufnahmen sind geschuetzt.
-- Systray-Icon mit **Anzeigen** und **Beenden**. Linker Doppelklick stellt das
-  vorhandene Hauptfenster wieder her und fokussiert es.
-- Einstellung **Beim Schließen in den Systray minimieren**: Verbergen laesst
-  Aufnahme und Meeting-Erkennung weiterlaufen; Tray-Beenden beendet die App.
+### Added
+- Automatic meeting recording via the Windows AudioSessionManager.
+- A matching auto-stop, when all capture/render sessions of the triggering
+  process stay inactive for at least 3 seconds. Manual recordings are protected.
+- System tray icon with **Show** and **Quit**. A left double-click restores the
+  existing main window and focuses it.
+- Setting **Minimize to system tray on close**: hiding keeps recording and
+  meeting detection running; quitting from the tray ends the app.
 
-### Geaendert
-- **Auto-Aufnahme samt Auto-Stop und Schliessen in den Systray sind standardmaessig an.**
-- Fehlende Settings-Felder erhalten die neuen Defaults. Bereits ausdruecklich
-  gespeicherte `false`-Werte bleiben erhalten; keine Zwangsmigration persoenlicher Configs.
-- Anwendung und Sidecar tragen Version 0.1.2. IPC-Protokoll bleibt kompatibel bei 1.0.0.
-- Self-contained Single-File-Sidecar: auf dem Zielsystem keine separate .NET-Installation.
+### Changed
+- **Auto-recording including auto-stop and close-to-tray are enabled by default.**
+- Missing settings fields receive the new defaults. Already explicitly saved
+  `false` values are preserved; no forced migration of personal configurations.
+- Application and sidecar carry version 0.1.2. The IPC protocol stays compatible at 1.0.0.
+- Self-contained single-file sidecar: no separate .NET installation on the target system.
 
-### Verifikation
-- `npm run verify -- --full`: 9 Schritte gruen; 92 Node-Tests,
-  539 C#-Assertions gegen Quellen / 552 gegen den publizierten Sidecar.
-- Zusaetzlich 44 Rust-Tests bestanden.
-- Frischer Portable-Build: 31,37 MB / 4 Dateien / 3 gepruefte SHA256-Summen.
-  Haupt-EXE ProductVersion 0.1.2; Sidecar FileVersion 0.1.2.0.
-- Smoke bestanden; Deployment PASS 9 / FAIL 0. Tray-Icon-Abnahme nativ belegt, Kontextmenue-/Doppelklick-Abnahme und bekannte
-  MediaFoundation-Stichprobe SKIPPED; diese sind keine bestandenen Abnahmen.
+### Verification
+- `npm run verify -- --full`: 9 steps green; 92 Node tests,
+  539 C# assertions against the sources / 552 against the published sidecar.
+- Additionally 44 Rust tests passed.
+- Fresh portable build: 31.37 MB / 4 files / 3 verified SHA256 sums.
+  Main EXE ProductVersion 0.1.2; sidecar FileVersion 0.1.2.0.
+- Smoke test passed; deployment PASS 9 / FAIL 0. Tray icon acceptance natively proven, context menu/double-click acceptance and the known
+  MediaFoundation probe SKIPPED; these are not passed acceptances.
 
-### Release-Pipeline
-- GitHub Actions baut und veroeffentlicht die Releases: **ausschliesslich bei einem Release-Tag** (`release.yml`) - kein automatischer Build bei Push oder Pull Request. Der Workflow checkt genau das Tag aus, laesst Typecheck, Node-Tests und Spec-Konsistenz durch, baut die Portable-Distribution, prueft sie mit Smoke-Test und Deployment-Pruefung und veroeffentlicht ZIP + `SHA256SUMS` als Release-Asset. `workflow_dispatch` holt ein fehlendes Release ohne Tag-Verschiebung nach.
-- Das Release **v0.1.2** wurde nachgetragen: ZIP aus dem Tag, erzeugt vom Release-Workflow - **16.469.792 Bytes** (SHA256 `c917e8a8…949f2`), entpackt **31,17 MB / 4 Dateien**, `SHA256SUMS.txt` als zweites Asset im `sha256sum`-Format, alle 3 Dateien gegen die Summen verifiziert.
-- Das Tag `v0.1.2` wurde vor der Veroeffentlichung auf den Commit mit der Pipeline verschoben (Produktcode zwischen den beiden Staenden identisch).
+### Release pipeline
+- GitHub Actions builds and publishes the releases: **exclusively on a release tag** (`release.yml`) - no automatic build on push or pull request. The workflow checks out exactly the tag, runs typecheck, Node tests and spec consistency, builds the portable distribution, verifies it with the smoke test and the deployment check and publishes ZIP + `SHA256SUMS` as a release asset. `workflow_dispatch` catches up a missing release without moving the tag.
+- The release **v0.1.2** was added later: ZIP from the tag, produced by the release workflow - **16,469,792 bytes** (SHA256 `c917e8a8…949f2`), unpacked **31.17 MB / 4 files**, `SHA256SUMS.txt` as a second asset in `sha256sum` format, all 3 files verified against the sums.
+- The tag `v0.1.2` was moved before publication to the commit with the pipeline (the product code between the two states is identical).
 
-### Bekannte Grenzen
-- Aufnahme benoetigt weiterhin vollstaendige Azure-Konfiguration.
-- Audio-Session-Ende ist eine Heuristik, kein garantiertes Meeting-Ende.
-  Echte Teams-/Zoom-Abnahme und Podcast-Gegenprobe stehen aus.
-- Native Tray-/Maus-/Fokus-Abnahme ist auf dem aktuellen nicht-interaktiven
-  Build-Host per Session-Bridge nicht ausfuehrbar. Win32-Probe und offene Punkte: [T-514](./specs/T-514-systray-und-schliessen-verhalten.md).
-- Live-Latenz, Clean-Machine-Abnahme und die bekannte MF-Stichprobe bleiben offen.
-- Eine interaktive Benutzersitzung existiert auf diesem Host (Session 1 mit Explorer).
-  Das Gateway laeuft in Session 0 und sieht sie nicht; eine geplante Aufgabe mit
-  LogonType=Interactive ueberbrueckt das. Native Screenshots und Tray-Icon-Nachweis
-  sind damit moeglich, Kontextmenue und Doppelklick nicht.
+### Known limits
+- Recording still requires a complete Azure configuration.
+- The end of an audio session is a heuristic, not a guaranteed meeting end.
+  Real Teams/Zoom acceptance and a podcast cross-check are still outstanding.
+- The native tray/mouse/focus acceptance cannot be executed on the current non-interactive
+  build host via the session bridge. Win32 probe and open points: [T-514](./specs/T-514-systray-und-schliessen-verhalten.md).
+- Live latency, clean-machine acceptance and the known MF probe remain open.
+- An interactive user session exists on this host (session 1 with Explorer).
+  The gateway runs in session 0 and cannot see it; a scheduled task with
+  LogonType=Interactive bridges this. Native screenshots and the tray icon proof
+  are therefore possible, context menu and double-click are not.
 
-Versions-Tag und GitHub-Release-Assets sind getrennte Veroeffentlichungen.
+The version tag and the GitHub release assets are two separate publications.

@@ -95,68 +95,68 @@ export const TRANSCRIPT_ERROR_CATALOG: Record<
 > = {
   TRANSCRIPTION_STOP_FAILED: {
     blocker: false,
-    description: 'Transkript-Service konnte nicht sauber gestoppt werden.',
-    recoveryHint: 'Erneut stoppen oder App neu starten.'
+    description: 'The transcription service could not be stopped cleanly.',
+    recoveryHint: 'Try stopping again or restart the app.'
   },
   LOOPBACK_REQUIRED: {
     blocker: true,
-    description: 'Aufnahme ist ohne funktionierendes Speaker-Loopback nicht erlaubt.',
-    recoveryHint: 'Loopback-Gerät aktivieren/wechseln und danach erneut starten.'
+    description: 'Recording is not allowed without a working speaker loopback.',
+    recoveryHint: 'Enable or switch the loopback device, then start again.'
   },
   LOOPBACK_DEVICE_NOT_FOUND: {
     blocker: true,
-    description: 'Kein Speaker-Loopback-Device gefunden.',
-    recoveryHint: 'Audio-Ausgabegerät prüfen oder Gerät explizit konfigurieren.'
+    description: 'No speaker loopback device found.',
+    recoveryHint: 'Check the audio output device or configure the device explicitly.'
   },
   LOOPBACK_INIT_FAILED: {
     blocker: true,
-    description: 'Speaker-Loopback konnte nicht initialisiert werden.',
-    recoveryHint: 'Treiber/Permissions prüfen und Sidecar neu starten.'
+    description: 'The speaker loopback could not be initialized.',
+    recoveryHint: 'Check driver and permissions, then restart the sidecar.'
   },
   SIDECAR_START_FAILED: {
     blocker: true,
-    description: 'C#-Capture-Sidecar konnte nicht gestartet werden.',
-    recoveryHint: 'Sidecar-Logs prüfen und Startparameter validieren.'
+    description: 'The C# capture sidecar could not be started.',
+    recoveryHint: 'Check the sidecar logs and validate the start parameters.'
   },
   SIDECAR_UNAVAILABLE: {
     blocker: true,
-    description: 'Sidecar ist nicht erreichbar oder bereits beendet.',
-    recoveryHint: 'Sidecar neu starten und Health-Status prüfen.'
+    description: 'The sidecar is unreachable or has already exited.',
+    recoveryHint: 'Restart the sidecar and check the health status.'
   },
   AZURE_AUTH_FAILED: {
     blocker: true,
-    description: 'Azure-Speech-Authentifizierung fehlgeschlagen.',
-    recoveryHint: 'API-Key/Region in der Konfiguration prüfen.'
+    description: 'Azure Speech authentication failed.',
+    recoveryHint: 'Check the API key and region in the configuration.'
   },
   AZURE_RECOGNIZER_FAILED: {
     blocker: false,
-    description: 'Recognizer hat einen Laufzeitfehler gemeldet.',
-    recoveryHint: 'Transkription neu starten und Azure-Diagnose prüfen.'
+    description: 'The recognizer reported a runtime error.',
+    recoveryHint: 'Restart the transcription and check the Azure diagnostics.'
   },
   UI_START_FAILED: {
     blocker: false,
-    description: 'Start wurde im Renderer ausgelöst, aber Main-Call ist fehlgeschlagen.',
-    recoveryHint: 'Fehlerdetails prüfen und erneut starten.'
+    description: 'The start was triggered in the renderer, but the main call failed.',
+    recoveryHint: 'Check the error details and start again.'
   },
   UI_STOP_FAILED: {
     blocker: false,
-    description: 'Stop wurde im Renderer ausgelöst, aber Main-Call ist fehlgeschlagen.',
-    recoveryHint: 'Erneut stoppen oder App neu starten.'
+    description: 'The stop was triggered in the renderer, but the main call failed.',
+    recoveryHint: 'Try stopping again or restart the app.'
   },
   UI_PAUSE_FAILED: {
     blocker: false,
-    description: 'Pause wurde im Renderer ausgeloest, aber Main-Call ist fehlgeschlagen.',
-    recoveryHint: 'Fehlerdetails pruefen und erneut pausieren.'
+    description: 'The pause was triggered in the renderer, but the main call failed.',
+    recoveryHint: 'Check the error details and pause again.'
   },
   UI_RESUME_FAILED: {
     blocker: false,
-    description: 'Fortsetzen wurde im Renderer ausgeloest, aber Main-Call ist fehlgeschlagen.',
-    recoveryHint: 'Fehlerdetails pruefen und erneut fortsetzen.'
+    description: 'The resume was triggered in the renderer, but the main call failed.',
+    recoveryHint: 'Check the error details and resume again.'
   },
   SETTINGS_PERSIST_FAILED: {
     blocker: false,
-    description: 'Einstellungen konnten nicht gespeichert werden.',
-    recoveryHint: 'Pfad-/Dateirechte prüfen und erneut speichern.'
+    description: 'The settings could not be saved.',
+    recoveryHint: 'Check path and file permissions, then save again.'
   }
 }
 

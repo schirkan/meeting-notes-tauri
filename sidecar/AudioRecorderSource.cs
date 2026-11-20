@@ -108,7 +108,7 @@ internal sealed class AudioRecorderSource : IDisposable
             Logger.Info(
                 "format",
                 "recorder_mode",
-                $"Quelle '{_label}': Engine-Modus, Zielformat {_targetFormat}, " +
+                $"Source '{_label}': engine mode, target format {_targetFormat}, " +
                 $"Latenz {_recorder.LatencyMilliseconds} ms.");
             return;
         }
@@ -117,7 +117,7 @@ internal sealed class AudioRecorderSource : IDisposable
             FallbackReason = ex;
         }
 
-        SwitchToFallback("Die WASAPI-Engine konnte das Zielformat nicht initialisieren.");
+        SwitchToFallback("The WASAPI engine could not initialize the target format.");
     }
 
     /// <summary>Beendet die Aufnahme.</summary>
@@ -153,7 +153,7 @@ internal sealed class AudioRecorderSource : IDisposable
         Logger.Warn(
             "format",
             "engine_conversion_unavailable",
-            $"Quelle '{_label}': {reason} Rueckfall auf den MediaFoundation-Resampler.");
+            $"Source '{_label}': {reason} falling back to the MediaFoundation resampler.");
         try
         {
             _recorder.Dispose();
@@ -183,7 +183,7 @@ internal sealed class AudioRecorderSource : IDisposable
         Logger.Info(
             "format",
             "recorder_mode",
-            $"Quelle '{_label}': Resampler-Modus, Quellformat {_recorder.WaveFormat} -> {_targetFormat}.");
+            $"Source '{_label}': resampler mode, source format {_recorder.WaveFormat} -> {_targetFormat}.");
     }
 
     private void Attach(WasapiRecorder recorder)
@@ -223,7 +223,7 @@ internal sealed class AudioRecorderSource : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Error("SIDECAR_UNAVAILABLE", $"Aufnahmefehler ({_label}): {ex.Message}");
+            Logger.Error("SIDECAR_UNAVAILABLE", $"Recording error ({_label}): {ex.Message}");
         }
     }
 
@@ -232,7 +232,7 @@ internal sealed class AudioRecorderSource : IDisposable
         if (e.Exception is null) return;
         Logger.Error(
             "SIDECAR_UNAVAILABLE",
-            $"Aufnahme ({_label}) wurde abgebrochen: {e.Exception.Message}");
+            $"The recording ({_label}) was aborted: {e.Exception.Message}");
     }
 
     private static WasapiRecorder BuildRecorder(

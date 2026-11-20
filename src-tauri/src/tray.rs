@@ -46,8 +46,8 @@ impl RecordingIndicator {
     fn tooltip(self) -> &'static str {
         match self {
             Self::Idle => "Meeting Notes",
-            Self::Recording => "Meeting Notes - Aufnahme",
-            Self::Paused => "Meeting Notes - Pausiert",
+            Self::Recording => "Meeting Notes - Recording",
+            Self::Paused => "Meeting Notes - Paused",
         }
     }
 }
@@ -80,17 +80,17 @@ pub fn update_recording_indicator(app: &AppHandle) {
         let mut current = behavior.recording_indicator.lock().expect("Tray indicator mutex poisoned");
         if *current == indicator { return; }
         let result = (|| -> Result<(), String> {
-            let tray = handle.tray_by_id(TRAY_ID).ok_or("Systray-Icon nicht verfuegbar.")?;
-            let icon = handle.default_window_icon().ok_or("App-Icon fuer Systray fehlt.")?;
+            let tray = handle.tray_by_id(TRAY_ID).ok_or("The system tray icon is not available.")?;
+            let icon = handle.default_window_icon().ok_or("The app icon for the system tray is missing.")?;
             tray.set_icon(Some(indicator_icon(icon, indicator))).map_err(|e| e.to_string())?;
             tray.set_tooltip(Some(indicator.tooltip())).map_err(|e| e.to_string())
         })();
         match result {
             Ok(()) => *current = indicator,
-            Err(error) => log_error(&handle, &format!("Systray-Aufnahmestatus konnte nicht aktualisiert werden: {error}")),
+            Err(error) => log_error(&handle, &format!("The system tray recording status could not be updated: {error}")),
         }
     }) {
-        log_error(app, &format!("Systray-Aufnahmestatus konnte nicht eingeplant werden: {error}"));
+        log_error(app, &format!("The system tray recording status could not be scheduled: {error}"));
     }
 }
 
@@ -101,10 +101,10 @@ fn menu_action(id: &str) -> MenuAction {
 }
 
 pub fn init(app: &AppHandle) -> Result<(), String> {
-    let show = MenuItem::with_id(app, SHOW, "Anzeigen", true, None::<&str>).map_err(|e| e.to_string())?;
-    let quit = MenuItem::with_id(app, QUIT, "Beenden", true, None::<&str>).map_err(|e| e.to_string())?;
+    let show = MenuItem::with_id(app, SHOW, "Show", true, None::<&str>).map_err(|e| e.to_string())?;
+    let quit = MenuItem::with_id(app, QUIT, "Quit", true, None::<&str>).map_err(|e| e.to_string())?;
     let menu = Menu::with_items(app, &[&show, &quit]).map_err(|e| e.to_string())?;
-    let icon = app.default_window_icon().cloned().ok_or("App-Icon fuer Systray fehlt.")?;
+    let icon = app.default_window_icon().cloned().ok_or("The app icon for the system tray is missing.")?;
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
         .tooltip("Meeting Notes")
@@ -129,7 +129,7 @@ pub fn init(app: &AppHandle) -> Result<(), String> {
 }
 
 fn show_main(app: &AppHandle) -> Result<(), String> {
-    let window = app.get_webview_window("main").ok_or("Hauptfenster nicht verfuegbar.")?;
+    let window = app.get_webview_window("main").ok_or("The main window is not available.")?;
     window.show().map_err(|e| e.to_string())?;
     window.unminimize().map_err(|e| e.to_string())?;
     window.set_focus().map_err(|e| e.to_string())
@@ -143,7 +143,7 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
         if app.state::<WindowBehavior>().should_hide(window.label()) && accessible {
             match window.hide() {
                 Ok(()) => api.prevent_close(),
-                Err(error) => log_error(app, &format!("Fenster konnte nicht in den Systray verborgen werden: {error}")),
+                Err(error) => log_error(app, &format!("The window could not be hidden into the system tray: {error}")),
             }
         }
     }

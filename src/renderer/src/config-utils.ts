@@ -32,7 +32,7 @@ export function draftToConfig(draft: ConfigDraft): AzureConfig {
   const speechKey = draft.speechKey.trim()
 
   if (!endpoint || !region || !speechKey) {
-    throw new Error('Bitte Endpoint, Region und Speech Key ausfüllen.')
+    throw new Error('Please fill in endpoint, region and speech key.')
   }
 
   const proxyPort = draft.proxyPort.trim()
@@ -47,12 +47,12 @@ export function draftToConfig(draft: ConfigDraft): AzureConfig {
   }
 
   if (!draft.proxyHost.trim() || !proxyPort) {
-    throw new Error('Proxy ist aktiv. Bitte Host und Port ausfüllen.')
+    throw new Error('Proxy is enabled. Please fill in host and port.')
   }
 
   const parsedPort = Number(proxyPort)
   if (!Number.isInteger(parsedPort) || parsedPort <= 0 || parsedPort > 65535) {
-    throw new Error('Proxy-Port ist ungültig.')
+    throw new Error('The proxy port is invalid.')
   }
 
   return {

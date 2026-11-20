@@ -22,13 +22,16 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
 
 ## Aktueller Produktstand
 
-- **Meeting Notes**, veroeffentlichte Version **0.1.3**, ist eine portable Windows-11-x64-Anwendung
+- **Meeting Notes**, zuletzt veroeffentlicht **0.1.3**, Arbeitsstand **0.1.4**, ist eine portable Windows-11-x64-Anwendung
   fuer Live-Transkripte mit Azure Speech. Implementierung vorhanden; offene
   Live-/Hardware-/Zielsystem-Abnahmen sind in den Specs ausgewiesen.
+- Die gesamte Oberflaeche, alle Meldungen und die oeffentliche Doku sind
+  englisch; Specs, `SPEC.md` und diese Datei bleiben intern deutsch.
+  Siehe [T-516](./specs/T-516-englische-oberflaeche-und-oeffentliche-doku.md).
 - Mikrofon, Speaker-Loopback oder beide Quellen sind waehlbar. Sprechererkennung
   ist je Quelle unabhaengig konfigurierbar; mindestens eine Transkriptionsquelle
   bleibt aktiv. Siehe [T-511](./specs/T-511-transkriptions-quellen-auswaehlen.md).
-- **Pause/Weiter** erhaelt die Azure-Sitzung ohne Audiozufuhr. **Stop** beendet sie;
+- **Pause/Resume** erhaelt die Azure-Sitzung ohne Audiozufuhr. **Stop** beendet sie;
   der naechste Start beginnt ein neues Transkript. Sprecheraliase und Segment-Merge
   sind sitzungsgebunden. Siehe [T-507](./specs/T-507-pause-stop-und-sitzungsgebundene-sprecherzuordnung.md).
 - Automatischer Start beobachtet lokale Core-Audio-Sessions erlaubter Prozesse,
@@ -37,15 +40,15 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
   gespeichertes `false` bleibt erhalten. Die Erkennung ist eine Heuristik.
   Siehe [T-513](./specs/T-513-automatische-meeting-erkennung-und-auto-start.md).
 - Schliessen verbirgt das Fenster standardmaessig im Systray, ohne Aufnahme oder
-  Detektor zu stoppen. **Beenden** beendet die App. Das Icon ist bei Aufnahme rot,
+  Detektor zu stoppen. **Quit** beendet die App. Das Icon ist bei Aufnahme rot,
   bei Pause gelb, nach Stop wieder in Originalfarbe.
   Siehe [T-514](./specs/T-514-systray-und-schliessen-verhalten.md).
 - Einstellungen stehen auf einer scrollenden Seite ohne Tabs oder Bereichsnavigation:
-  **Allgemein**, **Transkription**, **Azure**, **Proxy**. Audiooptionen stehen nur
+  **General**, **Transcription**, **Azure**, **Proxy**. Audiooptionen stehen nur
   im Leerzustand der Startseite und werden sofort gespeichert. Der Dialog hat
   einen temporaeren Store, initialen Speichern-Fokus und fragt beim Schliessen
-  nach ungespeicherten Aenderungen. Nur **Speichern** persistiert den Dialog-Draft.
-  **Verbindung testen**, letzte Ergebnisse und **Speichern** liegen im Footer.
+  nach ungespeicherten Aenderungen. Nur **Save** persistiert den Dialog-Draft.
+  **Test connection**, letzte Ergebnisse und **Save** liegen im Footer.
   Siehe [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md).
 - Das Drei-Punkte-Menue bietet **About** (Icon, Repo, Author, MIT-Lizenz) und
   **Dev-Tools (F12)**. Webseiten-Kontextmenues sind ausser in editierbaren

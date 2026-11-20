@@ -141,7 +141,7 @@ pub async fn start_detector(
                     let entry = crate::state::AppState::default().push_debug(
                         crate::state::DebugLogEntrySource::Sidecar,
                         crate::state::DebugLogEntryLevel::Warn,
-                        format!("detector beendet (Exit-Code {:?})", payload.code),
+                        format!("detector exited (exit code {:?})", payload.code),
                     );
                     events::emit_debug(&app, &entry);
                 }

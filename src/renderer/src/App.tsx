@@ -154,8 +154,8 @@ export function App() {
         footer={
           <div className="settings-dialog-footer-content">
             <div className="settings-dialog-footer-copy">
-              <p className="meta">Änderungen gelten nach dem Speichern für die nächste Aufnahme.</p>
-              {configState && <p className="meta-path">Konfiguration: {configState.path}</p>}
+              <p className="meta">Changes apply to the next recording after saving.</p>
+              {configState && <p className="meta-path">Configuration: {configState.path}</p>}
             </div>
             <div className="settings-dialog-footer-actions">
               <button
@@ -164,11 +164,11 @@ export function App() {
                 onClick={() => void onTestConnectivity()}
                 disabled={isTestingConnectivity || isSavingSettings || isChoosingDirectory || !configDraft.endpoint || !configDraft.speechKey || !configDraft.region}
               >
-                {isTestingConnectivity ? 'Teste …' : 'Verbindung testen'}
+                {isTestingConnectivity ? 'Testing …' : 'Test connection'}
               </button>
               {(connectivityResult || isTestingConnectivity) && (
                 <button className="secondary-button" type="button" onClick={onOpenConnectivityDialog}>
-                  {isTestingConnectivity ? 'Laufenden Verbindungstest anzeigen' : 'Letzten Verbindungstest anzeigen'}
+                  {isTestingConnectivity ? 'Show running connection test' : 'Show last connection test'}
                 </button>
               )}
               <button
@@ -177,7 +177,7 @@ export function App() {
                 onClick={() => void onSaveAll()}
                 disabled={status.running || isSavingSettings || isChoosingDirectory}
               >
-                Speichern
+                Save
               </button>
             </div>
             {settingsHint && <div className="hint">{settingsHint}</div>}
@@ -220,8 +220,8 @@ export function App() {
         toast.persistent ? (
           <div className={`toast toast-visible toast-${toast.variant} toast-persistent`.trim()} role="alert">
             <div className="toast-copyable-text">{toast.message}</div>
-            <button className="toast-close-button" type="button" onClick={dismissToast} aria-label="Fehlermeldung schließen">
-              Schließen
+            <button className="toast-close-button" type="button" onClick={dismissToast} aria-label="Close error message">
+              Close
             </button>
           </div>
         ) : (

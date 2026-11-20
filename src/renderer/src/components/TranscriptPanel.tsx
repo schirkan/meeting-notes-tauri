@@ -40,16 +40,16 @@ function TranscriptRow({ segment, getSpeakerLabel, speakerAliases, setSpeakerAli
     <li className={`segment ${segment.state}`}>
       <div className="segment-heading">
         <div className={`speaker-editor speaker-tone ${getSpeakerClassForIdentity(identity)}`}>
-          <button ref={buttonRef} className="speaker-badge" type="button" hidden={editing} title={`Sprechername ändern: ${label}`}
+          <button ref={buttonRef} className="speaker-badge" type="button" hidden={editing} title={`Change speaker name: ${label}`}
             onClick={() => { originalAlias.current = speakerAliases[identity]; setAlias(label); setEditing(true) }}>{label}</button>
-          {editing && <input ref={inputRef} aria-label="Sprechername" value={speakerAliases[identity] ?? ''}
+          {editing && <input ref={inputRef} aria-label="Speaker name" value={speakerAliases[identity] ?? ''}
             onChange={(event) => setAlias(event.target.value)} onBlur={() => setEditing(false)}
             onKeyDown={(event) => {
               if (event.key === 'Escape') { event.preventDefault(); setAlias(originalAlias.current); finish() }
               if (event.key === 'Enter') { event.preventDefault(); finish() }
             }} />}
         </div>
-        <span className="segment-meta">{new Date(segment.timestampIso).toLocaleTimeString('de-DE')}{segment.language && ` | ${segment.language}`}</span>
+        <span className="segment-meta">{new Date(segment.timestampIso).toLocaleTimeString('en-US')}{segment.language && ` | ${segment.language}`}</span>
       </div>
       <div className="segment-text">{segment.text}</div>
     </li>
@@ -58,14 +58,14 @@ function TranscriptRow({ segment, getSpeakerLabel, speakerAliases, setSpeakerAli
 
 export function TranscriptPanel(props: TranscriptPanelProps) {
   return (
-    <section className="console-transcript transcript-panel" aria-label="Transkript">
-      {props.segments.length > 0 && <div className="console-column-labels"><span>ZEIT / SPRECHER</span><span>TRANSKRIPT</span></div>}
-      {props.segments.length === 0 && (props.emptyContent ?? <p className="empty">Noch keine Daten.</p>)}
-      <ul ref={props.transcriptListRef} className="transcript-list" tabIndex={0} aria-label="Transkripteinträge">
+    <section className="console-transcript transcript-panel" aria-label="Transcript">
+      {props.segments.length > 0 && <div className="console-column-labels"><span>TIME / SPEAKER</span><span>TRANSCRIPT</span></div>}
+      {props.segments.length === 0 && (props.emptyContent ?? <p className="empty">No data yet.</p>)}
+      <ul ref={props.transcriptListRef} className="transcript-list" tabIndex={0} aria-label="Transcript entries">
         {props.segments.map((segment) => <TranscriptRow key={segment.id} segment={segment} {...props} />)}
       </ul>
       {!props.following && props.segments.length > 0 && <button className="floating-follow" type="button" onClick={props.onFollow}
-        title="Zum neuesten Eintrag und automatisch folgen"><Icon name="download" />Folgen</button>}
+        title="Jump to the newest entry and follow automatically"><Icon name="download" />Follow</button>}
     </section>
   )
 }

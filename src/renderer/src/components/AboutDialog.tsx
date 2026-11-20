@@ -19,7 +19,7 @@ export function AboutDialog(props: AboutDialogProps) {
             void props.onOpenRepository()
           }}>github.com/schirkan/meeting-notes-tauri</a>
           <p>Author: Martin Pietschmann</p>
-          <p>Lizenz: MIT</p>
+          <p>License: MIT</p>
         </div>
       </div>
     </SettingsDialog>

@@ -50,7 +50,7 @@ export type ConnectivityResult = {
 async function copyTranscriptToClipboard(segments: TranscriptSegment[]): Promise<void> {
   const text = buildTranscriptMarkdown(segments)
   if (!navigator.clipboard?.writeText) {
-    throw new Error('Zwischenablage wird vom WebView nicht unterstützt.')
+    throw new Error('The clipboard is not supported by the WebView.')
   }
   await navigator.clipboard.writeText(text)
 }
@@ -81,7 +81,7 @@ const api: TranscriptApi = {
   saveSettings: (settings) => invoke<UserSettings>(TAURI_COMMANDS.saveUserSettings, { settings }),
   saveConfig: (config) => invoke<AppConfigState>(TAURI_COMMANDS.saveFixedConfig, { config }),
   saveTranscriptMarkdown: (markdown) => invoke<string>(TAURI_COMMANDS.saveTranscriptMarkdown, { markdown }),
-  selectTranscriptDirectory: () => open({ directory: true, multiple: false, title: 'Speicherordner auswählen' }),
+  selectTranscriptDirectory: () => open({ directory: true, multiple: false, title: 'Choose save folder' }),
   testAzureConnectivity: (payload) => invoke<ConnectivityResult>(TAURI_COMMANDS.testAzureConnectivity, { payload }),
   copyTranscript: (segments) => copyTranscriptToClipboard(segments),
   onSegment: (cb) => subscribe<TranscriptSegment>(TAURI_EVENTS.segment, cb),

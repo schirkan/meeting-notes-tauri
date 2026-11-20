@@ -346,15 +346,15 @@ test('draftToConfig throws on missing required fields', () => {
   assert.throws(() => utils.draftToConfig({
     endpoint: '', region: 'r', speechKey: 'k', interimResults: true,
     useProxy: false, proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
-  }), /Endpoint/)
+  }), /endpoint/i)
   assert.throws(() => utils.draftToConfig({
     endpoint: 'e', region: '', speechKey: 'k', interimResults: true,
     useProxy: false, proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
-  }), /Region/)
+  }), /region/i)
   assert.throws(() => utils.draftToConfig({
     endpoint: 'e', region: 'r', speechKey: '', interimResults: true,
     useProxy: false, proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
-  }), /Speech Key/)
+  }), /speech key/i)
 })
 
 test('draftToConfig produces config without proxy when useProxy=false', () => {
@@ -371,15 +371,15 @@ test('draftToConfig requires proxy host/port when useProxy=true', () => {
   assert.throws(() => utils.draftToConfig({
     endpoint: 'e', region: 'r', speechKey: 'k', interimResults: true,
     useProxy: true, proxyHost: '', proxyPort: '8080', proxyUsername: '', proxyPassword: ''
-  }), /Proxy/)
+  }), /proxy/i)
   assert.throws(() => utils.draftToConfig({
     endpoint: 'e', region: 'r', speechKey: 'k', interimResults: true,
     useProxy: true, proxyHost: 'h', proxyPort: '0', proxyUsername: '', proxyPassword: ''
-  }), /Port/)
+  }), /port/i)
   assert.throws(() => utils.draftToConfig({
     endpoint: 'e', region: 'r', speechKey: 'k', interimResults: true,
     useProxy: true, proxyHost: 'h', proxyPort: 'abc', proxyUsername: '', proxyPassword: ''
-  }), /Port/)
+  }), /port/i)
 })
 
 test('proxy port must fit the Rust u16 contract', () => {
@@ -390,7 +390,7 @@ test('proxy port must fit the Rust u16 contract', () => {
     }
     assert.equal(contract.validateAzureConfig(config), false)
     assert.equal(utils.isConfigComplete(config), false)
-    assert.throws(() => utils.draftToConfig(utils.toConfigDraft(config)), /Port/)
+    assert.throws(() => utils.draftToConfig(utils.toConfigDraft(config)), /port/i)
   }
 })
 

@@ -200,14 +200,14 @@ mod pause_tests {
         let started_at = started.started_at.clone();
 
         let paused = state.mark_paused();
-        assert!(paused.running, "Die Aufnahme laeuft während der Pause weiter");
+        assert!(paused.running, "The recording keeps running during the pause");
         assert!(paused.paused);
-        assert_eq!(paused.started_at, started_at, "Pause setzt die Startzeit nicht zurueck");
+        assert_eq!(paused.started_at, started_at, "The pause does not reset the start time");
 
         let resumed = state.mark_resumed();
         assert!(resumed.running);
         assert!(!resumed.paused);
-        assert_eq!(resumed.started_at, started_at, "Fortsetzen behaelt die Startzeit");
+        assert_eq!(resumed.started_at, started_at, "Resuming keeps the start time");
     }
 
     /// Stop beendet die Sitzung endgueltig: kein Pause-Flag, keine Startzeit.
@@ -219,7 +219,7 @@ mod pause_tests {
 
         let stopped = state.mark_stopped();
         assert!(!stopped.running);
-        assert!(!stopped.paused, "Nach Stop ist die Aufnahme nicht mehr pausiert");
+        assert!(!stopped.paused, "After the stop the recording is no longer paused");
         assert_eq!(stopped.started_at, None);
     }
 

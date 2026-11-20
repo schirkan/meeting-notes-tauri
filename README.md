@@ -21,8 +21,8 @@ used on its own.
 - **Portable app:** Extract the complete folder and run it without an installer. The .NET runtime ships with the app.
 - **Connection diagnostics:** Test Azure connectivity and an optional corporate proxy from the settings dialog.
 - **Application information and diagnostics:** **About** in the three-dot menu shows the app icon, repository, author and MIT license. **Dev-Tools (F12)** toggles developer tools, as does F12. Webpage right-click menus are suppressed except in text fields and editable content; native window and tray menus are unaffected.
-- **System tray:** The tray icon turns **red while recording**, **yellow while paused**, and returns to its original color after stopping or a sidecar crash. Right-click it for **Anzeigen** or **Beenden**. **Anzeigen** and a left double-click restore and focus the main window. **Beim Schließen in den Systray minimieren** under **Allgemein** keeps the app, recording and meeting detection running when closing the window. Enabled by default from **v0.1.2**; **Beenden** always exits. The preference applies after saving, without restarting.
-- **Automatic recording:** "Aufnahme bei erkanntem Meeting automatisch starten" is enabled by default from **v0.1.2** and the app watches the Windows audio session graph in the background. An active audio session from an allowed meeting application starts recording. When all of that process's microphone/output sessions remain inactive for 3 seconds, its automatically started recording stops via the normal stop/export path. Manual recordings are never stopped by the detector. Automatic start and matching session-end stop share the same enabled setting. This is an audio-session heuristic, not a definitive meeting signal; real Teams/Zoom acceptance remains open.
+- **System tray:** The tray icon turns **red while recording**, **yellow while paused**, and returns to its original color after stopping or a sidecar crash. Right-click it for **Show** or **Quit**. **Show** and a left double-click restore and focus the main window. **Minimize to system tray on close** under **General** keeps the app, recording and meeting detection running when closing the window. Enabled by default from **v0.1.2**; **Quit** always exits. The preference applies after saving, without restarting.
+- **Automatic recording:** "Start recording automatically when a meeting is detected" is enabled by default from **v0.1.2** and the app watches the Windows audio session graph in the background. An active audio session from an allowed meeting application starts recording. When all of that process's microphone/output sessions remain inactive for 3 seconds, its automatically started recording stops via the normal stop/export path. Manual recordings are never stopped by the detector. Automatic start and matching session-end stop share the same enabled setting. This is an audio-session heuristic, not a definitive meeting signal; real Teams/Zoom acceptance remains open.
 
 ## Screenshots
 
@@ -44,8 +44,8 @@ See [docs/README.md](./docs/README.md) for the details of both sets.
 
 ### Settings
 
-The dialog is one compact scrolling page with the sections **Allgemein**,
-**Transkription**, **Azure** and **Proxy**. Audio controls live on the start page,
+The dialog is one compact scrolling page with the sections **General**,
+**Transcription**, **Azure** and **Proxy**. Audio controls live on the start page,
 so two captures - from the top and from the bottom - show the whole dialog.
 
 | Settings (top) | Settings (bottom) |
@@ -93,9 +93,9 @@ exiting during a recording remain untested; see [T-514](./specs/T-514-systray-un
 > [release notes](https://github.com/schirkan/meeting-notes-tauri/releases)
 > for the requirements and features of a downloaded version.
 
-From **v0.1.2**, new or incomplete configurations default to automatic meeting capture, matching automatic stop, and close-to-tray. In **v0.1.3** the settings dialog is a single scrolling page (Allgemein, Audio, Azure, Proxy) and the matching automatic stop can be switched off separately; the tray icon turns red while recording and yellow while paused. Previously saved `false` preferences are preserved. Auto-recording still requires a complete Azure configuration. See [the changelog](./CHANGELOG.md) for the tagged version's changes; a Git tag does not itself add a downloadable GitHub release asset.
+From **v0.1.2**, new or incomplete configurations default to automatic meeting capture, matching automatic stop, and close-to-tray. In **v0.1.3** the settings dialog is a single scrolling page (General, Audio, Azure, Proxy) and the matching automatic stop can be switched off separately; the tray icon turns red while recording and yellow while paused. Previously saved `false` preferences are preserved. Auto-recording still requires a complete Azure configuration. See [the changelog](./CHANGELOG.md) for the tagged version's changes; a Git tag does not itself add a downloadable GitHub release asset.
 
-The current development version uses **Allgemein**, **Transkription**, **Azure**
+The current development version uses **General**, **Transcription**, **Azure**
 and **Proxy** in the dialog. Audio controls appear only on the start page;
 **About** and **Dev-Tools (F12)** are available in the three-dot menu.
 
@@ -114,8 +114,7 @@ Only use downloads from a trusted source.
 
 ## 🚀 Getting started
 
-The interface currently uses German labels; the instructions below refer to
-the labels shown in the app.
+The instructions below refer to the labels shown in the app.
 
 ### Connect to Azure
 
@@ -123,33 +122,33 @@ Settings open automatically on first launch if the Azure configuration is missin
 
 1. Under **Azure**, enter your Azure Speech endpoint, region, and Speech Key.
 2. If needed, configure your HTTP proxy under **Proxy**. Enter only the hostname or IP address, without `http://` or a path.
-3. Use **Verbindung testen** (Test connection) to check connectivity. This test does not capture microphone or system audio, but it does connect to Azure.
-4. Click **Speichern** (Save). Successful saving closes the dialog; errors leave it open with an explanation.
+3. Use **Test connection** to check connectivity. This test does not capture microphone or system audio, but it does connect to Azure.
+4. Click **Save**. Successful saving closes the dialog; errors leave it open with an explanation.
 
-The dialog initially focuses **Speichern**. All footer actions have the same
+The dialog initially focuses **Save**. All footer actions have the same
 height. Edits, including export-folder selection, remain in a temporary draft
-until **Speichern** is clicked. Closing with **x**, Escape or the backdrop asks
+until **Save** is clicked. Closing with **x**, Escape or the backdrop asks
 to discard unsaved changes; cancelling keeps the draft. Connection tests use
 the draft without saving it and return to it when the test dialog closes.
 
 ### Transcribe a conversation
 
-1. Select audio devices under **Audio Einstellungen** in the empty transcript area on the start page; changes are saved immediately. The panel is shifted 150 px to the right on windows wider than 1100 px; narrower windows retain centered placement to avoid clipping. Select **Primäre Sprache** under **Transkription** in the settings dialog and confirm with **Speichern**. **Allgemein** contains only the close-to-tray preference. The dialog keeps its sections on one scrolling page without tabs; **Verbindung testen** is available in its footer when the required Azure fields are filled in. **Transkript automatisch speichern** enables automatic Markdown export; the adjacent path and folder icon select its destination.
+1. Select audio devices under **Audio settings** in the empty transcript area on the start page; changes are saved immediately. The panel is shifted 150 px to the right on windows wider than 1100 px; narrower windows retain centered placement to avoid clipping. Select **Primary language** under **Transcription** in the settings dialog and confirm with **Save**. **General** contains only the close-to-tray preference. The dialog keeps its sections on one scrolling page without tabs; **Test connection** is available in its footer when the required Azure fields are filled in. **Save transcript automatically** enables automatic Markdown export; the adjacent path and folder icon select its destination.
 2. Use the checkboxes next to the device selectors to enable microphone audio, speaker playback, or both. At least one source stays enabled.
-3. Enable **Sprechererkennung** (Speaker recognition) for either source if needed. Each source has its own checkbox beside its device selector.
+3. Enable **Speaker recognition** for either source if needed. Each source has its own checkbox beside its device selector.
 4. Click **Start**. The live transcript appears in the main area.
-5. **Pause** pauses transcription, **Weiter** resumes the session, and **Stop** ends it.
+5. **Pause** pauses transcription, **Resume** continues the session, and **Stop** ends it.
 
 Starting again creates a **new transcript and session**. Speaker mappings from
 the previous session are not carried over. Edit speaker names directly in the
-transcript, or click **Sprecher** to open the mapping overview.
+transcript, or click **Speakers** to open the mapping overview.
 
 ### Save your notes
 
-- **Kopieren** copies the finalized transcript to the clipboard as Markdown.
-- **Markdown exportieren** in the three-dot menu saves it to a file.
-- Automatic export when a recording ends is enabled by default. Disable it or change the output folder under **Transkription**, then click **Speichern**.
-- Use **Ordner auswählen** to choose an export folder with the native folder picker, or enter a path manually.
+- **Copy** copies the finalized transcript to the clipboard as Markdown.
+- **Export Markdown** in the three-dot menu saves it to a file.
+- Automatic export when a recording ends is enabled by default. Disable it or change the output folder under **Transcription**, then click **Save**.
+- Use **Choose folder** to choose an export folder with the native folder picker, or enter a path manually.
 
 With no custom path, exports are saved next to the EXE. Relative paths are
 resolved from that folder too. File export and clipboard copying use the same
@@ -179,11 +178,11 @@ button, so obtain the participants' agreement beforehand.
 | --- | --- |
 | Start is unavailable | Check the Azure configuration. After changing settings, wait for saving to finish and resolve any save errors. |
 | Microphone or system audio is missing | Make sure the source is enabled and the correct device is selected. Loopback captures playback from the selected output device; no playback means there may be no audio packets. |
-| Connection fails on a corporate network | Check proxy settings and run **Verbindung testen**. HTTP `407` indicates proxy authentication; `401`/`403` alone do not confirm a working Speech connection. |
+| Connection fails on a corporate network | Check proxy settings and run **Test connection**. HTTP `407` indicates proxy authentication; `401`/`403` alone do not confirm a working Speech connection. |
 | Certificate errors with TLS inspection | The corporate certificate must be trusted by Windows. Both HTTPS and Speech/WSS validate certificates. |
 | The recording service crashes | Export the existing transcript if needed, then click **Start** to begin a new session. Restarting the app is not required; automatic reconnection is not provided. |
 
-Open **Debug-Log** from the three-dot menu for more details. Only error rows
+Open **Debug log** from the three-dot menu for more details. Only error rows
 and the error counter are highlighted in red.
 
 The app is under development. Recognition quality, speaker mapping, and

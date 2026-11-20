@@ -1,51 +1,54 @@
 # Screenshots
 
-Zwei Aufnahmewege fuer die Oberflaeche von Meeting Notes.
+Two ways to capture the Meeting Notes interface. Both sets were regenerated
+and visually checked for version **0.1.4** on **2026-11-20**, with English UI text
+and English renderer demo data. The product's default transcription language
+remains German; the renderer demo explicitly selects English.
 
-## `native/` - echte Anwendung
+## `native/` - the real application
 
-`scripts/capture-native-screenshots.ps1` startet das gebaute `MeetingNotes.exe` in der
-interaktiven Windows-Sitzung und zeichnet das echte Fenster mit
-`PrintWindow(PW_RENDERFULLCONTENT)` auf. Das Bild enthaelt dadurch echten
-Fensterrahmen, echtes App-Icon, echten WebView2-Inhalt und - bei
-`08-taskbar-mit-app-icon.png` - die echte Windows-Taskleiste mit dem Icon der App.
+`scripts/capture-native-screenshots.ps1` starts the built `MeetingNotes.exe` in the
+interactive Windows session and records the real window with
+`PrintWindow(PW_RENDERFULLCONTENT)`. The image therefore contains the real
+window frame, the real app icon, the real WebView2 content and - with
+`08-taskbar-mit-app-icon.png` - the real Windows taskbar with the app icon.
 
-Aufruf: `npm run screenshots:native` (siehe `scripts/run-native-capture.ps1`).
+Run: `npm run screenshots:native` (see `scripts/run-native-capture.ps1`).
 
-| Datei | Inhalt |
+| File | Content |
 |---|---|
-| `native/01-startbildschirm.png` | Hauptfenster mit den Audio-Einstellungen der Startseite |
-| `native/02-einstellungen-oben.png` | Einstellungen von oben: Allgemein, Transkription, Azure |
-| `native/03-einstellungen-unten.png` | Einstellungen von unten: Azure und Proxy |
-| `native/04-verbindungstest.png` | Verbindungstest gegen den echten Azure-Endpunkt (Dummy-Key -> HTTP 401) |
-| `native/05-sprecherzuordnung.png` | Sprecherzuordnung im Inspector |
-| `native/06-debug-log.png` | Debug-Log mit echten Logzeilen |
-| `native/07-about-dialog.png` | About-Dialog mit App-Icon und Repository-Link |
-| `native/08-taskbar-mit-app-icon.png` | Windows-Taskleiste mit dem Icon von Meeting Notes |
+| `native/01-startbildschirm.png` | Main window with the audio settings of the start page |
+| `native/02-einstellungen-oben.png` | Settings from the top: General, Transcription, Azure |
+| `native/03-einstellungen-unten.png` | Settings from the bottom: Azure and Proxy |
+| `native/04-verbindungstest.png` | Connection test against the real Azure endpoint (dummy key -> HTTP 401) |
+| `native/05-sprecherzuordnung.png` | Speaker mapping in the inspector |
+| `native/06-debug-log.png` | Debug log with real log lines |
+| `native/07-about-dialog.png` | About dialog with app icon and repository link |
+| `native/08-taskbar-mit-app-icon.png` | Windows taskbar with the Meeting Notes icon |
 
-## `renderer/` - headless Renderer
+## `renderer/` - headless renderer
 
-`npm run screenshots` (`scripts/capture-screenshots.mjs`) rendert dieselbe
-React-Oberflaeche headless ueber den Vite-Dev-Server; nur die Tauri-Bridge ist eine
-Attrappe mit realistischen Daten. Das wird nur fuer Zustaende gebraucht, die native
-nicht herstellbar sind - etwa eine laufende Aufnahme mit Transkript, weil eine echte
-Aufnahme Azure-Speech-Credentials braucht.
+`npm run screenshots` (`scripts/capture-screenshots.mjs`) renders the same
+React interface headless through the Vite dev server; only the Tauri bridge is a
+mock with realistic data. This is only needed for states that cannot be produced
+natively - such as a running recording with a transcript, because a real
+recording requires Azure Speech credentials.
 
-| Datei | Inhalt |
+| File | Content |
 |---|---|
-| `renderer/01-startbildschirm.png` | Startbildschirm mit Audio-Einstellungen |
-| `renderer/02-aufnahme-transkript.png` | Laufende Aufnahme mit Transkript und Sprechern |
-| `renderer/03-einstellungen-oben.png` | Einstellungen von oben: Allgemein, Transkription, Azure |
-| `renderer/04-einstellungen-unten.png` | Einstellungen von unten: Azure und Proxy |
-| `renderer/05-verbindungstest.png` | Diagnose-Dialog Verbindungstest |
-| `renderer/06-sprecherzuordnung.png` | Sprecherzuordnung im Inspector |
-| `renderer/07-debug-log.png` | Debug-Log-Dock |
-| `renderer/08-about-dialog.png` | About-Dialog |
+| `renderer/01-startbildschirm.png` | Start screen with the audio settings |
+| `renderer/02-aufnahme-transkript.png` | Running recording with transcript and speakers |
+| `renderer/03-einstellungen-oben.png` | Settings from the top: General, Transcription, Azure |
+| `renderer/04-einstellungen-unten.png` | Settings from the bottom: Azure and Proxy |
+| `renderer/05-verbindungstest.png` | Connection test diagnostics dialog |
+| `renderer/06-sprecherzuordnung.png` | Speaker mapping in the inspector |
+| `renderer/07-debug-log.png` | Debug log dock |
+| `renderer/08-about-dialog.png` | About dialog |
 
-## Warum nur zwei Einstellungsbilder
+## Why only two settings images
 
-Der Dialog ist nach dem Umbau eine kompakte Seite: die Abschnitte **Allgemein**,
-**Transkription**, **Azure** und **Proxy** passen in einem Bild teilweise nebeneinander,
-und die Audio-Schalter liegen nur noch auf der Startseite. Vier Einzelaufnahmen
-wuerden deshalb Byte-Duplikate ergeben. Zwei Aufnahmen - von oben und von unten -
-zeigen den ganzen Dialog ohne Duplikat.
+After the redesign the dialog is one compact page: the sections **General**,
+**Transcription**, **Azure** and **Proxy** are stacked, and several sections
+partially fit into one image. Audio switches now live only on the start page. Four individual
+captures would therefore produce byte duplicates. Two captures - from the top
+and from the bottom - show the whole dialog without a duplicate.

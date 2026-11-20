@@ -243,7 +243,7 @@ function Click([string]$needle, [string]$type) {
   return $true
 }
 
-# Exact name match. A substring match would hit 'Audio Einstellungen' in the
+# Exact name match. A substring match would hit 'Audio settings' in the
 # background panel behind the dialog and scroll the wrong element.
 function Find-El-Exact([string]$name, [string]$type) {
   $all = All-Elements
@@ -313,13 +313,13 @@ function Scroll-To([string]$name, [int]$band) {
 }
 
 L '=== 1 main window ==='
-Click 'Fehlermeldung schlie' $null | Out-Null
-Click 'Dialog schlie' $null | Out-Null
+Click 'Close error message' $null | Out-Null
+Click 'Close dialog' $null | Out-Null
 Start-Sleep -Seconds 1
 Grab '01-startbildschirm'
 
-L '=== 2 settings allgemein ==='
-Click 'Einstellungsdialog' $null | Out-Null
+L '=== 2 settings general ==='
+Click 'Open settings dialog' $null | Out-Null
 Grab '02-einstellungen-oben'
 
 L '=== 3 settings unten ==='
@@ -328,32 +328,33 @@ Start-Sleep -Milliseconds 900
 Grab '03-einstellungen-unten'
 
 L '=== 6 connection test ==='
-Click 'Verbindung testen' $null | Out-Null
-for ($i = 0; $i -lt 18; $i++) {
-  Start-Sleep -Seconds 5
-  if (Find-El 'Verbindungstest anzeigen' $null) { L ('  test finished after ' + (($i + 1) * 5) + 's'); break }
+Click 'Test connection' $null | Out-Null
+# Starting the test opens this dialog and closes Settings immediately.
+# The reopen-result buttons are therefore not in the accessibility tree here.
+Start-Sleep -Seconds 5
+if (-not (Find-El 'Connection test' $null)) {
+  throw 'Connection test dialog not found; refusing to capture the wrong state.'
 }
-Click 'Verbindungstest anzeigen' $null | Out-Null
-Start-Sleep -Seconds 2
+L '  connection dialog open; capturing live diagnostics (not a completed-test assertion)'
 Grab '04-verbindungstest'
-# Erst den Verbindungsdialog, dann den Settings-Dialog schliessen.
-Click 'Dialog schlie' $null | Out-Null
+# First close the connection dialog, then the settings dialog.
+Click 'Close dialog' $null | Out-Null
 Start-Sleep -Milliseconds 900
-Click 'Dialog schlie' $null | Out-Null
+Click 'Close dialog' $null | Out-Null
 Start-Sleep -Milliseconds 900
 
 L '=== 7 speakers ==='
-Click 'Sprecherzuordnung' $null | Out-Null
+Click 'Speaker mapping' $null | Out-Null
 Grab '05-sprecherzuordnung'
 
 L '=== 8 debug log ==='
-Click 'Weitere Aktionen' $null | Out-Null
-Click 'Debug-Log' $null | Out-Null
+Click 'More actions' $null | Out-Null
+Click 'Debug log' $null | Out-Null
 Start-Sleep -Milliseconds 800
 Grab '06-debug-log'
 
 L '=== 9 about dialog ==='
-Click 'Weitere Aktionen' $null | Out-Null
+Click 'More actions' $null | Out-Null
 Click 'About' $null | Out-Null
 Start-Sleep -Milliseconds 900
 Grab '07-about-dialog'

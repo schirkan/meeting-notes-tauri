@@ -84,7 +84,7 @@ export function useAppState() {
     try {
       await window.transcriptApi.toggleDevtools()
     } catch (error) {
-      setToast({ message: errorDetail(error, 'Dev-Tools konnten nicht umgeschaltet werden.'), variant: 'error', persistent: true })
+      setToast({ message: errorDetail(error, 'Developer tools could not be toggled.'), variant: 'error', persistent: true })
     }
   }
 
@@ -92,7 +92,7 @@ export function useAppState() {
     try {
       await window.transcriptApi.openRepository()
     } catch (error) {
-      setToast({ message: errorDetail(error, 'Repository konnte nicht geöffnet werden.'), variant: 'error', persistent: true })
+      setToast({ message: errorDetail(error, 'The repository could not be opened.'), variant: 'error', persistent: true })
     }
   }
 
@@ -110,9 +110,9 @@ export function useAppState() {
     const transcriptApi = window.transcriptApi
 
     if (!transcriptApi) {
-      setRuntimeIssue('IPC-Bridge nicht verfügbar. Prüfe Preload/Dev-Start.')
+      setRuntimeIssue('The IPC bridge is not available. Check the preload or the dev start.')
       setToast({
-        message: 'IPC-Bridge nicht verfügbar. Prüfe Preload/Dev-Start.',
+        message: 'The IPC bridge is not available. Check the preload or the dev start.',
         variant: 'error',
         persistent: true
       })
@@ -129,7 +129,7 @@ export function useAppState() {
         if (!nextConfig.exists || !isConfigComplete(nextConfig.config)) {
           setSettingsDialogOpen(true)
           setToast({
-            message: 'Azure-Konfiguration fehlt oder ist unvollständig. Bitte in den Einstellungen ergänzen und speichern.',
+            message: 'Azure configuration is missing or incomplete. Please complete it in the settings and save.',
             variant: 'error',
             persistent: true
           })
@@ -139,7 +139,7 @@ export function useAppState() {
         if (disposed) return
         setSettingsDialogOpen(true)
         setToast({
-          message: 'Azure-Konfiguration konnte nicht geladen werden. Bitte in den Einstellungen prüfen und speichern.',
+          message: 'The Azure configuration could not be loaded. Please check it in the settings and save.',
           variant: 'error',
           persistent: true
         })
@@ -165,7 +165,7 @@ export function useAppState() {
       })
       .catch((error) => {
         if (disposed) return
-        const message = error instanceof Error ? error.message : 'Initialdaten konnten nicht geladen werden.'
+        const message = error instanceof Error ? error.message : 'The initial data could not be loaded.'
         setRuntimeIssue(message)
         setToast({ message, variant: 'error', persistent: true })
       })
@@ -240,7 +240,7 @@ export function useAppState() {
       setMeetingDetected(detected)
       setToast({
         message:
-          `Meeting erkannt (${detected.processName}). Die Aufnahme startet automatisch.`,
+          `Meeting detected (${detected.processName}). Recording starts automatically.`,
         variant: 'info',
         persistent: false
       })
@@ -250,13 +250,13 @@ export function useAppState() {
     // Das Ereignis kam bisher bis zum Preload, wurde aber von niemandem
     // abonniert - die Oberflaeche blieb bei einem Crash stumm.
     const unsubCrashed = window.transcriptSidecar?.onCrashed((payload) => {
-      setLastError({ code: 'SIDECAR_UNAVAILABLE', message: 'Der Aufnahmedienst ist abgestuerzt.' })
+      setLastError({ code: 'SIDECAR_UNAVAILABLE', message: 'The recording service has crashed.' })
       setStatus((prev) => ({ ...prev, running: false, paused: false }))
       setIsStarting(false)
       setToast({
         message:
-          `Sidecar abgestuerzt (Exit-Code ${payload.exitCode ?? 'unbekannt'}). ` +
-          'Die Aufnahme muss neu gestartet werden.',
+          `Sidecar crashed (exit code ${payload.exitCode ?? 'unknown'}). ` +
+          'The recording must be restarted.',
         variant: 'error',
         persistent: true
       })
@@ -354,20 +354,20 @@ export function useAppState() {
   }, [configState])
 
   const statusLabel = useMemo(() => {
-    if (isStarting) return 'Startet'
-    if (status.paused) return 'Pausiert'
-    if (status.running) return 'Läuft'
-    if (configState && !isConfigComplete(configState.config)) return 'Fehler'
-    if (lastError) return 'Fehler'
-    return 'Gestoppt'
+    if (isStarting) return 'Starting'
+    if (status.paused) return 'Paused'
+    if (status.running) return 'Running'
+    if (configState && !isConfigComplete(configState.config)) return 'Error'
+    if (lastError) return 'Error'
+    return 'Stopped'
   }, [configState, isStarting, lastError, status.paused, status.running])
 
   const statusDescription = useMemo(() => {
-    if (isStarting) return 'Transkription wird gestartet ...'
-    if (status.paused) return 'Aufnahme pausiert — Sitzung bleibt aktiv'
-    if (status.running) return 'Transkription aktiv'
-    if (!isConfigReady) return 'Konfiguration unvollständig'
-    return 'Bereit zum Starten'
+    if (isStarting) return 'Transcription is starting ...'
+    if (status.paused) return 'Recording paused - the session stays active'
+    if (status.running) return 'Transcription active'
+    if (!isConfigReady) return 'Configuration incomplete'
+    return 'Ready to start'
   }, [isConfigReady, isStarting, status.paused, status.running])
 
   const finalCount = segments.filter((segment) => segment.state === 'final').length
@@ -415,7 +415,7 @@ export function useAppState() {
     const startedAt = status.startedAt ?? sessionStartedAt
     if (!startedAt) return '---'
 
-    return new Date(startedAt).toLocaleTimeString('de-DE', {
+    return new Date(startedAt).toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit'
@@ -488,9 +488,9 @@ export function useAppState() {
       setNow(Date.now())
       setStatus(next)
       setSessionStartedAt(next.startedAt ?? new Date().toISOString())
-      setToast({ message: 'Neues Transkript gestartet.', variant: 'info', persistent: false })
+      setToast({ message: 'New transcript started.', variant: 'info', persistent: false })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Start fehlgeschlagen.'
+      const message = error instanceof Error ? error.message : 'Start failed.'
       setLastError({ code: 'UI_START_FAILED', message })
       setToast({ message: `UI_START_FAILED: ${message}`, variant: 'error', persistent: true })
     } finally {
@@ -504,7 +504,7 @@ export function useAppState() {
       setNow(Date.now())
       setStatus(next)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Stop fehlgeschlagen.'
+      const message = error instanceof Error ? error.message : 'Stop failed.'
       setLastError({ code: 'UI_STOP_FAILED', message })
       setToast({ message: `UI_STOP_FAILED: ${message}`, variant: 'error', persistent: true })
     }
@@ -518,7 +518,7 @@ export function useAppState() {
       setNow(Date.now())
       setStatus(next)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Pause fehlgeschlagen.'
+      const message = error instanceof Error ? error.message : 'Pause failed.'
       setLastError({ code: 'UI_PAUSE_FAILED', message })
       setToast({ message: `UI_PAUSE_FAILED: ${message}`, variant: 'error', persistent: true })
     }
@@ -530,7 +530,7 @@ export function useAppState() {
       setNow(Date.now())
       setStatus(next)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Fortsetzen fehlgeschlagen.'
+      const message = error instanceof Error ? error.message : 'Resume failed.'
       setLastError({ code: 'UI_RESUME_FAILED', message })
       setToast({ message: `UI_RESUME_FAILED: ${message}`, variant: 'error', persistent: true })
     }
@@ -547,7 +547,7 @@ export function useAppState() {
 
   const onResetTranscript = async () => {
     if (status.running || isStarting) return
-    const shouldReset = window.confirm('Transkript, Startzeit und Dauer wirklich zurücksetzen?')
+    const shouldReset = window.confirm('Really reset the transcript, start time and duration?')
     if (!shouldReset) {
       return
     }
@@ -583,7 +583,7 @@ export function useAppState() {
           setSettingsHint(null)
         }
       } catch (error) {
-        const message = errorDetail(error, 'Einstellungen konnten nicht automatisch gespeichert werden.')
+        const message = errorDetail(error, 'The settings could not be saved automatically.')
         if (revision === settingsSaveRevisionRef.current) {
           settingsSaveErrorRef.current = message
           setSettingsSaveFailed(true)
@@ -623,7 +623,7 @@ export function useAppState() {
         setDevices(refreshedDevices)
         setSettingsHint(null)
       } catch (error) {
-        const message = errorDetail(error, 'Einstellungen konnten nicht gespeichert werden.')
+        const message = errorDetail(error, 'The settings could not be saved.')
         settingsSaveErrorRef.current = message
         setSettingsSaveFailed(true)
         errors.push(message)
@@ -635,7 +635,7 @@ export function useAppState() {
         setConfigState(savedState)
         setConfigDraft(toConfigDraft(savedState.config))
       } catch (error) {
-        errors.push(errorDetail(error, 'Azure-Konfiguration konnte nicht gespeichert werden.'))
+        errors.push(errorDetail(error, 'The Azure configuration could not be saved.'))
       }
 
       if (revision === settingsSaveRevisionRef.current) setIsSavingSettings(false)
@@ -647,7 +647,7 @@ export function useAppState() {
       }
 
       setSettingsDialogOpen(false)
-      setToast({ message: 'Einstellungen gespeichert.', variant: 'info', persistent: false })
+      setToast({ message: 'Settings saved.', variant: 'info', persistent: false })
     })
     settingsSaveQueueRef.current = save
     await save
@@ -667,7 +667,7 @@ export function useAppState() {
         }
       }))
     } catch (error) {
-      const message = errorDetail(error, 'Speicherordner konnte nicht ausgewählt werden.')
+      const message = errorDetail(error, 'The save folder could not be selected.')
       setToast({ message, variant: 'error', persistent: true })
     } finally {
       setIsChoosingDirectory(false)
@@ -706,7 +706,7 @@ export function useAppState() {
       })
 
     } catch (error) {
-      const message = errorDetail(error, 'Verbindungstest fehlgeschlagen.')
+      const message = errorDetail(error, 'Connection test failed.')
       setConnectivityResult({
         reachable: false,
         httpsReachable: false,
@@ -716,7 +716,7 @@ export function useAppState() {
         error: message,
         testedAtIso: new Date().toISOString(),
         steps: [{
-          step: requestSubmitted ? 'IPC / Diagnose starten' : 'Konfiguration prüfen',
+          step: requestSubmitted ? 'IPC / Start diagnostics' : 'Check configuration',
           status: 'error',
           detail: message
         }]
@@ -729,9 +729,9 @@ export function useAppState() {
   const onCopyTranscript = async () => {
     try {
       await window.transcriptApi.copyTranscript(labeledSegments)
-      setToast({ message: 'Finales Transkript wurde in die Zwischenablage kopiert.', variant: 'info', persistent: false })
+      setToast({ message: 'The final transcript was copied to the clipboard.', variant: 'info', persistent: false })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Kopieren fehlgeschlagen.'
+      const message = error instanceof Error ? error.message : 'Copy failed.'
       setToast({ message, variant: 'error', persistent: true })
     }
   }
@@ -740,9 +740,9 @@ export function useAppState() {
     try {
       const result = await window.transcriptApi.clearDebugLog()
       setDebugLog([])
-      setToast({ message: `Debug-Log gelöscht (${result.cleared} Einträge).`, variant: 'info', persistent: false })
+      setToast({ message: `Debug log cleared (${result.cleared} entries).`, variant: 'info', persistent: false })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Debug-Log konnte nicht gelöscht werden.'
+      const message = error instanceof Error ? error.message : 'The debug log could not be cleared.'
       setToast({ message, variant: 'error', persistent: true })
     }
   }
@@ -781,9 +781,9 @@ export function useAppState() {
     try {
       const markdown = buildTranscriptMarkdown(segmentsToExport)
       const path = await window.transcriptApi.saveTranscriptMarkdown(markdown)
-      setToast({ message: `Transkript gespeichert: ${path}`, variant: 'info', persistent: false })
+      setToast({ message: `Transcript saved: ${path}`, variant: 'info', persistent: false })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Transkript konnte nicht gespeichert werden.'
+      const message = error instanceof Error ? error.message : 'The transcript could not be saved.'
       setToast({ message, variant: 'error', persistent: true })
     }
   }
@@ -931,7 +931,7 @@ export function useAppState() {
       if (isSavingSettings || isChoosingDirectory) return
       const dirty = JSON.stringify(dialogSettings) !== JSON.stringify(dialogSettingsBaselineRef.current)
         || JSON.stringify(configDraft) !== JSON.stringify(toConfigDraft(configState?.config ?? null))
-      if (dirty && !window.confirm('Ungespeicherte Änderungen verwerfen?')) return
+      if (dirty && !window.confirm('Discard unsaved changes?')) return
       setDialogSettings(settingsRef.current)
       setConfigDraft(toConfigDraft(configState?.config ?? null))
       setSettingsDialogOpen(false)

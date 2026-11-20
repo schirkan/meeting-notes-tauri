@@ -13,9 +13,9 @@
  * Belegt: Layout, Texte, Dialoge, Zustaende, Farben.
  * Nicht belegt: natives Fensterrahmens, Tray-Icon, WebView2, Aufnahme-Pipeline.
  *
- * Diese Datei ist bewusst reines ASCII: die Umlaute in den deutschen
- * Oberflaechentexten werden per \u-Escape geschrieben. Damit kann die Datei
- * nicht durch eine falsche Console-Kodierung zerstoert werden.
+ * Diese Datei ist bewusst reines ASCII: englische UI-Texte und Demo-Daten
+ * vermeiden Console-Kodierungsprobleme. Die UI-Sprache ist unabhaengig von
+ * der gewaehlten Transkriptionssprache.
  *
  * Aufruf: npm run screenshots
  */
@@ -31,17 +31,17 @@ const PROJECT_ROOT = join(__dirname, '..')
 const OUTPUT_DIR = join(PROJECT_ROOT, 'docs', 'renderer')
 const VIEWPORT = { width: 1280, height: 860 }
 
-// Deutsche Oberflaechentexte als Unicode-Escapes (ASCII-sichere Datei).
+// Englische Oberflaechentexte (ASCII-sichere Datei).
 const TXT = {
-  openSettings: 'Einstellungsdialog \u00f6ffnen',
-  settingsDialog: 'Einstellungen',
+  openSettings: 'Open settings dialog',
+  settingsDialog: 'Settings',
   tabAzure: 'Azure',
-  tabTranscription: 'Transkription',
+  tabTranscription: 'Transcription',
   tabProxy: 'Proxy',
-  tabGeneral: 'Allgemein',
-  testConnection: 'Verbindung testen',
-  connectivityDialog: 'Verbindungstest',
-  debugLog: 'Debug-Log'
+  tabGeneral: 'General',
+  testConnection: 'Test connection',
+  connectivityDialog: 'Connection test',
+  debugLog: 'Debug log'
 }
 
 const validConfig = {
@@ -52,7 +52,7 @@ const validConfig = {
 }
 
 const userSettings = {
-  language: 'de-DE',
+  language: 'en-US',
   transcription: { mic: true, speaker: true },
   diarization: { mic: true, speaker: true },
   devices: { micId: 'mic-demo', speakerLoopbackId: 'speaker-demo' },
@@ -63,22 +63,22 @@ const userSettings = {
 
 const devices = {
   inputs: [
-    { id: 'mic-demo', name: 'Demo-Mikrofon (Windows-Audiogeraet)', flow: 'input', isDefault: true },
-    { id: 'mic-two', name: 'Zweites Demo-Mikrofon', flow: 'input', isDefault: false }
+    { id: 'mic-demo', name: 'Demo microphone (Windows audio device)', flow: 'input', isDefault: true },
+    { id: 'mic-two', name: 'Second demo microphone', flow: 'input', isDefault: false }
   ],
   outputs: [
-    { id: 'speaker-demo', name: 'Demo-Lautsprecher (Windows-Audiogeraet)', flow: 'output', isDefault: true },
-    { id: 'speaker-two', name: 'Demo-Kopfhoerer', flow: 'output', isDefault: false }
+    { id: 'speaker-demo', name: 'Demo speaker (Windows audio device)', flow: 'output', isDefault: true },
+    { id: 'speaker-two', name: 'Demo headphones', flow: 'output', isDefault: false }
   ],
   fetchedAtIso: new Date(2026, 10, 18, 9, 12, 3).toISOString()
 }
 
 const debugLog = [
-  { id: 'd1', timestampIso: new Date(2026, 10, 18, 9, 12, 1).toISOString(), source: 'main', level: 'info', message: 'Meeting Notes initialisiert.' },
-  { id: 'd2', timestampIso: new Date(2026, 10, 18, 9, 12, 2).toISOString(), source: 'main', level: 'info', message: 'Meeting-Erkennung gestartet (Audio-Session-Graph).' },
+  { id: 'd1', timestampIso: new Date(2026, 10, 18, 9, 12, 1).toISOString(), source: 'main', level: 'info', message: 'Meeting Notes initialized.' },
+  { id: 'd2', timestampIso: new Date(2026, 10, 18, 9, 12, 2).toISOString(), source: 'main', level: 'info', message: 'Meeting detection started (audio session graph).' },
   { id: 'd3', timestampIso: new Date(2026, 10, 18, 9, 12, 3).toISOString(), source: 'sidecar', level: 'info', message: 'recorder_mode: engine (16 kHz, 16 bit, mono)' },
-  { id: 'd4', timestampIso: new Date(2026, 10, 18, 9, 12, 4).toISOString(), source: 'status', level: 'info', message: 'Status geaendert: running.' },
-  { id: 'd5', timestampIso: new Date(2026, 10, 18, 9, 12, 5).toISOString(), source: 'ipc', level: 'warn', message: 'Konfiguration nicht lesbar: Berechtigung verweigert' }
+  { id: 'd4', timestampIso: new Date(2026, 10, 18, 9, 12, 4).toISOString(), source: 'status', level: 'info', message: 'Status changed: running.' },
+  { id: 'd5', timestampIso: new Date(2026, 10, 18, 9, 12, 5).toISOString(), source: 'ipc', level: 'warn', message: 'Configuration not readable: permission denied' }
 ]
 
 const connectivityResult = {
@@ -90,10 +90,10 @@ const connectivityResult = {
   httpStatusText: 'OK',
   latencyMs: 143,
   steps: [
-    { step: 'DNS-Aufloesung', status: 'ok', detail: 'example.test -> 203.0.113.10' },
-    { step: 'TCP-Verbindung', status: 'ok', detail: 'Port 443 erreichbar (24 ms)' },
-    { step: 'HTTPS-Handshake', status: 'ok', detail: 'TLS 1.3, Zertifikat gegen Systemvertrauen geprueft' },
-    { step: 'Speech/WSS', status: 'ok', detail: 'ConversationTranscriber verbunden' }
+    { step: 'DNS resolution', status: 'ok', detail: 'example.test -> 203.0.113.10' },
+    { step: 'TCP connection', status: 'ok', detail: 'Port 443 reachable (24 ms)' },
+    { step: 'HTTPS handshake', status: 'ok', detail: 'TLS 1.3, certificate checked against the system trust store' },
+    { step: 'Speech/WSS', status: 'ok', detail: 'ConversationTranscriber connected' }
   ],
   testedAtIso: new Date(2026, 10, 18, 9, 12, 6).toISOString()
 }
@@ -102,12 +102,12 @@ const connectivityResult = {
 function dummySegments() {
   const at = (second) => new Date(2026, 10, 18, 9, 13, second).toISOString()
   return [
-    { id: 's1', sessionId: 'demo-session', source: 'mic', speaker: 'Guest-1', language: 'de-DE', timestampIso: at(1), text: 'Guten Morgen zusammen, wir schauen uns heute den Stand des Transkripts an.', state: 'final' },
-    { id: 's2', sessionId: 'demo-session', source: 'speaker', speaker: 'Guest-2', language: 'de-DE', timestampIso: at(6), text: 'Danke. Der Abruf aus dem System-Ton liefert bereits brauchbare Saetze.', state: 'final' },
-    { id: 's3', sessionId: 'demo-session', source: 'mic', speaker: 'Guest-1', language: 'de-DE', timestampIso: at(11), text: 'Die Sprechertrennung ordnet Mic und System-Ausgabe getrennt zu.', state: 'final' },
-    { id: 's4', sessionId: 'demo-session', source: 'speaker', speaker: 'Guest-2', language: 'de-DE', timestampIso: at(16), text: 'Dann exportieren wir am Ende als Markdown mit Frontmatter.', state: 'final' },
-    { id: 's5', sessionId: 'demo-session', source: 'mic', speaker: 'Guest-1', language: 'de-DE', timestampIso: at(21), text: 'Genau, mit Zeitstempeln und Sprechernamen.', state: 'final' },
-    { id: 's6', sessionId: 'demo-session', source: 'speaker', speaker: 'Guest-2', language: 'de-DE', timestampIso: at(24), text: 'Ich notiere noch die offenen Punkte fuer das naechste', state: 'interim' }
+    { id: 's1', sessionId: 'demo-session', source: 'mic', speaker: 'Guest-1', language: 'en-US', timestampIso: at(1), text: 'Good morning, everyone. Today we are reviewing the transcript.', state: 'final' },
+    { id: 's2', sessionId: 'demo-session', source: 'speaker', speaker: 'Guest-2', language: 'en-US', timestampIso: at(6), text: 'Thank you. System audio capture is already producing useful sentences.', state: 'final' },
+    { id: 's3', sessionId: 'demo-session', source: 'mic', speaker: 'Guest-1', language: 'en-US', timestampIso: at(11), text: 'Speaker separation assigns the mic and the system output separately.', state: 'final' },
+    { id: 's4', sessionId: 'demo-session', source: 'speaker', speaker: 'Guest-2', language: 'en-US', timestampIso: at(16), text: 'Then we will export Markdown with frontmatter when we finish.', state: 'final' },
+    { id: 's5', sessionId: 'demo-session', source: 'mic', speaker: 'Guest-1', language: 'en-US', timestampIso: at(21), text: 'Exactly, with timestamps and speaker names.', state: 'final' },
+    { id: 's6', sessionId: 'demo-session', source: 'speaker', speaker: 'Guest-2', language: 'en-US', timestampIso: at(24), text: 'I am noting the open questions for the next', state: 'interim' }
   ]
 }
 
@@ -205,19 +205,19 @@ async function main() {
   try {
     let page = await openApp(browser, baseUrl)
     await page.waitForSelector('.idle-audio-panel')
-    await capture(page, '01-startbildschirm.png', 'Startbildschirm mit Audio-Einstellungen')
+    await capture(page, '01-startbildschirm.png', 'Start screen with the audio settings')
     await page.close()
 
-    page = await openApp(browser, baseUrl, { running: true, startedAt: new Date(2026, 10, 18, 9, 13, 0).toISOString() })
+    page = await openApp(browser, baseUrl, { running: true, startedAt: new Date(Date.now() - 83000).toISOString() })
     await emitDummyTranscript(page)
     await page.waitForTimeout(400)
-    await capture(page, '02-aufnahme-transkript.png', 'Laufende Aufnahme mit Transkript und Sprechern')
+    await capture(page, '02-aufnahme-transkript.png', 'Running recording with transcript and speakers')
     await page.close()
 
     page = await openApp(browser, baseUrl)
     await page.getByRole('button', { name: TXT.openSettings }).click()
     await page.getByRole('dialog', { name: TXT.settingsDialog, exact: true }).waitFor()
-    await capture(page, '03-einstellungen-oben.png', 'Einstellungen - Allgemein, Transkription, Azure')
+    await capture(page, '03-einstellungen-oben.png', 'Settings - General, Transcription, Azure')
     await page.close()
 
     page = await openApp(browser, baseUrl)
@@ -225,7 +225,7 @@ async function main() {
     const settingsDialog = page.getByRole('dialog', { name: TXT.settingsDialog, exact: true })
     await settingsDialog.waitFor()
     await scrollDialogToBottom(page)
-    await capture(page, '04-einstellungen-unten.png', 'Einstellungen - Azure und Proxy')
+    await capture(page, '04-einstellungen-unten.png', 'Settings - Azure and Proxy')
     await page.close()
 
     page = await openApp(browser, baseUrl)
@@ -236,15 +236,15 @@ async function main() {
     await testDialog.getByRole('button', { name: TXT.testConnection, exact: true }).click()
     await page.getByRole('dialog', { name: TXT.connectivityDialog, exact: true }).waitFor()
     await page.waitForTimeout(300)
-    await capture(page, '05-verbindungstest.png', 'Diagnose-Dialog Verbindungstest')
+    await capture(page, '05-verbindungstest.png', 'Connection test diagnostics dialog')
     await page.close()
 
-    page = await openApp(browser, baseUrl, { running: true, startedAt: new Date(2026, 10, 18, 9, 13, 0).toISOString() })
+    page = await openApp(browser, baseUrl, { running: true, startedAt: new Date(Date.now() - 83000).toISOString() })
     await emitDummyTranscript(page)
     await page.locator('.utility-actions button[aria-controls="console-speakers"]').click()
     await page.waitForSelector('#console-speakers:not([hidden])')
     await page.waitForTimeout(300)
-    await capture(page, '06-sprecherzuordnung.png', 'Sprecherzuordnung im Inspector')
+    await capture(page, '06-sprecherzuordnung.png', 'Speaker mapping in the inspector')
     await page.close()
 
     page = await openApp(browser, baseUrl)
@@ -252,7 +252,7 @@ async function main() {
     await page.getByRole('button', { name: TXT.debugLog, exact: true }).click()
     await page.waitForSelector('.console-debug')
     await page.waitForTimeout(400)
-    await capture(page, '07-debug-log.png', 'Debug-Log-Dock')
+    await capture(page, '07-debug-log.png', 'Debug log dock')
     await page.close()
 
     page = await openApp(browser, baseUrl)
@@ -269,7 +269,7 @@ async function main() {
 
   console.log('Fertig. Die Renderer-Screenshots liegen in docs/renderer.')
   if (failures.length > 0) {
-    console.error('Fehlgeschlagene Aufnahmen: ' + failures.join(' | '))
+    console.error('Failed captures: ' + failures.join(' | '))
     process.exitCode = 1
   }
 }

@@ -184,7 +184,7 @@ export function validateUserSettings(settings: UserSettings): UserSettingsValida
 
   if (!isValidBcp47Language(settings.language)) {
     warnings.push(
-      `Ungültiger Sprachcode "${settings.language}" (erwartet BCP-47, z. B. "de-DE"). Es wird auf "${DEFAULT_USER_SETTINGS.language}" zurückgefallen.`
+      `Invalid language code "${settings.language}" (expected BCP-47, e.g. "de-DE"). Falling back to "${DEFAULT_USER_SETTINGS.language}" `
     )
   }
 

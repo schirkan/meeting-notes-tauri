@@ -1,10 +1,10 @@
 {
-  "_comment": "Beispielkonfiguration. Diese Datei nach 'MeetingNotes.config.json' kopieren und anpassen. Die echte Datei liegt direkt neben der EXE (Release) bzw. im Repository-Root (Dev) und ist in .gitignore. Quelle: src/shared/config-contract.ts -> AppConfig.",
+  "_comment": "Example configuration. Copy this file to 'MeetingNotes.config.json' and adjust it. The real file sits next to the EXE (release) or in the repository root (dev) and is listed in .gitignore. Source: src/shared/config-contract.ts -> AppConfig.",
 
   "azure": {
     "endpoint": "wss://westeurope.stt.speech.microsoft.com/speech/universal/v2",
     "region": "westeurope",
-    "speechKey": "<HIER-DEINEN-AZURE-SPEECH-KEY-EINTRAGEN>",
+    "speechKey": "<YOUR-AZURE-SPEECH-KEY-HERE>",
     "interimResults": true,
     "proxy": {
       "host": "",

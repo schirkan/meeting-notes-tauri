@@ -639,6 +639,26 @@ Minimierungsoption. Kein Kalender und kein neuer Fenster-Fallback.
 auf dem dokumentierten Commit; eine zusaetzliche GitHub-Release-Veroeffentlichung
 ist von diesem Tag getrennt.
 
+## AD-022 - Englisch nach Zielgruppe, nicht nach Dateityp (20.11.2026)
+
+**Vorgabe von Martin:** Die gesamte UI und alle Meldungen sowie README,
+GitHub-Texte und Endanwender-Dokumentation werden englisch. Specs und
+Agenten-Dokumentation duerfen deutsch bleiben.
+
+**Entscheidung:** Nutzer-facing Labels, Accessibility-Texte, Fehler-/Recovery-
+Hinweise, Tray-Texte, Diagnosemeldungen und oeffentliche Dokumentation sind
+englisch. Bestehende GitHub-Release-Notizen werden nur uebersetzt; ihre
+historischen Anforderungen und Abnahmegrenzen bleiben erhalten. Quellcode-
+Kommentare und interne Specs bleiben deutsch.
+
+**Unveraendert:** Konfigurations-/Protokollschluessel, Fehlercodes und Dateinamen.
+Die primaere Transkriptionssprache bleibt standardmaessig `de-DE`; UI-Sprache
+und Transkriptionssprache sind unabhaengig. Anzeigeformatierung nutzt `en-US`.
+Keine neue Lokalisierungsbibliothek oder Sprachauswahl fuer die UI.
+
+**Nachweis:** [T-516](./specs/T-516-englische-oberflaeche-und-oeffentliche-doku.md),
+neue englische Screenshots und Release 0.1.4 nach erfolgreicher Verifikation.
+
 | # | Frage | Status |
 |---|---|---|
 | OQ-1 | Soll der Sidecar-EXE-Name gleich bleiben (`MeetingNotes.Sidecar.exe`) oder umbenannt werden (`MeetingNotes.AudioService.exe` o. ä.)? | offen — wird in `specs/T-201` entschieden |

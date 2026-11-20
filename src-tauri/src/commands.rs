@@ -37,7 +37,7 @@ pub fn open_repository(app: AppHandle) -> Result<(), String> {
     #[allow(deprecated)]
     app.shell()
         .open("https://github.com/schirkan/meeting-notes-tauri", None)
-        .map_err(|error| format!("Repository konnte nicht geoeffnet werden: {error}"))
+        .map_err(|error| format!("The repository could not be opened: {error}"))
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -95,13 +95,13 @@ pub async fn start_recording_with_origin(
     let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
     let mut lifecycle = lifecycle.lock().await;
     if state.snapshot_status().running {
-        return Err("Es laeuft bereits eine Aufnahme.".into());
+        return Err("A recording is already running.".into());
     }
     lifecycle.auto_origin = None;
     if origin.is_some() && !settings::load_user_settings().await.map_err(|e| e.to_string())?.auto_start.enabled {
-        return Err("Automatischer Aufnahmestart ist deaktiviert.".into());
+        return Err("Automatic recording start is disabled.".into());
     }
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "start_recording aufgerufen.");
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "start_recording called.");
 
     let azure = settings::load_azure_config().await.map_err(|e| e.to_string())?;
     let user = settings::load_user_settings().await.map_err(|e| e.to_string())?;
@@ -150,7 +150,7 @@ pub async fn start_recording_with_origin(
     // Sidecar, der nicht antwortet, wuerde sonst stumm bleiben.
     spawn_handshake_timeout(app.clone(), handle.child);
 
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status geändert: running.");
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status changed: running.");
     events::emit_status(&app, &status);
     Ok(status)
 }
@@ -200,7 +200,7 @@ async fn stop_recording_inner(
     app: &AppHandle,
     state: &AppState,
 ) -> Result<events::TranscriptStatus, String> {
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "stop_recording aufgerufen.");
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "stop_recording called.");
 
     let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
     let handle = {
@@ -212,14 +212,14 @@ async fn stop_recording_inner(
     }
 
     let status = state.mark_stopped();
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status geändert: stopped.");
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status changed: stopped.");
     events::emit_status(&app, &status);
     Ok(status)
 }
 
 fn require_running_recording(state: &AppState) -> Result<(), String> {
     if state.snapshot_status().running { Ok(()) }
-    else { Err("Es laeuft keine Aufnahme.".into()) }
+    else { Err("No recording is running.".into()) }
 }
 
 #[cfg(test)]
@@ -252,18 +252,18 @@ mod lifecycle_tests {
         let mut auto_start = crate::settings::AutoStartSettings::default();
         assert!(
             auto_stop_allowed(&auto_start),
-            "Auto-Start und Auto-Stop sind standardmaessig an"
+            "Auto-start and auto-stop are enabled by default"
         );
         auto_start.auto_stop = false;
         assert!(
             !auto_stop_allowed(&auto_start),
-            "Abgeschalteter Auto-Stop beendet die Aufnahme nicht"
+            "A disabled auto-stop does not stop the recording"
         );
         auto_start.auto_stop = true;
         auto_start.enabled = false;
         assert!(
             !auto_stop_allowed(&auto_start),
-            "Ohne Auto-Start gibt es nichts automatisch zu beenden"
+            "Without auto-start there is nothing to stop automatically"
         );
     }
 }
@@ -279,7 +279,7 @@ pub async fn pause_recording(
     let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
     let _lifecycle = lifecycle.lock().await;
     require_running_recording(&state)?;
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "pause_recording aufgerufen.");
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "pause_recording called.");
 
     let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
     let handle = {
@@ -298,7 +298,7 @@ pub async fn pause_recording(
             &state,
             DebugLogEntrySource::Sidecar,
             DebugLogEntryLevel::Info,
-            "Pause-Befehl an Sidecar gesendet.",
+            "Pause command sent to the sidecar.",
         );
     } else {
         push_and_emit_debug(
@@ -306,13 +306,13 @@ pub async fn pause_recording(
             &state,
             DebugLogEntrySource::Main,
             DebugLogEntryLevel::Warn,
-            "Pause angefordert, aber es laeuft kein Sidecar.",
+            "Pause requested, but no sidecar is running.",
         );
-        return Err("Es laeuft kein Sidecar.".into());
+        return Err("No sidecar is running.".into());
     }
 
     let status = state.mark_paused();
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status geaendert: paused.");
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status changed: paused.");
     events::emit_status(&app, &status);
     Ok(status)
 }
@@ -326,7 +326,7 @@ pub async fn resume_recording(
     let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
     let _lifecycle = lifecycle.lock().await;
     require_running_recording(&state)?;
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "resume_recording aufgerufen.");
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "resume_recording called.");
 
     let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
     let handle = {
@@ -345,7 +345,7 @@ pub async fn resume_recording(
             &state,
             DebugLogEntrySource::Sidecar,
             DebugLogEntryLevel::Info,
-            "Resume-Befehl an Sidecar gesendet.",
+            "Resume command sent to the sidecar.",
         );
     } else {
         push_and_emit_debug(
@@ -353,13 +353,13 @@ pub async fn resume_recording(
             &state,
             DebugLogEntrySource::Main,
             DebugLogEntryLevel::Warn,
-            "Fortsetzen angefordert, aber es laeuft kein Sidecar.",
+            "Resume requested, but no sidecar is running.",
         );
-        return Err("Es laeuft kein Sidecar.".into());
+        return Err("No sidecar is running.".into());
     }
 
     let status = state.mark_resumed();
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status geaendert: resumed.");
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status changed: resumed.");
     events::emit_status(&app, &status);
     Ok(status)
 }
@@ -369,7 +369,7 @@ pub async fn reset_transcript(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "reset_transcript aufgerufen.");
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "reset_transcript called.");
 
     // Transkript-Buffer wird vom Renderer gehalten. Hier nur ein
     // zentraler Log-Punkt + das Versenden eines optionalen
@@ -389,7 +389,7 @@ pub async fn reset_transcript(
             &state,
             DebugLogEntrySource::Sidecar,
             DebugLogEntryLevel::Info,
-            "Reset-Befehl an Sidecar gesendet.",
+            "Reset command sent to the sidecar.",
         );
     }
 
@@ -398,7 +398,7 @@ pub async fn reset_transcript(
         &state,
         DebugLogEntrySource::Main,
         DebugLogEntryLevel::Info,
-        "Transkript zurueckgesetzt.",
+        "Transcript reset.",
     );
     Ok(())
 }
@@ -419,7 +419,7 @@ pub async fn clear_debug_log(
     state: State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
     let cleared = state.clear_debug_log();
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Main, DebugLogEntryLevel::Info, format!("Debug-Log gelöscht ({cleared} Einträge)."));
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Main, DebugLogEntryLevel::Info, format!("Debug log cleared ({cleared} entries)."));
     Ok(serde_json::json!({ "cleared": cleared }))
 }
 
@@ -463,7 +463,7 @@ pub async fn get_devices(app: AppHandle) -> Result<DeviceSnapshot, String> {
                 &app.state::<AppState>(),
                 DebugLogEntrySource::Sidecar,
                 DebugLogEntryLevel::Warn,
-                format!("Sidecar-EXE für Device-Listing nicht gefunden: {e}"),
+                format!("Sidecar EXE for the device listing not found: {e}"),
             );
             return Ok(empty_device_snapshot());
         }
@@ -486,12 +486,12 @@ pub async fn get_devices(app: AppHandle) -> Result<DeviceSnapshot, String> {
             .arg("--list-devices")
             .current_dir(&cwd)
             .spawn()
-            .map_err(|e| format!("Sidecar-Spawn fehlgeschlagen: {e}"))?;
+            .map_err(|e| format!("Sidecar spawn failed: {e}"))?;
 
         // stdout-Handle VOR kill() wegnehmen, damit die Pipe nicht
         // geschlossen wird, bevor wir gelesen haben.
         let mut stdout = child.stdout.take()
-            .ok_or_else(|| "Sidecar lieferte keinen Stdout-Stream.".to_string())?;
+            .ok_or_else(|| "The sidecar did not provide a stdout stream.".to_string())?;
         let mut stderr = child.stderr.take();
 
         // Auf Prozess-Beendigung warten, max. 5 s.
@@ -556,7 +556,7 @@ pub async fn get_devices(app: AppHandle) -> Result<DeviceSnapshot, String> {
         Ok(None)
     })
     .await
-    .map_err(|e| format!("Device-Listing-Task: {e}"))?;
+    .map_err(|e| format!("Device listing task: {e}"))?;
 
     match result {
         Ok(Some(snap)) => {
@@ -566,7 +566,7 @@ pub async fn get_devices(app: AppHandle) -> Result<DeviceSnapshot, String> {
                 DebugLogEntrySource::Sidecar,
                 DebugLogEntryLevel::Info,
                 format!(
-                    "Device-Listing: {} inputs, {} outputs",
+                    "Device listing: {} inputs, {} outputs",
                     snap.inputs.len(),
                     snap.outputs.len()
                 ),
@@ -579,7 +579,7 @@ pub async fn get_devices(app: AppHandle) -> Result<DeviceSnapshot, String> {
                 &app.state::<AppState>(),
                 DebugLogEntrySource::Sidecar,
                 DebugLogEntryLevel::Warn,
-                "Sidecar beendet ohne device_list-Event — leerer Snapshot zurueckgegeben.",
+                "The sidecar exited without a device_list event - an empty snapshot was returned.",
             );
             Ok(empty_device_snapshot())
         }
@@ -589,7 +589,7 @@ pub async fn get_devices(app: AppHandle) -> Result<DeviceSnapshot, String> {
                 &app.state::<AppState>(),
                 DebugLogEntrySource::Sidecar,
                 DebugLogEntryLevel::Warn,
-                format!("Device-Listing fehlgeschlagen: {e}"),
+                format!("Device listing failed: {e}"),
             );
             Ok(empty_device_snapshot())
         }
@@ -684,7 +684,7 @@ mod device_deser_tests {
     #[test]
     fn status_log_is_not_a_recording_status_event() {
         let log = serde_json::json!({
-            "type": "status", "level": "info", "code": "capturing", "message": "Aktiv: Mic + Speaker-Loopback."
+            "type": "status", "level": "info", "code": "capturing", "message": "Active: mic + speaker loopback."
         });
         let parsed = parse_sidecar_log(&log).unwrap().expect("Flat status message must be routed as a log");
         assert_eq!(parsed.code, "capturing");
@@ -709,7 +709,7 @@ pub async fn get_user_settings(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<UserSettings, String> {
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "get_user_settings aufgerufen.");
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "get_user_settings called.");
     settings::load_user_settings().await.map_err(|e| e.to_string())
 }
 
@@ -719,10 +719,10 @@ pub async fn save_user_settings(
     state: State<'_, AppState>,
     settings: UserSettings,
 ) -> Result<UserSettings, String> {
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "save_user_settings aufgerufen.");
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "save_user_settings called.");
     let saved = settings::save_user_settings(settings).await.map_err(|e| e.to_string())?;
     app.state::<crate::tray::WindowBehavior>().update(&saved.window);
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Main, DebugLogEntryLevel::Info, "User-Settings gespeichert.");
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Main, DebugLogEntryLevel::Info, "User settings saved.");
     Ok(saved)
 }
 
@@ -733,7 +733,7 @@ pub async fn get_app_config(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<AppConfigState, String> {
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "get_app_config aufgerufen.");
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "get_app_config called.");
     settings::get_app_config_state().await.map_err(|e| e.to_string())
 }
 
@@ -743,9 +743,9 @@ pub async fn save_fixed_config(
     state: State<'_, AppState>,
     config: AzureConfig,
 ) -> Result<AppConfigState, String> {
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "save_fixed_config aufgerufen.");
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "save_fixed_config called.");
     settings::save_azure_config(config).await.map_err(|e| e.to_string())?;
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Main, DebugLogEntryLevel::Info, "Azure-Konfiguration gespeichert.");
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Main, DebugLogEntryLevel::Info, "Azure configuration saved.");
     settings::get_app_config_state().await.map_err(|e| e.to_string())
 }
 
@@ -760,12 +760,12 @@ pub async fn save_transcript_markdown(
     state: State<'_, AppState>,
     markdown: String,
 ) -> Result<String, String> {
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "save_transcript_markdown aufgerufen.");
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "save_transcript_markdown called.");
     let path = settings::write_transcript_markdown(&markdown)
         .await
         .map_err(|e| e.to_string())?;
     let path = path.to_string_lossy().into_owned();
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Main, DebugLogEntryLevel::Info, format!("Transkript als Markdown gespeichert: {path}"));
+    push_and_emit_debug(&app, &state, DebugLogEntrySource::Main, DebugLogEntryLevel::Info, format!("Transcript saved as Markdown: {path}"));
     Ok(path)
 }
 
@@ -779,7 +779,7 @@ pub async fn test_azure_connectivity(
 ) -> Result<connectivity::ConnectivityResult, String> {
     let value = payload.unwrap_or(serde_json::Value::Null);
     let config: AzureConfig = serde_json::from_value(value.clone())
-        .map_err(|error| format!("Ungültige Azure-Konfiguration: {error}. Endpoint, Region, Speech Key und Proxy prüfen."))?;
+        .map_err(|error| format!("Invalid Azure configuration: {error}. Check the endpoint, region, speech key and proxy."))?;
     if let Some(proxy) = config.proxy.as_ref() {
         connectivity::configured_proxy(proxy)?;
     }
@@ -796,7 +796,7 @@ pub async fn test_azure_connectivity(
         &state,
         DebugLogEntrySource::Ipc,
         DebugLogEntryLevel::Info,
-        format!("test_azure_connectivity(endpoint={endpoint}) aufgerufen."),
+        format!("test_azure_connectivity(endpoint={endpoint}) called."),
     );
 
     let start = std::time::Instant::now();
@@ -818,9 +818,9 @@ pub async fn test_azure_connectivity(
     result.reachable = result.https_reachable && result.speech_reachable;
     result.latency_ms = start.elapsed().as_millis() as u64;
     if !result.reachable {
-        result.error = Some(format!("HTTPS: {}; Speech/WSS: {}. Siehe getrennte Diagnose-Schritte.",
-            if result.https_reachable { "erreichbar" } else { "fehlgeschlagen" },
-            if result.speech_reachable { "erreichbar" } else { "fehlgeschlagen" }));
+        result.error = Some(format!("HTTPS: {}; Speech/WSS: {}. See the separate diagnostic steps.",
+            if result.https_reachable { "reachable" } else { "failed" },
+            if result.speech_reachable { "reachable" } else { "failed" }));
     }
 
     // Bridge-Event: Renderer kann zuhören statt zu pollen
@@ -894,7 +894,7 @@ fn spawn_event_forwarder(
                     let entry = app_handle.state::<AppState>().push_debug(
                         DebugLogEntrySource::Sidecar,
                         DebugLogEntryLevel::Error,
-                        format!("Sidecar beendet (exit={exit_code:?})."),
+                        format!("The sidecar exited (exit={exit_code:?})."),
                     );
                     events::emit_debug(&app_handle, &entry);
                     events::emit_sidecar_crashed(
@@ -975,7 +975,7 @@ async fn handle_handshake_line(
             DebugLogEntrySource::Sidecar,
             DebugLogEntryLevel::Error,
             format!(
-                "handshake abgelehnt: Protokollversion {version} wird nicht unterstuetzt (Minimum {}).",
+                "handshake rejected: protocol version {version} is not supported (minimum {}).",
                 crate::protocol::MIN_PROTOCOL_VERSION
             ),
         );
@@ -985,7 +985,7 @@ async fn handle_handshake_line(
             &serde_json::json!({
                 "code": "PROTOCOL_VERSION_MISMATCH",
                 "message": format!(
-                    "Der Sidecar meldet Protokollversion {version}, erwartet wird mindestens {}.",
+                    "The sidecar reports protocol version {version}, at least {} is expected.",
                     crate::protocol::MIN_PROTOCOL_VERSION
                 ),
             }),
@@ -1026,7 +1026,7 @@ fn spawn_handshake_timeout(app: AppHandle, child: Arc<Mutex<Option<CommandChild>
             DebugLogEntrySource::Sidecar,
             DebugLogEntryLevel::Error,
             format!(
-                "Kein Handshake vom Sidecar innerhalb von {} s - Sidecar wird beendet.",
+                "No handshake from the sidecar within {} s - the sidecar will be stopped.",
                 crate::protocol::HANDSHAKE_TIMEOUT_SECS
             ),
         );
@@ -1036,7 +1036,7 @@ fn spawn_handshake_timeout(app: AppHandle, child: Arc<Mutex<Option<CommandChild>
             &serde_json::json!({
                 "code": "HANDSHAKE_TIMEOUT",
                 "message": format!(
-                    "Der Sidecar hat innerhalb von {} s nicht auf das Handshake geantwortet.",
+                    "The sidecar did not answer the handshake within {} s.",
                     crate::protocol::HANDSHAKE_TIMEOUT_SECS
                 ),
             }),
@@ -1079,7 +1079,7 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) {
                     let entry = state.push_debug(
                         DebugLogEntrySource::Sidecar,
                         DebugLogEntryLevel::Warn,
-                        format!("{count} fehlerhafte Sidecar-Zeilen (Rate-Limit 1/1000)."),
+                        format!("{count} malformed sidecar lines (rate limit 1/1000)."),
                     );
                     events::emit_debug(app, &entry);
                 }
@@ -1110,7 +1110,7 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) {
             let entry = app.state::<AppState>().push_debug(
                 DebugLogEntrySource::Sidecar,
                 DebugLogEntryLevel::Warn,
-                format!("Ungueltiger Sidecar-Logeintrag: {error}"),
+                format!("Invalid sidecar log entry: {error}"),
             );
             events::emit_debug(app, &entry);
             return;
@@ -1134,7 +1134,7 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) {
                 let entry = app.state::<AppState>().push_debug(
                     DebugLogEntrySource::Sidecar,
                     DebugLogEntryLevel::Warn,
-                    "Ungueltiges Sidecar-Status-Event: running muss ein Boolean sein.",
+                    "Invalid sidecar status event: running must be a boolean.",
                 );
                 events::emit_debug(app, &entry);
                 return;

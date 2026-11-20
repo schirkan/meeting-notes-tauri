@@ -4,16 +4,16 @@ import { Icon } from './Icon'
 import { AudioSources } from './AudioPanel'
 
 const languageOptions = [
-  { value: 'de-DE', label: 'Deutsch' },
-  { value: 'en-US', label: 'Englisch' },
-  { value: 'fr-FR', label: 'Französisch' },
-  { value: 'es-ES', label: 'Spanisch' },
-  { value: 'it-IT', label: 'Italienisch' },
-  { value: 'pt-BR', label: 'Portugiesisch' },
-  { value: 'nl-NL', label: 'Niederländisch' },
-  { value: 'pl-PL', label: 'Polnisch' },
-  { value: 'tr-TR', label: 'Türkisch' },
-  { value: 'ja-JP', label: 'Japanisch' }
+  { value: 'de-DE', label: 'German' },
+  { value: 'en-US', label: 'English' },
+  { value: 'fr-FR', label: 'French' },
+  { value: 'es-ES', label: 'Spanish' },
+  { value: 'it-IT', label: 'Italian' },
+  { value: 'pt-BR', label: 'Portuguese' },
+  { value: 'nl-NL', label: 'Dutch' },
+  { value: 'pl-PL', label: 'Polish' },
+  { value: 'tr-TR', label: 'Turkish' },
+  { value: 'ja-JP', label: 'Japanese' }
 ] as const
 
 type SettingsPanelProps = {
@@ -41,10 +41,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
     <>
     <section className="panel settings">
       <div className="panel-header">
-        <h2>{audioOnly ? 'Audio Einstellungen' : 'Allgemein'}</h2>
+        <h2>{audioOnly ? 'Audio settings' : 'General'}</h2>
       </div>
 
-      {statusRunning && <div className="settings-inline-hint">Aufnahme stoppen, um Einstellungen zu ändern.</div>}
+      {statusRunning && <div className="settings-inline-hint">Stop the recording to change settings.</div>}
 
       <div className={audioOnly ? 'settings-block audio-settings-grid' : 'settings-block'}>
         {audioOnly && <AudioSources
@@ -68,17 +68,17 @@ export function SettingsPanel(props: SettingsPanelProps) {
               }}
               disabled={statusRunning}
             />
-            <span>Beim Schließen in den Systray minimieren</span>
+            <span>Minimize to system tray on close</span>
           </label>
         </>}
       </div>
     </section>
 
     {!audioOnly && <section className="panel settings">
-      <div className="panel-header"><h2>Transkription</h2></div>
+      <div className="panel-header"><h2>Transcription</h2></div>
       <div className="settings-block">
           <label className="language-field">
-            <span className="field-caption"><Icon name="flag" />Primäre Sprache</span>
+            <span className="field-caption"><Icon name="flag" />Primary language</span>
             <select value={settings.language} disabled={statusRunning}
               onChange={(event) => {
                 const language = event.currentTarget.value
@@ -92,7 +92,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
               ))}
             </select>
           </label>
-          <label className="checkbox-field" title="Aufnahme bei erkanntem Meeting automatisch starten">
+          <label className="checkbox-field" title="Start recording automatically when a meeting is detected">
             <input
               type="checkbox"
               checked={settings.autoStart.enabled}
@@ -102,12 +102,12 @@ export function SettingsPanel(props: SettingsPanelProps) {
               }}
               disabled={statusRunning}
             />
-            <span>Aufnahme automatisch starten</span>
+            <span>Start recording automatically</span>
           </label>
-          <label className="checkbox-field" title="Aufnahme automatisch beenden, wenn das Meeting automatisch gestartet wurde">
+          <label className="checkbox-field" title="Stop recording automatically when the meeting was started automatically">
             <input
               type="checkbox"
-              aria-label="Aufnahme automatisch beenden"
+              aria-label="Stop recording automatically"
               checked={settings.autoStart.autoStop}
               onChange={(event) => {
                 const autoStop = event.currentTarget.checked
@@ -115,10 +115,10 @@ export function SettingsPanel(props: SettingsPanelProps) {
               }}
               disabled={statusRunning || !settings.autoStart.enabled}
             />
-            <span>Aufnahme automatisch beenden</span>
+            <span>Stop recording automatically</span>
           </label>
 
-          <label className="checkbox-field" title="Transkript automatisch als Markdown speichern">
+          <label className="checkbox-field" title="Save the transcript automatically as Markdown">
             <input
               type="checkbox"
               checked={settings.transcript.markdownExport.enabled}
@@ -134,12 +134,12 @@ export function SettingsPanel(props: SettingsPanelProps) {
               }}
               disabled={statusRunning}
             />
-            <span>Transkript automatisch speichern</span>
+            <span>Save transcript automatically</span>
           </label>
           <div className="directory-control">
             <input
               id="transcript-export-path"
-              aria-label="Speicherpfad (optional)"
+              aria-label="Save path (optional)"
               type="text"
               value={settings.transcript.markdownExport.path ?? ''}
               onChange={(event) => {
@@ -152,12 +152,12 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   }
                 }))
               }}
-              placeholder="Standard: Anwendungsverzeichnis"
+              placeholder="Default: application directory"
               disabled={statusRunning || !settings.transcript.markdownExport.enabled}
             />
             <button type="button" onClick={() => void onChooseDirectory()}
               disabled={statusRunning || !settings.transcript.markdownExport.enabled || choosingDirectory}
-              aria-label="Speicherordner auswählen" title="Ordner auswählen"><Icon name="folder" /></button>
+              aria-label="Choose save folder" title="Choose folder"><Icon name="folder" /></button>
           </div>
       </div>
     </section>}

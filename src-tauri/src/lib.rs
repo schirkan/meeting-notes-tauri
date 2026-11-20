@@ -40,7 +40,7 @@ pub fn run() {
       let entry = state.push_debug(
         state::DebugLogEntrySource::Main,
         state::DebugLogEntryLevel::Info,
-        "Meeting Notes initialisiert.",
+        "Meeting Notes initialized.",
       );
       events::emit_debug(&handle, &entry);
 
@@ -68,7 +68,7 @@ pub fn run() {
         let entry = state.push_debug(
           state::DebugLogEntrySource::Main,
           state::DebugLogEntryLevel::Warn,
-          format!("Systray nicht verfuegbar; Schliessen beendet die App: {error}"),
+          format!("The system tray is not available; closing the app exits it: {error}"),
         );
         events::emit_debug(&handle, &entry);
       }
@@ -82,7 +82,7 @@ pub fn run() {
         let entry = state.push_debug(
           state::DebugLogEntrySource::Main,
           state::DebugLogEntryLevel::Warn,
-          format!("Meeting-Erkennung nicht verfuegbar: {error}"),
+          format!("Meeting detection is not available: {error}"),
         );
         events::emit_debug(&handle, &entry);
       }
@@ -183,7 +183,7 @@ async fn stop_recording_on_meeting_end(
             let entry = app.state::<AppState>().push_debug(
                 state::DebugLogEntrySource::Main,
                 state::DebugLogEntryLevel::Info,
-                format!("Audiositzungen von {} beendet; automatische Aufnahme gestoppt.", payload.process_name),
+                format!("Audio sessions of {} ended; the automatic recording was stopped.", payload.process_name),
             );
             events::emit_debug(app, &entry);
             events::emit_meeting_ended(app, &payload);
@@ -193,7 +193,7 @@ async fn stop_recording_on_meeting_end(
             let entry = app.state::<AppState>().push_debug(
                 state::DebugLogEntrySource::Main,
                 state::DebugLogEntryLevel::Error,
-                format!("Automatischer Aufnahmestopp fehlgeschlagen: {error}"),
+                format!("The automatic recording stop failed: {error}"),
             );
             events::emit_debug(app, &entry);
         }
@@ -213,7 +213,7 @@ async fn start_recording_on_detection(
         let entry = state.push_debug(
             state::DebugLogEntrySource::Main,
             state::DebugLogEntryLevel::Info,
-            format!("Meeting erkannt, aber es laeuft bereits eine Aufnahme: {description}"),
+            format!("Meeting detected, but a recording is already running: {description}"),
         );
         events::emit_debug(app, &entry);
         return;
@@ -226,7 +226,7 @@ async fn start_recording_on_detection(
             let entry = state.push_debug(
                 state::DebugLogEntrySource::Main,
                 state::DebugLogEntryLevel::Warn,
-                format!("Meeting erkannt, aber die Azure-Konfiguration fehlt: {description}"),
+                format!("Meeting detected, but the Azure configuration is missing: {description}"),
             );
             events::emit_debug(app, &entry);
             return;
@@ -235,7 +235,7 @@ async fn start_recording_on_detection(
             let entry = state.push_debug(
                 state::DebugLogEntrySource::Main,
                 state::DebugLogEntryLevel::Error,
-                format!("Meeting erkannt, Konfiguration nicht lesbar: {error}"),
+                format!("Meeting detected, the configuration could not be read: {error}"),
             );
             events::emit_debug(app, &entry);
             return;
@@ -245,7 +245,7 @@ async fn start_recording_on_detection(
     let entry = state.push_debug(
         state::DebugLogEntrySource::Main,
         state::DebugLogEntryLevel::Info,
-        format!("Meeting erkannt, Aufnahme startet automatisch: {description}"),
+        format!("Meeting detected, the recording starts automatically: {description}"),
     );
     events::emit_debug(app, &entry);
 
@@ -257,7 +257,7 @@ async fn start_recording_on_detection(
         let entry = app.state::<AppState>().push_debug(
             state::DebugLogEntrySource::Main,
             state::DebugLogEntryLevel::Error,
-            format!("Automatischer Aufnahmestart fehlgeschlagen: {error}"),
+            format!("The automatic recording start failed: {error}"),
         );
         events::emit_debug(app, &entry);
     }

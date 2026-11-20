@@ -30,7 +30,7 @@ export function ProxyPanel(props: ProxyPanelProps) {
             }}
             disabled={statusRunning}
           />
-          <span>Proxy verwenden</span>
+          <span>Use proxy</span>
         </label>
 
         <label>
@@ -55,7 +55,7 @@ export function ProxyPanel(props: ProxyPanelProps) {
         </label>
 
         <label>
-          Proxy Benutzername (optional)
+          Proxy username (optional)
           <input
             type="text"
             value={configDraft.proxyUsername}
@@ -65,7 +65,7 @@ export function ProxyPanel(props: ProxyPanelProps) {
         </label>
 
         <label>
-          Proxy Passwort (optional)
+          Proxy password (optional)
           <input
             type="password"
             value={configDraft.proxyPassword}

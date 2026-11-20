@@ -22,7 +22,7 @@ const FOCUSABLE_SELECTOR = [
 ].join(',')
 
 export function SettingsDialog(props: SettingsDialogProps) {
-  const { isOpen, onClose, children, title = 'Einstellungen', scrollable = false, footer, busy = false } = props
+  const { isOpen, onClose, children, title = 'Settings', scrollable = false, footer, busy = false } = props
   const dialogRef = useRef<HTMLElement | null>(null)
   // Ref statt State, damit onClose-Wechsel den Initial-Focus-Effekt nicht
   // erneut auslösen. Außerdem den Initial-Fokus nur einmalig pro Open-Phase
@@ -113,7 +113,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
       >
         <div className="settings-dialog-header">
           <h2>{title}</h2>
-          <button className="settings-dialog-close" type="button" onClick={onClose} aria-label="Dialog schließen">
+          <button className="settings-dialog-close" type="button" onClick={onClose} aria-label="Close dialog">
             <Icon name="close" />
           </button>
         </div>

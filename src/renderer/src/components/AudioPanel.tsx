@@ -22,21 +22,21 @@ export function AudioSources(props: AudioSourcesProps) {
     <>
       <div className="audio-source-row full-field">
         <div className="audio-source-field">
-          <span className="field-caption"><Icon name="mic" />Mikrofon</span>
+          <span className="field-caption"><Icon name="mic" />Microphone</span>
           <div className="audio-source-control">
             <input
               type="checkbox"
-              aria-label="Mikrofon transkribieren"
+              aria-label="Transcribe microphone"
               checked={settings.transcription.mic}
               onChange={(event) => {
                 const mic = event.currentTarget.checked
                 setSettings((prev) => ({ ...prev, transcription: { mic, speaker: !mic || prev.transcription.speaker } }))
               }}
               disabled={statusRunning}
-              title="Mikrofon transkribieren"
+              title="Transcribe microphone"
             />
             <select
-              aria-label="Mikrofon"
+              aria-label="Microphone"
               value={settings.devices.micId ?? ''}
               onChange={(event) => {
                 const micId = event.currentTarget.value || null
@@ -44,7 +44,7 @@ export function AudioSources(props: AudioSourcesProps) {
               }}
               disabled={statusRunning || !settings.transcription.mic}
             >
-              <option value="">System-Default</option>
+              <option value="">System default</option>
               {devices.inputs.map((device) => (
                 <option key={device.id} value={device.id}>
                   {device.name} {device.isDefault ? '(Default)' : ''}
@@ -57,7 +57,7 @@ export function AudioSources(props: AudioSourcesProps) {
         <label className="checkbox-field source-diarization">
           <input
             type="checkbox"
-            aria-label="Sprechererkennung für Mikrofon"
+            aria-label="Speaker recognition for microphone"
             checked={settings.diarization.mic}
             onChange={(event) => {
               const mic = event.currentTarget.checked
@@ -65,7 +65,7 @@ export function AudioSources(props: AudioSourcesProps) {
             }}
             disabled={statusRunning || !settings.transcription.mic}
           />
-          <span>Sprechererkennung</span>
+          <span>Speaker recognition</span>
         </label>
       </div>
 
@@ -75,14 +75,14 @@ export function AudioSources(props: AudioSourcesProps) {
           <div className="audio-source-control">
             <input
               type="checkbox"
-              aria-label="Speaker-Loopback transkribieren"
+              aria-label="Transcribe speaker loopback"
               checked={settings.transcription.speaker}
               onChange={(event) => {
                 const speaker = event.currentTarget.checked
                 setSettings((prev) => ({ ...prev, transcription: { speaker, mic: !speaker || prev.transcription.mic } }))
               }}
               disabled={statusRunning}
-              title="Speaker-Loopback transkribieren"
+              title="Transcribe speaker loopback"
             />
             <select
               aria-label="Speaker Loopback"
@@ -93,7 +93,7 @@ export function AudioSources(props: AudioSourcesProps) {
               }}
               disabled={statusRunning || !settings.transcription.speaker}
             >
-              <option value="">System-Default</option>
+              <option value="">System default</option>
               {devices.outputs.map((device) => (
                 <option key={device.id} value={device.id}>
                   {device.name} {device.isDefault ? '(Default)' : ''}
@@ -106,7 +106,7 @@ export function AudioSources(props: AudioSourcesProps) {
         <label className="checkbox-field source-diarization">
           <input
             type="checkbox"
-            aria-label="Sprechererkennung für Speaker"
+            aria-label="Speaker recognition for speaker loopback"
             checked={settings.diarization.speaker}
             onChange={(event) => {
               const speaker = event.currentTarget.checked
@@ -114,7 +114,7 @@ export function AudioSources(props: AudioSourcesProps) {
             }}
             disabled={statusRunning || !settings.transcription.speaker}
           />
-          <span>Sprechererkennung</span>
+          <span>Speaker recognition</span>
         </label>
       </div>
     </>

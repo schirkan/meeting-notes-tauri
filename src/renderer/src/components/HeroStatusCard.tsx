@@ -51,9 +51,9 @@ export function HeroStatusCard(props: HeroStatusCardProps) {
   }, [])
   const closeMenu = () => { if (menuRef.current) menuRef.current.open = false }
   const { status, isStarting } = props
-  const recordLabel = status.running ? 'Stop' : isStarting ? 'Startet …' : 'Start'
-  const pauseLabel = status.paused ? 'Weiter' : 'Pause'
-  const speakerLabel = `Sprecherzuordnung ${props.speakersOpen ? 'ausblenden' : 'einblenden'}`
+  const recordLabel = status.running ? 'Stop' : isStarting ? 'Starting …' : 'Start'
+  const pauseLabel = status.paused ? 'Resume' : 'Pause'
+  const speakerLabel = `Speaker mapping ${props.speakersOpen ? 'hide' : 'show'}`
 
   return (
     <header className="console-header">
@@ -73,28 +73,28 @@ export function HeroStatusCard(props: HeroStatusCardProps) {
         <span className={`live-badge ${status.paused ? 'paused' : status.running ? '' : 'stopped'}`}
           aria-label={`${props.statusLabel}: ${props.durationLabel}`}
           title={`${props.statusLabel} · ${props.runtimeIssue ?? props.statusDescription}`}>
-          <span className="dot" /><time title={`Startzeit: ${props.startedAtLabel}`}>{props.durationLabel}</time>
+          <span className="dot" /><time title={`Started at: ${props.startedAtLabel}`}>{props.durationLabel}</time>
         </span>
       </div>
       <div className="toolbar-actions utility-actions">
         <button type="button" onClick={() => void props.onCopyTranscript()} disabled={!props.canCopyTranscript}
-          aria-label="Transkript kopieren" title="Transkript kopieren"><Icon name="copy" /><span>Kopieren</span></button>
+          aria-label="Copy transcript" title="Copy transcript"><Icon name="copy" /><span>Copy</span></button>
         <button type="button" onClick={() => void props.onResetTranscript()} disabled={!props.canResetTranscript}
-          aria-label="Transkript löschen" title={status.running ? 'Aufnahme stoppen, um das Transkript zu löschen' : 'Transkript löschen'}>
-          <Icon name="trash" /><span>Löschen</span>
+          aria-label="Clear transcript" title={status.running ? 'Stop the recording to clear the transcript' : 'Clear transcript'}>
+          <Icon name="trash" /><span>Clear</span>
         </button>
         <button type="button" onClick={props.onToggleSpeakers} aria-expanded={props.speakersOpen}
-          aria-controls="console-speakers" aria-label={speakerLabel} title={speakerLabel}><Icon name="users" /><span>Sprecher</span></button>
+          aria-controls="console-speakers" aria-label={speakerLabel} title={speakerLabel}><Icon name="users" /><span>Speakers</span></button>
         <button className="icon-button" type="button" onClick={props.onOpenSettingsDialog}
-          aria-label="Einstellungsdialog öffnen" title="Einstellungen"><Icon name="settings" /></button>
+          aria-label="Open settings dialog" title="Settings"><Icon name="settings" /></button>
         <details className="overflow-menu" ref={menuRef}>
-          <summary aria-label="Weitere Aktionen" title="Weitere Aktionen"><Icon name="more" /></summary>
+          <summary aria-label="More actions" title="More actions"><Icon name="more" /></summary>
           <div className="menu">
             <button type="button" disabled={!props.canCopyTranscript} onClick={() => { closeMenu(); void props.onExportTranscript() }}>
-              <Icon name="download" />Markdown exportieren
+              <Icon name="download" />Export Markdown
             </button>
             <button type="button" onClick={() => { closeMenu(); props.onToggleDebug() }} aria-controls="console-debug" aria-pressed={props.debugVisible}>
-              <Icon name="terminal" />Debug-Log
+              <Icon name="terminal" />Debug log
             </button>
             <button type="button" onClick={() => { closeMenu(); void props.onToggleDevtools() }}>
               <Icon name="terminal" />Dev-Tools (F12)

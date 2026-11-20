@@ -76,21 +76,21 @@ public sealed class AzureSpeechService : IDisposable
             "azure",
             paused ? "paused" : "resumed",
             paused
-                ? "Audio-Zufuhr gestoppt; Azure-Session bleibt verbunden."
-                : "Audio-Zufuhr wieder aktiv.");
+                ? "Audio feed stopped; the Azure session stays connected."
+                : "Audio feed active again.");
     }
 
     public async Task InitAsync()
     {
         if (_initialized) return;
-        Logger.Info("azure", "init", "AzureSpeechService.init: SDK wird initialisiert.");
+        Logger.Info("azure", "init", "AzureSpeechService.init: the SDK is being initialized.");
 
         // Die SDK-Eigenschaft gilt global. Wirksam ist sie nur, wenn
         // mindestens eine transkribierte Quelle die Sprechererkennung nutzt.
         _speechConfig = SpeechConfiguration.Create(_config, _settings.Language, EffectiveDiarization);
 
         if (_config.Proxy is not null)
-            Logger.Info("azure", "proxy", "Azure Speech Proxy konfiguriert; Zugangsdaten werden nicht protokolliert.");
+            Logger.Info("azure", "proxy", "Azure Speech proxy configured; credentials are not logged.");
 
         _initialized = true;
         Logger.Info(
@@ -108,15 +108,15 @@ public sealed class AzureSpeechService : IDisposable
     public async Task StartAsync(AzureAudioFormat format)
     {
         if (_speechConfig is null)
-            throw new InvalidOperationException("AzureSpeechService nicht initialisiert.");
+            throw new InvalidOperationException("AzureSpeechService is not initialized.");
         if (_streams.Count > 0)
-            throw new InvalidOperationException("AzureSpeechService läuft bereits. Bitte zuerst StopAsync aufrufen.");
+            throw new InvalidOperationException("AzureSpeechService is already running. Call StopAsync first.");
         _format = format;
         _stopping = false;
 
         var sources = TranscriptionSources;
         if (sources.Count == 0)
-            throw new InvalidOperationException("Keine Audioquelle zum Transkribieren ausgewählt.");
+            throw new InvalidOperationException("No audio source selected for transcription.");
 
         var states = sources.Select(source => EnsureStreamForFormat(source, format)).ToArray();
         try
@@ -134,7 +134,7 @@ public sealed class AzureSpeechService : IDisposable
         Logger.Info(
             "azure",
             "started",
-            $"{states.Length} Recognizer laufen ({string.Join(", ", sources)}).");
+            $"{states.Length} recognizers are running ({string.Join(", ", sources)}).");
     }
 
     /// <summary>
@@ -166,7 +166,7 @@ public sealed class AzureSpeechService : IDisposable
                 Logger.Info(
                     "audio",
                     "first_frame",
-                    $"Erstes Audio-Frame empfangen (source={frame.Source}, " +
+                    $"First audio frame received (source={frame.Source}, " +
                     $"sampleRate={frame.SampleRate}, bits={frame.BitsPerSample}, " +
                     $"channels={frame.Channels}, bytes={frame.Payload.Length}).");
             }
@@ -197,7 +197,7 @@ public sealed class AzureSpeechService : IDisposable
                 Logger.Info(
                     "audio",
                     "push_stat",
-                    $"pushFrame-Statistik ({frame.Source}): {counter.Frames} Frames, " +
+                    $"pushFrame statistics ({frame.Source}): {counter.Frames} frames, " +
                     $"{counter.Bytes} Bytes in {elapsed:F1}s (~{counter.Bytes / elapsed:F0} B/s).");
                 counter.Reset(now);
             }
@@ -205,7 +205,7 @@ public sealed class AzureSpeechService : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Error("AZURE_RECOGNIZER_FAILED", $"pushFrame Fehler (source={frame.Source}): {ex.Message}");
+            Logger.Error("AZURE_RECOGNIZER_FAILED", $"pushFrame error (source={frame.Source}): {ex.Message}");
         }
     }
 
@@ -230,15 +230,15 @@ public sealed class AzureSpeechService : IDisposable
         }
         if (restarted.Count > 0)
             Logger.Info("azure", "session_restarted",
-                $"{restarted.Count} Quelle(n) neu verbunden: {string.Join(", ", restarted)}. " +
-                "Die Sprecher-IDs wurden neu vergeben.");
+                $"{restarted.Count} source(s) reconnected: {string.Join(", ", restarted)}. " +
+                "The speaker IDs were reassigned.");
         return restarted.ToArray();
     }
 
     public async Task StopAsync()
     {
         _stopping = true;
-        Logger.Info("azure", "stopping", $"{_streams.Count} aktive Stream(s) werden beendet.");
+        Logger.Info("azure", "stopping", $"{_streams.Count} active stream(s) are being stopped.");
         var closeTasks = _streams.Values.Select(state => Task.Run(() => FinalizeStream(state))).ToArray();
         await Task.WhenAll(closeTasks);
         _streams.Clear();
@@ -268,7 +268,7 @@ public sealed class AzureSpeechService : IDisposable
         Logger.Info(
             "azure",
             "stream_create",
-            $"{useConversation} für {source} erstellt (sampleRate={format.SampleRate}, " +
+            $"{useConversation} created for {source} (sampleRate={format.SampleRate}, " +
             $"bits={format.BitsPerSample}, channels={format.Channels}).");
 
         if (useConversation)
@@ -327,14 +327,14 @@ public sealed class AzureSpeechService : IDisposable
             var recognizer = (ConversationTranscriber)state.RecognizerBase;
             await recognizer.StartTranscribingAsync();
             state.Started = true;
-            Logger.Info("azure", "stream_start", $"startTranscribingAsync gestartet für {state.Source}.");
+            Logger.Info("azure", "stream_start", $"startTranscribingAsync started for {state.Source}.");
         }
         else
         {
             var recognizer = (SpeechRecognizer)state.RecognizerBase;
             await recognizer.StartContinuousRecognitionAsync();
             state.Started = true;
-            Logger.Info("azure", "stream_start", $"startContinuousRecognitionAsync gestartet für {state.Source}.");
+            Logger.Info("azure", "stream_start", $"startContinuousRecognitionAsync started for {state.Source}.");
         }
     }
 
@@ -353,11 +353,11 @@ public sealed class AzureSpeechService : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Warn("azure", "stop_error", $"stop-Fehler ({state.Mode}/{state.Source}): {ex.Message}");
+            Logger.Warn("azure", "stop_error", $"stop error ({state.Mode}/{state.Source}): {ex.Message}");
         }
         try { state.PushStream.Close(); } catch { /* ignore */ }
         try { state.RecognizerBase.Dispose(); } catch { /* ignore */ }
-        Logger.Info("azure", "stream_closed", $"Recognizer geschlossen (mode={state.Mode}, started={state.Started}).");
+        Logger.Info("azure", "stream_closed", $"Recognizer closed (mode={state.Mode}, started={state.Started}).");
     }
 
     private void AttachCommonDiagnostics(Recognizer recognizer, StreamState state)
@@ -366,20 +366,20 @@ public sealed class AzureSpeechService : IDisposable
         {
             state.OnSessionStarted(e.SessionId);
             Logger.Info("azure", "session_start",
-                $"Session gestartet (source={state.Source}, mode={state.Mode}, session={e.SessionId}).");
+                $"Session started (source={state.Source}, mode={state.Mode}, session={e.SessionId}).");
         };
         recognizer.SessionStopped += (_, e) =>
         {
             Logger.Info("azure", "session_stop",
-                $"Session gestoppt (source={state.Source}, mode={state.Mode}, session={e.SessionId}).");
+                $"Session stopped (source={state.Source}, mode={state.Mode}, session={e.SessionId}).");
             if (!_stopping) state.MarkDead();
         };
         recognizer.SpeechStartDetected += (_, e) =>
             Logger.Info("azure", "speech_start",
-                $"Speech start erkannt (source={state.Source}, mode={state.Mode}, offset={e.Offset}).");
+                $"Speech start detected (source={state.Source}, mode={state.Mode}, offset={e.Offset}).");
         recognizer.SpeechEndDetected += (_, e) =>
             Logger.Info("azure", "speech_end",
-                $"Speech end erkannt (source={state.Source}, mode={state.Mode}, offset={e.Offset}).");
+                $"Speech end detected (source={state.Source}, mode={state.Mode}, offset={e.Offset}).");
     }
 
     private void HandleCanceled(string source, string mode, RecognitionEventArgs e)
@@ -388,7 +388,7 @@ public sealed class AzureSpeechService : IDisposable
         // ErrorDetails / Reason / ErrorCode live on the derived
         // *CanceledEventArgs classes; reflection keeps this helper generic.
         var prop = (string name) => e.GetType().GetProperty(name)?.GetValue(e)?.ToString();
-        var details = (prop("ErrorDetails") ?? "Azure Recognizer wurde abgebrochen.").Trim();
+        var details = (prop("ErrorDetails") ?? "The Azure recognizer was canceled.").Trim();
         var reason = prop("Reason") ?? "n/a";
         var errorCode = prop("ErrorCode") ?? "n/a";
         var authRelated = System.Text.RegularExpressions.Regex.IsMatch(
@@ -414,8 +414,8 @@ public sealed class AzureSpeechService : IDisposable
                 if (_missingSpeakerIdLogged.Add(source))
                     Logger.Warn(
                         "azure", "missing_speaker",
-                        $"ConversationTranscriber liefert für {source} aktuell keine speakerId. " +
-                        "Prüfe Region, Feature-Verfügbarkeit und ob diarization-fähige Events eintreffen.");
+                        $"The ConversationTranscriber currently returns no speakerId for {source}. " +
+                        "Check the region, the feature availability and whether diarization-capable events arrive.");
             }
         }
         var speakerId = diarized

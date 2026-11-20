@@ -24,7 +24,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
 
       {!configState?.exists && (
         <div className="settings-inline-hint">
-          Keine gültige Azure-Konfiguration gefunden. Bitte jetzt eintragen und speichern.
+          No valid Azure configuration found. Please enter and save one now.
         </div>
       )}
 
@@ -69,7 +69,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
             onChange={(event) => setConfigDraft((prev) => ({ ...prev, interimResults: event.target.checked }))}
             disabled={statusRunning}
           />
-          <span>Interim Results aktivieren</span>
+          <span>Enable interim results</span>
         </label>
       </div>
 

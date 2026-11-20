@@ -75,15 +75,15 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $zip = Join-Path $env:RUNNER_TEMP "MeetingNotes-v$version-win-x64.zip"
           Compress-Archive -Path 'dist/portable/*' -DestinationPath $zip -CompressionLevel Optimal
-          # Kein Get-FileHash: das Utility-Modul ist auf einem Build-Runner
-          # nicht zwingend geladen. Die .NET-API ist ueberall vorhanden.
+          # No Get-FileHash: the utility module is not necessarily loaded on a build runner.
+          # The .NET API is available everywhere.
           $sha = [System.Security.Cryptography.SHA256]::Create()
           $stream = [System.IO.File]::OpenRead($zip)
           try { $bytes = $sha.ComputeHash($stream) } finally { $stream.Dispose(); $sha.Dispose() }
           $hash = ([System.BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
-          # Eine Textdatei, kein ZIP: der Name sagt, was es ist.
-          # Format wie die SHA256SUMS im Archiv: ohne Praefix, damit
-          # `sha256sum -c SHA256SUMS.txt` direkt funktioniert.
+          # A text file, not a ZIP: the name says what it is.
+          # Same format as the SHA256SUMS in the archive: without a prefix, so that
+          # `sha256sum -c SHA256SUMS.txt` works directly.
           "$hash  MeetingNotes-v$version-win-x64.zip" |
             Out-File -FilePath (Join-Path $env:RUNNER_TEMP 'SHA256SUMS.txt') -Encoding utf8
           Write-Host "ZIP: $zip ($((Get-Item $zip).Length) Bytes)"
@@ -112,37 +112,37 @@ jobs:
           $sums = Join-Path $env:RUNNER_TEMP 'SHA256SUMS.txt'
           $notes = @"
           ## Meeting Notes v$version
-          Portable-Distribution fuer Windows x64.
+          Portable distribution for Windows x64.
           
-          ### Enthalten
-          - `MeetingNotes.exe` (Tauri-Host)
-          - `MeetingNotes.Sidecar.exe` (self-contained, komprimiert und konservativ getrimmt) - **keine .NET-Installation noetig**
+          ### Included
+          - `MeetingNotes.exe` (Tauri host)
+          - `MeetingNotes.Sidecar.exe` (self-contained, compressed and conservatively trimmed) - **no .NET installation required**
           - `MeetingNotes.config.example.json`
           - `SHA256SUMS`
           
           ### Installation
-          1. ZIP herunterladen und **alle Dateien** in einen beschreibbaren Ordner entpacken
-          2. `MeetingNotes.exe` starten; `MeetingNotes.Sidecar.exe` muss im selben Ordner liegen
-          3. `MeetingNotes.config.example.json` nach `MeetingNotes.config.json` kopieren und die Azure-Zugangsdaten eintragen
+          1. Download the ZIP and extract **all files** into a writable folder
+          2. Start `MeetingNotes.exe`; `MeetingNotes.Sidecar.exe` must sit in the same folder
+          3. Copy `MeetingNotes.config.example.json` to `MeetingNotes.config.json` and enter your Azure credentials
           
-          ### Voraussetzungen
+          ### Requirements
           - Windows 11 x64
-          - Microsoft Edge WebView2 Runtime (auf vielen Windows-11-Systemen bereits vorhanden)
-          - Internetzugang und ein Azure-Speech-Ressource mit Endpunkt, Region und Schluessel
-          - Mikrofon und/oder ein Ausgabegeraet
+          - Microsoft Edge WebView2 Runtime (already present on many Windows 11 systems)
+          - An internet connection and an Azure Speech resource with endpoint, region and key
+          - A microphone and/or an audio output device
           
-          Die App ist nicht code-signiert; Windows kann daher eine Sicherheitswarnung anzeigen.
-          Details und offene Punkte: [SPEC.md](https://github.com/${{ github.repository }}/blob/main/SPEC.md).
+          The app is not code-signed, so Windows may display a security warning.
+          Details and open points: [SPEC.md](https://github.com/${{ github.repository }}/blob/main/SPEC.md).
           "@
           $notes | Out-File -FilePath (Join-Path $env:RUNNER_TEMP 'notes.md') -Encoding utf8
           $existing = gh release view $tag --json tagName 2>$null
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "Release $tag existiert bereits - Assets werden ersetzt."
+            Write-Host "Release $tag already exists - the assets are replaced."
             gh release upload $tag $zip $sums --clobber
             gh release edit $tag --notes-file (Join-Path $env:RUNNER_TEMP 'notes.md') --title "Meeting Notes v$version"
           } else {
-            # Kein --target: das Tag existiert bereits, und die API lehnt
-            # einen Tag-Namen als target_commitish ab.
+            # No --target: the tag already exists, and the API rejects
+            # a tag name as target_commitish.
             gh release create $tag $zip $sums --title "Meeting Notes v$version" --notes-file (Join-Path $env:RUNNER_TEMP 'notes.md')
           }
           gh release view $tag --json url,tagName,assets
