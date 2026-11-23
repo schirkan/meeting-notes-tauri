@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.1.5 - 2026-11-23
+
+### Added
+- **About** now shows the installed app version below the product name.
+
+### Fixed
+- Automatic meeting detection watches all capture and playback devices that are active when the detector starts, not just Windows' default multimedia devices.
+- The default meeting-process list recognizes both `teams.exe` and `ms-teams.exe`.
+
+### Known limitations
+- Restart the detector after connecting a new audio device. This change does not affect which devices are used for transcription.
+- Optimized Teams VDI can process call audio outside the VM; automatic detection still requires a local Windows audio session.
+
 ## v0.1.4 - 2026-11-20
 
 ### Added
