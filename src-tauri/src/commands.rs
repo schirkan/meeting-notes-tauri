@@ -147,7 +147,6 @@ pub async fn start_recording_with_origin(
     }
 
     lifecycle.auto_origin = origin;
-    lifecycle.stop_error = None;
     let status = state.mark_started();
     events::emit_status(&app, &status);
     spawn_event_forwarder(app.clone(), handle.events_rx, Arc::clone(&handle.child));
@@ -172,17 +171,14 @@ pub async fn stop_recording(
         return Err("Finish or cancel quitting before stopping transcription.".into());
     }
     lifecycle.auto_origin = None;
-    let result = stop_recording_inner(&app, &state).await;
-    if let Err(error) = &result { lifecycle.stop_error = Some(error.clone()); }
-    result
+    stop_recording_inner(&app, &state, false).await
 }
 
 pub async fn stop_recording_for_quit(app: &AppHandle) -> Result<events::TranscriptStatus, String> {
     let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
     let mut lifecycle = lifecycle.lock().await;
     lifecycle.auto_origin = None;
-    if let Some(error) = lifecycle.stop_error.take() { return Err(error); }
-    stop_recording_inner(app, &app.state::<AppState>()).await
+    stop_recording_inner(app, &app.state::<AppState>(), true).await
 }
 
 /// Only the process that automatically started this recording can end it.
@@ -211,14 +207,13 @@ pub async fn stop_recording_for_meeting(
         return Ok(false);
     }
     lifecycle.auto_origin = None;
-    let result = stop_recording_inner(app, &state).await;
-    if let Err(error) = &result { lifecycle.stop_error = Some(error.clone()); }
-    result.map(|_| true)
+    stop_recording_inner(app, &state, false).await.map(|_| true)
 }
 
 async fn stop_recording_inner(
     app: &AppHandle,
     state: &AppState,
+    for_quit: bool,
 ) -> Result<events::TranscriptStatus, String> {
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "stop_recording called.");
 
@@ -226,6 +221,11 @@ async fn stop_recording_inner(
     let (tx, rx) = tokio::sync::oneshot::channel();
     let handle = {
         let mut guard = cache.lock().await;
+        // The forwarder records a crash under this same cache lock, before
+        // a confirmed Quit can mistake the now-idle session for a clean stop.
+        if for_quit && guard.is_none() {
+            if let Some(error) = state.take_stop_error() { return Err(error); }
+        }
         guard.as_mut().map(|handle| {
             handle.shutdown = Some(tx);
             SidecarHandle {
@@ -258,7 +258,9 @@ async fn stop_recording_inner(
         return Ok(state.snapshot_status());
     };
 
-    let status = state.mark_stopped();
+    // Quit already presents its own failure; only remember errors it has not seen.
+    let stop_error = if for_quit { None } else { result.as_ref().err().cloned() };
+    let status = state.mark_stopped_with_error(stop_error);
     push_and_emit_debug(app, state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status changed: stopped.");
     events::emit_status(app, &status);
     result.map(|()| status)
@@ -978,9 +980,11 @@ fn spawn_event_forwarder(
                         let _ = shutdown.send(check_sidecar_shutdown(payload.code, acknowledged_shutdown));
                         return;
                     }
-                    let status = app_handle.state::<AppState>().mark_stopped();
-                    events::emit_status(&app_handle, &status);
                     let exit_code = payload.code;
+                    let status = app_handle.state::<AppState>().mark_stopped_with_error(Some(format!(
+                        "The transcription service exited without completing shutdown (exit: {exit_code:?})."
+                    )));
+                    events::emit_status(&app_handle, &status);
                     let entry = app_handle.state::<AppState>().push_debug(
                         DebugLogEntrySource::Sidecar,
                         DebugLogEntryLevel::Error,
@@ -1049,7 +1053,9 @@ async fn handle_handshake_line(
         })
     } else {
         let handle = guard.take();
-        let status = app.state::<AppState>().mark_stopped();
+        let status = app.state::<AppState>().mark_stopped_with_error(Some(
+            "The transcription service reported an incompatible protocol version.".into(),
+        ));
         events::emit_status(app, &status);
         handle
     };
@@ -1113,7 +1119,9 @@ fn spawn_handshake_timeout(app: AppHandle, child: Arc<Mutex<Option<CommandChild>
             return;
         }
         let handle = guard.take();
-        let status = app.state::<AppState>().mark_stopped();
+        let status = app.state::<AppState>().mark_stopped_with_error(Some(
+            "The transcription service did not complete its handshake.".into(),
+        ));
         events::emit_status(&app, &status);
         let entry = app.state::<AppState>().push_debug(
             DebugLogEntrySource::Sidecar,

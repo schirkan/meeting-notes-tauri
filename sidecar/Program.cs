@@ -230,12 +230,27 @@ if (!string.IsNullOrWhiteSpace(speakerId))
     Logger.Info("config", "speaker_device_id", $"--speaker-device-id={speakerId}");
 
 var targetWaveFormat = new WaveFormat(sampleRate, 16, 1);
+// Process lifetime: a native operation or the stdin reader may outlive a
+// timed-out shutdown and still use the token while the process exits.
 var cts = new CancellationTokenSource();
-Console.CancelKeyPress += (_, e) =>
+var stopping = cts.Token;
+AzureSpeechService? azure = null;
+AudioRecorderSource? micSource = null;
+AudioRecorderSource? speakerSource = null;
+var captureCleanupAssigned = false;
+
+void RequestStop()
+{
+    azure?.RequestStop();
+    cts.Cancel();
+}
+
+ConsoleCancelEventHandler onCancel = (_, e) =>
 {
     e.Cancel = true;
-    cts.Cancel();
+    RequestStop();
 };
+Console.CancelKeyPress += onCancel;
 
 try
 {
@@ -271,7 +286,6 @@ try
     // Float-Mic, fuer das die Engine nicht auf 16-Bit-PCM konvertieren kann -
     // faellt AudioRecorderSource automatisch auf den MediaFoundation-Resampler
     // zurueck. Beide Wege liefern exakt 16 kHz / 16-bit / mono.
-    AzureSpeechService? azure = null;
     if (azureEnabled)
     {
         var azureConfig = new AzureSpeechConfig(
@@ -294,7 +308,7 @@ try
 
     // T-511: Nur transkribierte Quellen werden aufgenommen. Eine abgeschaltete
     // Quelle erhaelt weder Recorder noch Azure-Stream.
-    using AudioRecorderSource? micSource = micDevice is null
+    micSource = micDevice is null
         ? null
         : AudioRecorderSource.Create(
         micDevice,
@@ -322,7 +336,7 @@ try
             }
         });
 
-    using AudioRecorderSource? speakerSource = speakerDevice is null
+    speakerSource = speakerDevice is null
         ? null
         : AudioRecorderSource.Create(
         speakerDevice,
@@ -379,94 +393,102 @@ try
     // "pause" beendet die Azure-Session NICHT: nur die Audioframes werden
     // nicht mehr zugespeist. Die vom Azure-Dienst vergebenen Sprecher-IDs
     // bleiben dadurch gueltig.
-    _ = Task.Run(async () =>
+    async Task ReconnectAsync(bool resuming)
     {
+        if (azure is null) return;
         try
         {
-            while (!cts.Token.IsCancellationRequested)
-            {
-                var line = await Console.In.ReadLineAsync(cts.Token);
-                if (line is null) break;
-                var command = SidecarCommands.ReadType(line);
-                switch (command)
-                {
-                    case SidecarCommands.HandshakeAck:
-                        Logger.Info("sidecar", "handshake_ack", "Protocol handshake confirmed.");
-                        break;
-                    case SidecarCommands.Pause:
-                        azure?.SetPaused(true);
-                        Logger.Info("sidecar", "pause", "Transcription paused; the Azure session stays connected.");
-                        Logger.Event("status", new { phase = "paused", running = true });
-                        break;
-                    case SidecarCommands.Resume:
-                        {
-                            var restarted = azure is null ? Array.Empty<string>() : await azure.ReconnectDeadStreamsAsync();
-                            azure?.SetPaused(false);
-                            Logger.Info("sidecar", "resume", "Transcription resumed.");
-                            Logger.Event("status", new { phase = "resumed", running = true });
-                            foreach (var source in restarted)
-                                Logger.Warn("azure", "speaker_ids_reset",
-                                    $"The Azure session for {source} had ended and was reconnected. " +
-                                    "The speaker IDs were reassigned.");
-                            break;
-                        }
-                    case SidecarCommands.Reset:
-                        Logger.Info("sidecar", "reset", "Reset command received.");
-                        break;
-                    case SidecarCommands.Shutdown:
-                        Logger.Info("sidecar", "shutdown", "Shutdown command received.");
-                        cts.Cancel();
-                        break;
-                    default:
-                        Logger.Warn("sidecar", "unknown_command", $"Unknown command: {command}");
-                        break;
-                }
-            }
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            Logger.Error("SIDECAR_UNAVAILABLE", $"The stdin reader stopped: {ex.Message}");
-        }
-    });
-
-    var healthInterval = TimeSpan.FromSeconds(30);
-    var nextHealthLog = DateTime.UtcNow.Add(healthInterval);
-    while (!cts.Token.IsCancellationRequested)
-    {
-        try { await Task.Delay(TimeSpan.FromSeconds(1), cts.Token); }
-        catch (OperationCanceledException) { break; }
-
-        if (DateTime.UtcNow >= nextHealthLog)
-        {
-            Logger.Info("health", "alive", "ok");
-            nextHealthLog = DateTime.UtcNow.Add(healthInterval);
-        }
-
-        // Waehrend einer Pause wird nicht neu verbunden: die Azure-Sitzung
-        // soll die Sprecher-IDs unveraendert erhalten. Ausserhalb der Pause
-        // wird eine vom Dienst beendete Sitzung sofort neu aufgebaut, damit
-        // die Aufnahme nicht still weiterlaeuft.
-        if (azure is not null && !azure.IsPaused)
-        {
-            var restarted = await azure.ReconnectDeadStreamsAsync();
+            var restarted = await azure.ReconnectDeadStreamsAsync(stopping);
+            stopping.ThrowIfCancellationRequested();
             foreach (var source in restarted)
                 Logger.Warn("azure", "speaker_ids_reset",
-                    $"The Azure session for {source} was ended by the service and reconnected. " +
-                    "The speaker IDs were reassigned.");
+                    $"The Azure session for {source} had ended and was reconnected. The speaker IDs were reassigned.");
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            Logger.Error("AZURE_RECOGNIZER_FAILED", $"Azure reconnect failed ({(resuming ? "resume" : "health check")}): {ex.Message}");
         }
     }
 
-    micSource?.Stop();
-    speakerSource?.Stop();
-    if (azure is not null) await azure.StopAsync(requireCleanStop: true);
-    Logger.Info("status", "stopped", "Graceful shutdown completed.");
-    Logger.Event("status", new { phase = "stopped", running = false });
-    return 0;
-}
-catch (OperationCanceledException)
-{
-    Logger.Info("status", "cancelled", "Stopped by cancellation.");
+    async Task HandleCommandAsync(string command)
+    {
+        switch (command)
+        {
+            case SidecarCommands.HandshakeAck:
+                Logger.Info("sidecar", "handshake_ack", "Protocol handshake confirmed.");
+                break;
+            case SidecarCommands.Pause:
+                azure?.SetPaused(true);
+                Logger.Info("sidecar", "pause", "Transcription paused; the Azure session stays connected.");
+                Logger.Event("status", new { phase = "paused", running = true });
+                break;
+            case SidecarCommands.Resume:
+                await ReconnectAsync(resuming: true);
+                stopping.ThrowIfCancellationRequested();
+                azure?.SetPaused(false);
+                Logger.Info("sidecar", "resume", "Transcription resumed.");
+                Logger.Event("status", new { phase = "resumed", running = true });
+                break;
+            case SidecarCommands.Reset:
+                Logger.Info("sidecar", "reset", "Reset command received.");
+                break;
+            default:
+                Logger.Warn("sidecar", "unknown_command", $"Unknown command: {command}");
+                break;
+        }
+    }
+
+    _ = Task.Run(async () =>
+    {
+        try { await RecordingControl.ReadCommandsAsync(Console.In, HandleCommandAsync, RequestStop, stopping); }
+        catch (Exception ex) { Logger.Error("SIDECAR_UNAVAILABLE", $"The stdin reader stopped: {ex.Message}"); }
+    });
+
+    _ = Task.Run(async () =>
+    {
+        var healthInterval = TimeSpan.FromSeconds(30);
+        var nextHealthLog = DateTime.UtcNow.Add(healthInterval);
+        try
+        {
+            while (!stopping.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1), stopping);
+                if (DateTime.UtcNow >= nextHealthLog)
+                {
+                    Logger.Info("health", "alive", "ok");
+                    nextHealthLog = DateTime.UtcNow.Add(healthInterval);
+                }
+
+                // During a pause, retain speaker identities and leave reconnect to Resume.
+                if (azure is not null && !azure.IsPaused) await ReconnectAsync(resuming: false);
+            }
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
+    });
+
+    // Neither a Resume command nor the health task owns the shutdown wait.
+    try { await Task.Delay(Timeout.InfiniteTimeSpan, stopping); }
+    catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
+
+    using var deadline = new CancellationTokenSource(RecordingControl.ShutdownBudget);
+    var shutdownToken = deadline.Token;
+    captureCleanupAssigned = true;
+    await RecordingControl.CompleteShutdownAsync(async () =>
+    {
+        try
+        {
+            micSource?.Stop();
+            speakerSource?.Stop();
+        }
+        finally
+        {
+            try { micSource?.Dispose(); }
+            finally { speakerSource?.Dispose(); }
+        }
+
+        if (azure is not null) await azure.StopAsync(requireCleanStop: true, shutdownToken);
+    }, shutdownToken);
     return 0;
 }
 catch (Exception ex)
@@ -476,6 +498,13 @@ catch (Exception ex)
 }
 finally
 {
-    cts.Dispose();
+    Console.CancelKeyPress -= onCancel;
+    // Successful or timed-out shutdown already owns recorder disposal. Never
+    // retry it here; native code may still be working on the same handles.
+    if (!captureCleanupAssigned)
+    {
+        try { micSource?.Dispose(); }
+        finally { speakerSource?.Dispose(); }
+    }
 }
 

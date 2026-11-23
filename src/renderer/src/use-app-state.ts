@@ -78,19 +78,24 @@ export function useAppState() {
   const [now, setNow] = useState(() => Date.now())
   const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null)
   const observedStartRef = useRef<string | null>(null)
+  const recordingGenerationRef = useRef(0)
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
   const autoScrollEnabledRef = useRef(true)
   const transcriptListRef = useRef<HTMLUListElement | null>(null)
 
-  const observeRecordingStart = (nextStatus: TranscriptStatus) => {
+  const observeRecordingStart = (nextStatus: TranscriptStatus, resetTranscript = true) => {
     const startedAt = nextStatus.startedAt
-    if (!nextStatus.running || !startedAt || observedStartRef.current === startedAt) return
+    const previousStart = observedStartRef.current
+    if (!nextStatus.running || !startedAt || previousStart === startedAt) return
     observedStartRef.current = startedAt
+    recordingGenerationRef.current++
+    setSessionStartedAt(startedAt)
+    // A first paused status describes a session already in progress, even before getStatus resolves.
+    if (!resetTranscript || (previousStart === null && nextStatus.paused)) return
     setSegments([])
     setSpeakerAliases({})
     autoScrollEnabledRef.current = true
     setAutoScrollEnabled(true)
-    setSessionStartedAt(startedAt)
   }
 
   const onToggleDevtools = async () => {
@@ -133,6 +138,14 @@ export function useAppState() {
     }
 
     let disposed = false
+    let receivedLiveStatus = false
+
+    const statusLoad = transcriptApi.getStatus().then((nextStatus) => {
+      if (disposed || receivedLiveStatus) return
+      // Adopt an existing session without clearing any segments already received.
+      observeRecordingStart(nextStatus, false)
+      setStatus(nextStatus)
+    })
 
     const configLoad = transcriptApi.getConfig()
       .then((nextConfig) => {
@@ -159,16 +172,14 @@ export function useAppState() {
       })
 
     void Promise.all([
-      transcriptApi.getStatus(),
       transcriptApi.getSettings(),
       transcriptApi.getDevices(),
       transcriptApi.getDebugLog(),
-      configLoad
+      configLoad,
+      statusLoad
     ])
-      .then(([nextStatus, nextSettings, nextDevices, nextDebugLog]) => {
+      .then(([nextSettings, nextDevices, nextDebugLog]) => {
         if (disposed) return
-        setStatus(nextStatus)
-        setSessionStartedAt(nextStatus.startedAt ?? null)
         const normalized = normalizeUserSettings(nextSettings)
         setSettings(normalized)
         setDialogSettings(normalized)
@@ -239,6 +250,7 @@ export function useAppState() {
     })
 
     const unsubStatus = transcriptApi.onStatus((nextStatus) => {
+      receivedLiveStatus = true
       observeRecordingStart(nextStatus)
       setNow(Date.now())
       setStatus(nextStatus)
@@ -266,6 +278,7 @@ export function useAppState() {
     // Das Ereignis kam bisher bis zum Preload, wurde aber von niemandem
     // abonniert - die Oberflaeche blieb bei einem Crash stumm.
     const unsubCrashed = window.transcriptSidecar?.onCrashed((payload) => {
+      receivedLiveStatus = true
       setLastError({ code: 'SIDECAR_UNAVAILABLE', message: 'The transcription service has crashed.' })
       setStatus((prev) => ({ ...prev, running: false, paused: false }))
       setIsStarting(false)
@@ -515,7 +528,7 @@ export function useAppState() {
       setNow(Date.now())
       setStatus(next)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Stop failed.'
+      const message = errorDetail(error, 'Stop failed.')
       setLastError({ code: 'UI_STOP_FAILED', message })
       setToast({ message: `UI_STOP_FAILED: ${message}`, variant: 'error', persistent: true })
     }
@@ -563,12 +576,15 @@ export function useAppState() {
       return
     }
 
+    const generation = recordingGenerationRef.current
     try {
       await window.transcriptApi.reset()
     } catch (error) {
       setToast({ message: errorDetail(error, 'The transcript could not be reset.'), variant: 'error', persistent: true })
       return
     }
+    // A new recording may have started (and even stopped) while IPC was pending.
+    if (recordingGenerationRef.current !== generation) return
     setSegments([])
     setSpeakerAliases({})
     setSessionStartedAt(null)
@@ -796,7 +812,7 @@ export function useAppState() {
   // aufgeloest wird.
   const pendingExportsRef = useRef(new Map<string, Promise<void>>())
   const lastSavedExportRef = useRef<string | null>(null)
-  const persistTranscript = async (segmentsToExport: TranscriptSegment[], reuseSaved = false) => {
+  const persistTranscript = async (segmentsToExport: TranscriptSegment[], { reuseSaved = false, background = false } = {}) => {
     if (!segmentsToExport.some((segment) => segment.state === 'final')) return
     const markdown = buildTranscriptMarkdown(segmentsToExport)
     const key = JSON.stringify([segmentsToExport.at(-1)?.sessionId, settingsRef.current.transcript.markdownExport.path, markdown])
@@ -806,15 +822,17 @@ export function useAppState() {
     if (reuseSaved && lastSavedExportRef.current === key) return
     const write = window.transcriptApi.saveTranscriptMarkdown(markdown).then((path) => {
       lastSavedExportRef.current = key
-      setToast({ message: `Transcript saved: ${path}`, variant: 'info', persistent: false })
+      setToast((previous) => background && previous?.variant === 'error' ? previous : {
+        message: `Transcript saved: ${path}`, variant: 'info', persistent: false
+      })
     }).finally(() => pending.delete(key))
     pending.set(key, write)
     return write
   }
 
-  const autoSaveTranscript = async (segmentsToExport: TranscriptSegment[]) => {
+  const saveTranscriptWithToast = async (segmentsToExport: TranscriptSegment[], background = false) => {
     try {
-      await persistTranscript(segmentsToExport)
+      await persistTranscript(segmentsToExport, { background })
     } catch (error) {
       const message = errorDetail(error, 'The transcript could not be saved.')
       setToast({ message, variant: 'error', persistent: true })
@@ -876,7 +894,7 @@ export function useAppState() {
     saveTimerRef.current = window.setTimeout(() => {
       saveTimerRef.current = null
       setSaveRequest(0)
-      void autoSaveTranscript(exportSegmentsRef.current)
+      void saveTranscriptWithToast(exportSegmentsRef.current, true)
     }, 500)
     return () => {
       if (saveTimerRef.current !== null) {
@@ -896,7 +914,7 @@ export function useAppState() {
       let error: string | null = null
       try {
         await settingsSaveQueueRef.current
-        await persistTranscript(labeledSegments, true)
+        await persistTranscript(labeledSegments, { reuseSaved: true })
       } catch (cause) {
         error = `The transcript could not be saved: ${errorDetail(cause, 'Unknown error.')}`
       }
@@ -928,7 +946,7 @@ export function useAppState() {
     lastError,
     latestSegment,
     onCopyTranscript,
-    onExportTranscript: () => persistTranscript(labeledSegments),
+    onExportTranscript: () => saveTranscriptWithToast(labeledSegments),
     autoScrollEnabled,
     onFollowTranscript: () => {
       autoScrollEnabledRef.current = true

@@ -11,6 +11,8 @@ used on its own.
 [🐛 Report an issue](https://github.com/schirkan/meeting-notes-tauri/issues) ·
 [📄 License](./LICENSE)
 
+This README describes `main`. For the behavior of an installed release, use the README at its tag (for example [v0.1.5](https://github.com/schirkan/meeting-notes-tauri/blob/v0.1.5/README.md)). **Save on Quit** and **Hide from taskbar** require **v0.1.6** or newer.
+
 ## ✨ Features
 
 - **Live transcripts:** See interim text during the conversation and finalized results as recognition completes.
@@ -21,7 +23,7 @@ used on its own.
 - **Portable app:** Extract the complete folder and run it without an installer. The .NET runtime ships with the app.
 - **Connection diagnostics:** Test Azure connectivity and an optional corporate proxy from the settings dialog.
 - **Application information and diagnostics:** **About** in the three-dot menu shows the app icon, repository, author and MIT license. **Dev-Tools (F12)** toggles developer tools, as does F12. Webpage right-click menus are suppressed except in text fields and editable content; native window and tray menus are unaffected.
-- **System tray:** The tray icon turns **red while transcribing**, **yellow while paused**, and returns to its original color after stopping or a sidecar crash. Right-click it for **Show** or **Quit**. **Show** and a left double-click restore and focus the main window. **Hide from taskbar** under **General** is on by default and takes effect after saving. If the system tray cannot be initialized, the window stays on the taskbar. With **Minimize to system tray on close** enabled, closing the window keeps the app, transcription, and meeting detection running. With it disabled, closing the window quits the app even when **Hide from taskbar** is on. Closing to quit or choosing **Quit** from the tray asks for confirmation while transcription is running or paused. **Cancel** leaves the session open. Confirming **Quit** stops transcription, collects the final segments, and saves them as Markdown in the configured folder before exiting, even if **Save transcript automatically** is off. No file is written if there are no final segments. If stopping or saving fails, the app stays open with the transcript so you can try **Quit** again.
+- **System tray:** The tray icon turns **red while transcribing**, **yellow while paused**, and returns to its original color after stopping or a sidecar crash. Right-click it for **Show** or **Quit**. **Show** and a left double-click restore and focus the main window. **Hide from taskbar** under **General** is on by default and takes effect after saving. If the system tray cannot be initialized, the window stays on the taskbar. With **Minimize to system tray on close** enabled, closing the window keeps the app, transcription, and meeting detection running. With it disabled, closing the window quits the app even when **Hide from taskbar** is on. Closing to quit or choosing **Quit** from the tray asks for confirmation while transcription is running or paused. **Cancel** leaves the session open. Confirming **Quit** stops transcription, collects the final segments, and saves them as Markdown in the configured folder before exiting, even if **Save transcript automatically** is off. No file is written if there are no final segments. If stopping or saving fails, the app stays open. After a stop failure, choose **Quit** again to save the final text collected so far; results not received from Azure cannot be recovered. You can also export manually, and write failures are shown in the app.
 - **Automatic transcription:** Under **General**, **Start transcription automatically** watches Windows audio sessions and starts transcription when an allowed meeting app becomes active. **Stop transcription automatically** stops that session after the app's audio sessions have been inactive for 3 seconds. Both settings default to on. Auto-stop needs auto-start and never stops a manually started transcription. This is an audio-session heuristic, not a definitive meeting signal; real Teams/Zoom acceptance remains open.
 
 ## Screenshots
@@ -222,7 +224,7 @@ For the native tray callback/menu/exit probe, run `npm run test:tray` on an inte
 
 GitHub Actions builds and publishes the portable releases. There is **no automatic build on push** - the workflow only runs when a release tag is pushed:
 
-- **Release** (`.github/workflows/release.yml`) runs when you push a `v*` tag. It checks out exactly that tag, runs typecheck, Node tests and spec consistency, builds the portable distribution, verifies it with the smoke test and the deployment check, and publishes the ZIP as a GitHub release asset together with a `SHA256SUMS.txt` file in `sha256sum` format.
+- **Release** (`.github/workflows/release.yml`) runs when you push a `v*` tag. It checks out exactly that tag, runs typecheck and Node tests, builds the portable distribution, verifies it with the smoke test and the deployment check, and publishes the ZIP as a GitHub release asset together with a `SHA256SUMS.txt` file in `sha256sum` format.
 - A missing release can be published later without moving the tag via **Run workflow** with the `tag` input.
 
 ```powershell

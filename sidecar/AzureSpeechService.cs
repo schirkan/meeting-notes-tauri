@@ -71,7 +71,7 @@ public sealed class AzureSpeechService : IDisposable
     /// </summary>
     public void SetPaused(bool paused)
     {
-        if (_paused == paused) return;
+        if (_stopping || _paused == paused) return;
         _paused = paused;
         Logger.Info(
             "azure",
@@ -113,6 +113,9 @@ public sealed class AzureSpeechService : IDisposable
         if (_streams.Count > 0)
             throw new InvalidOperationException("AzureSpeechService is already running. Call StopAsync first.");
         _format = format;
+        lock (_missingSpeakerIdLogged) _missingSpeakerIdLogged.Clear();
+        _firstFrameLogged.Clear();
+        _pushCounters.Clear();
         _stopping = false;
 
         var sources = TranscriptionSources;
@@ -159,7 +162,7 @@ public sealed class AzureSpeechService : IDisposable
         // Pause (T-507): die Azure-Session lebt weiter, aber es werden
         // keine Audioframes mehr zugespeist. Der pausierte Abschnitt
         // erscheint deshalb nicht im Transkript.
-        if (_paused) return;
+        if (_paused || _stopping) return;
         try
         {
             if (_firstFrameLogged.Add(frame.Source))
@@ -178,7 +181,7 @@ public sealed class AzureSpeechService : IDisposable
             // tragen.
             if (!_streams.TryGetValue(frame.Source, out var state)) return;
             var pushTicks = Stopwatch.GetTimestamp();
-            state.PushStream.Write(frame.Payload);
+            if (!state.TryWrite(frame.Payload)) return;
 
             // T-502: Stufen der Latenzkette im Sidecar festhalten. Der
             // Push-Zeitpunkt ist die Referenz fuer die Azure-Roundtrip.
@@ -216,20 +219,35 @@ public sealed class AzureSpeechService : IDisposable
     /// vergibt neue Sprecher-IDs — das UI erkennt das an der Session-ID im
     /// Segment und baut die Sprecherbasis neu auf (T-507).
     /// </summary>
-    public async Task<string[]> ReconnectDeadStreamsAsync()
+    public async Task<string[]> ReconnectDeadStreamsAsync(CancellationToken stopping)
     {
-        await _streamLifecycle.WaitAsync();
+        await _streamLifecycle.WaitAsync(stopping);
         try
         {
             if (_stopping || _format is null) return Array.Empty<string>();
             var restarted = new List<string>();
             foreach (var source in _streams.Where(pair => pair.Value.SessionDead).Select(pair => pair.Key).ToArray())
             {
+                stopping.ThrowIfCancellationRequested();
+                if (_stopping) break;
                 var dead = _streams[source];
-                FinalizeStream(dead);
+                if (!dead.SessionDead) continue;
+                // Keep ownership until native cleanup/start actually returns.
+                // Canceling a wait must not let shutdown dispose a busy recognizer.
+                await FinalizeStreamAsync(dead, requireDrain: false, CancellationToken.None);
                 _streams.TryRemove(source, out _);
+                stopping.ThrowIfCancellationRequested();
+                if (_stopping) break;
                 var fresh = EnsureStreamForFormat(source, _format);
-                await StartStreamAsync(fresh);
+                stopping.ThrowIfCancellationRequested();
+                if (_stopping) break;
+                try { await StartStreamAsync(fresh); }
+                catch
+                {
+                    fresh.MarkDead();
+                    throw;
+                }
+                stopping.ThrowIfCancellationRequested();
                 restarted.Add(source);
             }
             if (restarted.Count > 0)
@@ -241,21 +259,25 @@ public sealed class AzureSpeechService : IDisposable
         finally { _streamLifecycle.Release(); }
     }
 
-    public async Task StopAsync(bool requireCleanStop = false)
+    internal void RequestStop() => _stopping = true;
+
+    public async Task StopAsync(bool requireCleanStop = false, CancellationToken deadline = default)
     {
-        _stopping = true;
-        await _streamLifecycle.WaitAsync();
+        RequestStop();
+        await _streamLifecycle.WaitAsync(deadline);
         try
         {
             Logger.Info("azure", "stopping", $"{_streams.Count} active stream(s) are being stopped.");
-            var closeTasks = _streams.Values.Select(state => Task.Run(() => FinalizeStream(state))).ToArray();
-            var closed = await Task.WhenAll(closeTasks);
-            _streams.Clear();
-            lock (_missingSpeakerIdLogged) _missingSpeakerIdLogged.Clear();
-            _firstFrameLogged.Clear();
-            _pushCounters.Clear();
-            if (requireCleanStop && closed.Any(success => !success))
-                throw new InvalidOperationException("An Azure recognizer could not be stopped cleanly.");
+            try
+            {
+                await Task.WhenAll(_streams.Values.Select(state => Task.Run(
+                    () => FinalizeStreamAsync(state, requireCleanStop, deadline))));
+            }
+            catch (Exception ex) when (!requireCleanStop)
+            {
+                Logger.Warn("azure", "stop_error", $"An Azure recognizer could not be stopped: {ex.Message}");
+            }
+            finally { _streams.Clear(); }
         }
         finally { _streamLifecycle.Release(); }
     }
@@ -289,21 +311,21 @@ public sealed class AzureSpeechService : IDisposable
             var recognizer = new ConversationTranscriber(_speechConfig, autoDetect, audioConfig);
             var state = new StreamState(recognizer, pushStream, "conversationTranscriber", source);
             AttachCommonDiagnostics(recognizer, state);
-            recognizer.Transcribing += (_, e) =>
+            recognizer.Transcribing += (_, e) => state.Drain.Emit(() =>
             {
                 var text = e.Result?.Text?.Trim();
                 if (!string.IsNullOrEmpty(text))
                     EmitTranscript(source, text, "interim", 0.8, e.Result?.SpeakerId,
                         ExtractConversationLanguage(e.Result), state.ResolveSessionId());
-            };
-            recognizer.Transcribed += (_, e) =>
+            });
+            recognizer.Transcribed += (_, e) => state.Drain.Emit(() =>
             {
                 var text = e.Result?.Text?.Trim();
                 if (!string.IsNullOrEmpty(text))
                     EmitTranscript(source, text, "final", 0.9, e.Result?.SpeakerId,
                         ExtractConversationLanguage(e.Result), state.ResolveSessionId());
-            };
-            recognizer.Canceled += (_, e) => HandleCanceled(source, "conversationTranscriber", e);
+            });
+            recognizer.Canceled += (_, e) => HandleCanceled(state, e.Reason, e.ErrorCode, e.ErrorDetails);
             _streams[source] = state;
             return state;
         }
@@ -312,21 +334,21 @@ public sealed class AzureSpeechService : IDisposable
             var recognizer = new SpeechRecognizer(_speechConfig, autoDetect, audioConfig);
             var state = new StreamState(recognizer, pushStream, "speechRecognizer", source);
             AttachCommonDiagnostics(recognizer, state);
-            recognizer.Recognizing += (_, e) =>
+            recognizer.Recognizing += (_, e) => state.Drain.Emit(() =>
             {
                 var text = e.Result?.Text?.Trim();
                 if (!string.IsNullOrEmpty(text))
                     EmitTranscript(source, text, "interim", 0.8, source == SourceMic ? "self" : "guest",
                         ExtractSpeechLanguage(e.Result), state.ResolveSessionId());
-            };
-            recognizer.Recognized += (_, e) =>
+            });
+            recognizer.Recognized += (_, e) => state.Drain.Emit(() =>
             {
                 var text = e.Result?.Text?.Trim();
                 if (!string.IsNullOrEmpty(text))
                     EmitTranscript(source, text, "final", 0.9, source == SourceMic ? "self" : "guest",
                         ExtractSpeechLanguage(e.Result), state.ResolveSessionId());
-            };
-            recognizer.Canceled += (_, e) => HandleCanceled(source, "speechRecognizer", e);
+            });
+            recognizer.Canceled += (_, e) => HandleCanceled(state, e.Reason, e.ErrorCode, e.ErrorDetails);
             _streams[source] = state;
             return state;
         }
@@ -335,6 +357,7 @@ public sealed class AzureSpeechService : IDisposable
     private async Task StartStreamAsync(StreamState state)
     {
         if (state.Started) return;
+        state.StartAttempted = true;
         if (state.Mode == "conversationTranscriber")
         {
             var recognizer = (ConversationTranscriber)state.RecognizerBase;
@@ -351,41 +374,47 @@ public sealed class AzureSpeechService : IDisposable
         }
     }
 
-    private bool FinalizeStream(StreamState state)
+    private async Task FinalizeStreamAsync(StreamState state, bool requireDrain, CancellationToken deadline)
     {
-        var success = true;
         try
         {
-            if (state.Mode == "conversationTranscriber")
+            // EOF lets the SDK consume already queued audio. An explicit Stop
+            // can cut that short, and its Task is not a final-result barrier.
+            state.CloseInput();
+            try
             {
-                if (state.Started) ((ConversationTranscriber)state.RecognizerBase).StopTranscribingAsync().GetAwaiter().GetResult();
+                await state.Drain.FinishAsync(requireDrain && state.Started).WaitAsync(deadline);
             }
-            else
+            finally
             {
-                if (state.Started) ((SpeechRecognizer)state.RecognizerBase).StopContinuousRecognitionAsync().GetAwaiter().GetResult();
+                if (state.StartAttempted)
+                {
+                    state.ExplicitStopRequested = true;
+                    if (state.RecognizerBase is ConversationTranscriber transcriber)
+                        await transcriber.StopTranscribingAsync();
+                    else
+                        await ((SpeechRecognizer)state.RecognizerBase).StopContinuousRecognitionAsync();
+                }
             }
         }
-        catch (Exception ex)
-        {
-            success = false;
-            Logger.Warn("azure", "stop_error", $"stop error ({state.Mode}/{state.Source}): {ex.Message}");
-        }
-        try { state.PushStream.Close(); } catch { /* ignore */ }
-        try { state.RecognizerBase.Dispose(); } catch { /* ignore */ }
+        finally { state.RecognizerBase.Dispose(); }
+        if (requireDrain && (state.Drain.Failed || (state.StartAttempted && !state.Started)))
+            throw new InvalidOperationException($"Azure recognition did not end cleanly ({state.Mode}/{state.Source}).");
         Logger.Info("azure", "stream_closed", $"Recognizer closed (mode={state.Mode}, started={state.Started}).");
-        return success;
     }
 
     private void AttachCommonDiagnostics(Recognizer recognizer, StreamState state)
     {
         recognizer.SessionStarted += (_, e) =>
         {
+            state.Drain.OnSessionStarted();
             state.OnSessionStarted(e.SessionId);
             Logger.Info("azure", "session_start",
                 $"Session started (source={state.Source}, mode={state.Mode}, session={e.SessionId}).");
         };
         recognizer.SessionStopped += (_, e) =>
         {
+            state.Drain.OnSessionStopped();
             Logger.Info("azure", "session_stop",
                 $"Session stopped (source={state.Source}, mode={state.Mode}, session={e.SessionId}).");
             if (!_stopping) state.MarkDead();
@@ -398,15 +427,17 @@ public sealed class AzureSpeechService : IDisposable
                 $"Speech end detected (source={state.Source}, mode={state.Mode}, offset={e.Offset}).");
     }
 
-    private void HandleCanceled(string source, string mode, RecognitionEventArgs e)
+    private void HandleCanceled(StreamState state, CancellationReason reason, CancellationErrorCode errorCode, string? errorDetails)
     {
-        if (!_stopping && _streams.TryGetValue(source, out var canceled)) canceled.MarkDead();
-        // ErrorDetails / Reason / ErrorCode live on the derived
-        // *CanceledEventArgs classes; reflection keeps this helper generic.
-        var prop = (string name) => e.GetType().GetProperty(name)?.GetValue(e)?.ToString();
-        var details = (prop("ErrorDetails") ?? "The Azure recognizer was canceled.").Trim();
-        var reason = prop("Reason") ?? "n/a";
-        var errorCode = prop("ErrorCode") ?? "n/a";
+        // EOF is normal. Let SessionStopped declare the stream dead after its
+        // result callbacks, rather than reconnecting at the earlier EOF event.
+        if (reason == CancellationReason.EndOfStream ||
+            (state.ExplicitStopRequested && reason == CancellationReason.CancelledByUser)) return;
+
+        state.Drain.Fail();
+        if (!_stopping) state.MarkDead();
+        var details = (errorDetails ?? "The Azure recognizer was canceled.").Trim();
+        var (source, mode) = (state.Source, state.Mode);
         var authRelated = System.Text.RegularExpressions.Regex.IsMatch(
             details, "auth|token|key|forbidden|unauthorized|401|403",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -571,11 +602,37 @@ public sealed record AudioFrame(
 
 internal sealed class StreamState
 {
+    private readonly object _inputLock = new();
+    private bool _inputClosed;
+    private volatile bool _sessionDead;
+    public StreamDrain Drain { get; } = new();
     public Recognizer RecognizerBase { get; }
-    public PushAudioInputStream PushStream { get; }
+    private PushAudioInputStream PushStream { get; }
     public string Mode { get; }
     public string Source { get; }
     public bool Started { get; set; }
+    public bool StartAttempted { get; set; }
+    public volatile bool ExplicitStopRequested;
+
+    public bool TryWrite(byte[] payload)
+    {
+        lock (_inputLock)
+        {
+            if (_inputClosed) return false;
+            PushStream.Write(payload);
+            return true;
+        }
+    }
+
+    public void CloseInput()
+    {
+        lock (_inputLock)
+        {
+            if (_inputClosed) return;
+            PushStream.Close();
+            _inputClosed = true;
+        }
+    }
 
     /// <summary>T-502: Zeitpunkt des letzten Pushes in den Azure-Stream.</summary>
     public long LastPushTicks { get; set; }
@@ -601,9 +658,9 @@ internal sealed class StreamState
     /// Die Azure-Session dieser Quelle wurde vom Dienst beendet. Sie wird
     /// neu verbunden.
     /// </summary>
-    public bool SessionDead { get; private set; }
+    public bool SessionDead => _sessionDead;
 
-    public void MarkDead() => SessionDead = true;
+    public void MarkDead() => _sessionDead = true;
 
     /// <summary>
     /// Wie oft Azure fuer diese Quelle eine Session gemeldet hat. Der
@@ -655,7 +712,7 @@ internal sealed class StreamState
         var previous = AzureSessionId;
         SessionStartedCount += 1;
         AzureSessionId = sessionId;
-        SessionDead = false;
+        _sessionDead = false;
         if (previous is not null && !string.Equals(previous, sessionId, StringComparison.Ordinal))
         {
             EffectiveSessionId = null;

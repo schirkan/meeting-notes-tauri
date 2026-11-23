@@ -209,7 +209,11 @@ fn request_quit(app: &AppHandle) {
             app.state::<state::AppState>().snapshot_status().running
         };
         if !was_running && !running {
-            if app.state::<WindowBehavior>().quit_export_required.load(Ordering::Acquire) {
+            let behavior = app.state::<WindowBehavior>();
+            if behavior.quit_export_required.load(Ordering::Acquire)
+                || app.state::<state::AppState>().has_stop_error()
+            {
+                behavior.quit_export_required.store(true, Ordering::Release);
                 finish_quit(&app).await;
             } else {
                 app.exit(0);

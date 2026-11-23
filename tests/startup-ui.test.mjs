@@ -39,7 +39,16 @@ async function openApp(options) {
   }))
   await page.addInitScript((input) => {
     const noSubscription = () => () => {}
-    let currentStatus = { running: input.running ?? false, paused: false }
+    const stoppedStatus = { running: false, paused: false }
+    let currentStatus = input.running
+      ? { running: true, paused: false, startedAt: input.startedAt ?? new Date().toISOString() }
+      : stoppedStatus
+    let onStatus
+    window.emitStatus = (status) => {
+      currentStatus = status
+      onStatus?.(status)
+      return status
+    }
     window.settingsSaveError = input.saveSettingsError
     window.directoryPickerResult = input.directoryPickerResult ?? null
     window.transcriptApi = {
@@ -48,15 +57,26 @@ async function openApp(options) {
         window.devtoolsToggleCalls = (window.devtoolsToggleCalls ?? 0) + 1
       },
       openRepository: async () => { window.repositoryOpened = true },
-      getStatus: async () => currentStatus,
-      start: async () => { window.lastStartCalled = true; return currentStatus = { running: true, startedAt: new Date().toISOString() } },
+      getStatus: async () => {
+        const snapshot = currentStatus
+        if (input.deferInitialStatus) {
+          return new Promise(resolve => { window.completeInitialStatus = () => resolve(snapshot) })
+        }
+        return snapshot
+      },
+      start: async () => {
+        window.lastStartCalled = true
+        return window.emitStatus({ running: true, paused: false, startedAt: new Date().toISOString() })
+      },
       stop: async () => {
         window.lastStopCalled = true
-        if (input.stopError) throw new Error(input.stopError)
-        return currentStatus = { ...currentStatus, running: false, paused: false }
+        // Rust emits stopped even if shutting down the sidecar fails.
+        window.emitStatus(stoppedStatus)
+        if (input.stopError) throw input.stopError
+        return stoppedStatus
       },
-      pause: async () => { window.lastPauseCalled = true; return currentStatus = { ...currentStatus, running: true, paused: true } },
-      resume: async () => { window.lastResumeCalled = true; return currentStatus = { ...currentStatus, running: true, paused: false } },
+      pause: async () => { window.lastPauseCalled = true; return window.emitStatus({ ...currentStatus, paused: true }) },
+      resume: async () => { window.lastResumeCalled = true; return window.emitStatus({ ...currentStatus, paused: false }) },
       getSettings: async () => {
         const settings = {
           language: input.language ?? 'de-DE',
@@ -101,7 +121,11 @@ async function openApp(options) {
         window.lastSavedConfig = config
         return { exists: true, path: 'test-config', config }
       },
-      reset: async () => {},
+      reset: async () => {
+        if (input.deferReset) {
+          return new Promise(resolve => { window.completeReset = resolve })
+        }
+      },
       saveTranscriptMarkdown: async (markdown) => {
         window.lastSavedMarkdown = markdown
         window.transcriptWrites = (window.transcriptWrites ?? 0) + 1
@@ -136,7 +160,7 @@ async function openApp(options) {
         return () => { delete window.emitSegment }
       },
       onError: noSubscription,
-      onStatus: (callback) => { window.emitStatus = (value) => { currentStatus = value; callback(value) }; return () => { delete window.emitStatus } },
+      onStatus: (callback) => { onStatus = callback; return () => { onStatus = undefined } },
       onDebugLog: (callback) => { window.emitDebugLog = callback; return () => { delete window.emitDebugLog } },
       onMeetingDetected: (callback) => { window.emitMeetingDetected = callback; return () => { delete window.emitMeetingDetected } }
     }
@@ -341,6 +365,38 @@ test('valid startup configuration leaves settings closed', async () => {
   } finally {
     await page.close()
   }
+})
+
+test('a first live paused status preserves segments and wins over a delayed initial status', async () => {
+  const startedAt = new Date().toISOString()
+  const page = await openApp({
+    configState: { exists: true, path: 'test-config', config: validConfig },
+    running: true,
+    startedAt,
+    deferInitialStatus: true
+  })
+  try {
+    await page.waitForFunction(() => typeof window.completeInitialStatus === 'function')
+    await emitSegments(page)
+    await page.getByRole('button', { name: 'Speaker mapping show', exact: true }).click()
+    await page.getByRole('textbox', { name: 'Display name for Mic · Guest-1', exact: true }).fill('Anna')
+    await page.evaluate(value => window.emitStatus({ running: true, paused: true, startedAt: value }), startedAt)
+    const resume = page.getByRole('button', { name: 'Resume', exact: true })
+    await resume.waitFor()
+    const badges = page.locator('.speaker-badge')
+    assert.deepEqual(await badges.allTextContents(), ['Anna', 'Speaker · Guest-1'])
+
+    // The Settings dialog waits for startup data, so its visibility confirms
+    // the older status snapshot was processed, not just delivered to IPC.
+    await page.getByRole('button', { name: 'Open settings dialog' }).click()
+    await page.evaluate(() => window.completeInitialStatus())
+    const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
+    await dialog.waitFor()
+    await dialog.getByRole('button', { name: 'Close dialog', exact: true }).click()
+    assert.equal(await resume.isVisible(), true)
+    assert.equal(await page.getByRole('button', { name: 'Clear transcript', exact: true }).isDisabled(), true)
+    assert.deepEqual(await badges.allTextContents(), ['Anna', 'Speaker · Guest-1'])
+  } finally { await page.close() }
 })
 
 test('settings shows all sections without navigation and preserves two-column layout, save and test payloads', async () => {
@@ -936,20 +992,27 @@ test('Mic speakers get independent badges, aliases, interim handling and export 
   }
 })
 
-test('pause and resume keep the session running and report the paused state', async () => {
+test('pause and resume preserve segments and aliases when the renderer adopts a running session', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, running: true })
   try {
-    await page.locator('.hero-controls').waitFor()
+    await page.getByRole('button', { name: 'Stop', exact: true }).waitFor()
+    await emitSegments(page)
+    await page.getByRole('button', { name: 'Speaker mapping show', exact: true }).click()
+    await page.getByRole('textbox', { name: 'Display name for Mic · Guest-1', exact: true }).fill('Anna')
+    const badges = page.locator('.speaker-badge')
+    assert.deepEqual(await badges.allTextContents(), ['Anna', 'Speaker · Guest-1'])
     assert.match(await page.locator('.live-badge').getAttribute('aria-label'), /Running/)
     await page.getByRole('button', { name: /Pause/ }).click()
     await page.waitForFunction(() => !!window.lastPauseCalled)
     await page.waitForFunction(() => document.querySelector('.live-badge')?.classList.contains('paused'))
     assert.match(await page.locator('.live-badge').getAttribute('aria-label'), /Paused/)
     assert.match(await page.locator('.live-badge').getAttribute('title'), /session stays active/)
+    assert.deepEqual(await badges.allTextContents(), ['Anna', 'Speaker · Guest-1'])
     await page.getByRole('button', { name: /Resume/ }).click()
     await page.waitForFunction(() => !!window.lastResumeCalled)
     await page.waitForFunction(() => !document.querySelector('.live-badge')?.classList.contains('paused'))
     assert.match(await page.locator('.live-badge').getAttribute('aria-label'), /Running/)
+    assert.deepEqual(await badges.allTextContents(), ['Anna', 'Speaker · Guest-1'])
   } finally {
     await page.close()
   }
@@ -1261,6 +1324,31 @@ test('inline speaker editing has no reflow, cancels with Escape, and updates map
   } finally { await page.close() }
 })
 
+test('a manual Markdown export shows its write error and can be retried', async () => {
+  const page = await openApp({
+    configState: { exists: true, path: 'test-config', config: validConfig },
+    deferTranscriptWrite: true
+  })
+  try {
+    await emitSegments(page)
+    const exportMarkdown = async () => {
+      await page.getByLabel('More actions', { exact: true }).click()
+      await page.getByRole('button', { name: 'Export Markdown', exact: true }).click()
+    }
+    await exportMarkdown()
+    await page.waitForFunction(() => window.transcriptWrites === 1)
+    const writeError = 'The export folder is not writable.'
+    await page.evaluate(error => window.completeTranscriptWrite(error), writeError)
+    await page.getByText(writeError, { exact: true }).waitFor({ timeout: 3000 })
+    assert.equal(await page.getByRole('alert').isVisible(), true)
+
+    await exportMarkdown()
+    await page.waitForFunction(() => window.transcriptWrites === 2)
+    await page.evaluate(() => window.completeTranscriptWrite())
+    await page.getByText(/^Transcript saved: /).waitFor()
+  } finally { await page.close() }
+})
+
 test('idle audio settings stay centered in the available transcript area', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
   try {
@@ -1327,6 +1415,44 @@ test('idle audio settings synchronize with dialog, persist, and reset is stopped
   } finally { await page.close() }
 })
 
+test('a delayed Clear response cannot erase a newer session even after it stops', async () => {
+  const page = await openApp({
+    configState: { exists: true, path: 'test-config', config: validConfig },
+    deferReset: true,
+    transcript: { markdownExport: { enabled: false } }
+  })
+  try {
+    const start = page.getByRole('button', { name: 'Start', exact: true })
+    const stop = page.getByRole('button', { name: 'Stop', exact: true })
+    const clear = page.getByRole('button', { name: 'Clear transcript', exact: true })
+    await start.click()
+    await emitSegments(page)
+    await stop.click()
+    page.once('dialog', confirmation => confirmation.accept())
+    await clear.click()
+    await page.waitForFunction(() => typeof window.completeReset === 'function')
+
+    await start.click()
+    const text = 'Final segment of the newer session.'
+    await page.evaluate(value => window.emitSegment({ id: 'new-final', sessionId: 'new-session', source: 'mic',
+      speaker: 'Guest-1', language: 'de-DE', timestampIso: new Date().toISOString(), text: value, state: 'final' }), text)
+    await page.getByText(text, { exact: true }).waitFor()
+    assert.deepEqual(await page.locator('.segment-text').allTextContents(), [text])
+    await page.getByRole('button', { name: 'Speaker mapping show', exact: true }).click()
+    await page.getByRole('textbox', { name: 'Display name for Mic · Guest-1', exact: true }).fill('Anna')
+    await stop.click()
+    await start.waitFor()
+
+    await page.evaluate(async () => {
+      window.completeReset()
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    })
+    assert.deepEqual(await page.locator('.segment-text').allTextContents(), [text])
+    assert.deepEqual(await page.locator('.speaker-badge').allTextContents(), ['Anna'])
+    assert.equal(await clear.isEnabled(), true)
+  } finally { await page.close() }
+})
+
 test('Debug dock starts hidden, opens upward within half the workspace, and clears without collapsing', async () => {
   const logs = Array.from({ length: 70 }, (_, index) => ({ id: `log-${index}`, timestampIso: new Date().toISOString(), source: 'ipc',
     level: index < 2 ? 'error' : 'info', message: `Log ${index}: Status and details` }))
@@ -1390,11 +1516,15 @@ test('Follow appears only after manual scrolling and resumes automatic following
 })
 
 test('recording timer excludes pauses, freezes after stop and resets on a new start', async () => {
-  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, transcript: { markdownExport: { enabled: false } } })
+  const page = await openApp({
+    configState: { exists: true, path: 'test-config', config: validConfig },
+    running: true,
+    startedAt: new Date(Date.now() - 60000).toISOString(),
+    transcript: { markdownExport: { enabled: false } }
+  })
   try {
-    await page.getByRole('button', { name: 'Start', exact: true }).click()
-    await page.evaluate(() => window.emitStatus({ running: true, startedAt: new Date(Date.now() - 60000).toISOString() }))
-    await page.waitForFunction(() => document.querySelector('.live-badge time')?.textContent === '01:00')
+    await page.getByRole('button', { name: 'Stop', exact: true }).waitFor()
+    assert.match(await page.locator('.live-badge time').innerText(), /^01:\d{2}$/)
     await page.getByRole('button', { name: 'Pause', exact: true }).click()
     const paused = await page.locator('.live-badge time').innerText()
     await page.waitForTimeout(2100)
@@ -1437,14 +1567,27 @@ test('settings without navigation preserve input focus, scroll and trap focus', 
   } finally { await page.close() }
 })
 
-test('failed Stop surfaces details and leaves recording and reset protection intact', async () => {
-  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, running: true, stopError: 'Sidecar does not respond' })
+test('failed Stop shows the Rust string error after the stopped status and preserves the transcript', async () => {
+  const stopError = 'The transcription service did not finish stopping within 15 seconds.'
+  const page = await openApp({
+    configState: { exists: true, path: 'test-config', config: validConfig },
+    running: true,
+    stopError,
+    deferTranscriptWrite: true
+  })
   try {
     await emitSegments(page)
     await page.getByRole('button', { name: 'Stop', exact: true }).click()
-    await page.locator('.toast-error').waitFor()
-    assert.match(await page.locator('.toast-error').innerText(), /UI_STOP_FAILED: Sidecar does not respond/)
-    assert.equal(await page.getByRole('button', { name: 'Clear transcript', exact: true }).isDisabled(), true)
+    const errorToast = page.getByText(`UI_STOP_FAILED: ${stopError}`, { exact: true })
+    await errorToast.waitFor({ timeout: 3000 })
+    await page.waitForFunction(() => window.transcriptWrites === 1)
+    await page.evaluate(async () => {
+      window.completeTranscriptWrite()
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    })
+    assert.equal(await errorToast.isVisible(), true)
+    assert.equal(await page.getByRole('button', { name: 'Start', exact: true }).isEnabled(), true)
+    assert.equal(await page.getByRole('button', { name: 'Clear transcript', exact: true }).isEnabled(), true)
     assert.equal(await page.locator('.segment').count(), 2)
   } finally { await page.close() }
 })

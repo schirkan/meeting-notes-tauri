@@ -45,11 +45,16 @@ public static class Logger
         Write(wrapped);
     }
 
-    private static void Write<T>(T payload)
+    // This wire acknowledgement contains no free text or runtime values. Even a
+    // credential equal to "status" or "stopped" must not change the protocol.
+    internal static void Stopped()
+        => Write(new { type = "status", payload = new { phase = "stopped", running = false } }, redact: false);
+
+    private static void Write<T>(T payload, bool redact = true)
     {
         lock (WriteLock)
         {
-            Console.WriteLine(JsonSerializer.Serialize(payload, JsonOptions));
+            Console.WriteLine(JsonSerializer.Serialize(payload, redact ? JsonOptions : null));
             Console.Out.Flush();
         }
     }

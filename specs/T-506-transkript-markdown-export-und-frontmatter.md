@@ -18,7 +18,7 @@ Das Transkript soll als Markdown-Datei mit YAML-Frontmatter automatisch gespeich
 - [x] Der Export läuft automatisch, sobald die Aufnahme endet. Final-Segmente, die nach dem Status-Event eintreffen, werden mit einem kurzen Nachlauf (500 ms) noch erfasst. Beleg: src/renderer/src/use-app-state.ts (Export beim Stopp) und src-tauri/src/commands.rs (save_transcript_markdown).
 - [x] Der Dateiname lautet `transcript-<JJJJ-MM-TT-hh-mm-ss>.md`; bei Namenskollision erhaelt er einen eindeutigen Suffix. Geschrieben wird atomar (Temp-Datei + Rename). Beleg: `write_transcript_markdown` in settings.rs.
 - [x] Bestaetigtes **Quit** bei offener Sitzung speichert unabhaengig von **Save transcript automatically**. Ohne finale Segmente entsteht keine Datei. Beleg: die drei Chromium-Regressionen `Quit export` pruefen spaete finale Segmente mit Alias, Schreiben vor Quittierung, Fehler mit Wiederholung, gemeinsame laufende Schreiboperation und eine Sitzung mit nur Interim-Segmenten. Native Abnahme siehe [T-514](./T-514-systray-und-schliessen-verhalten.md).
-- [x] Der Pfad des geschriebenen Files wird als Toast zurückgemeldet. Beleg: src/renderer/src/use-app-state.ts (Toast mit dem geschriebenen Pfad).
+- [x] Der Pfad des geschriebenen Files wird als Toast zurückgemeldet. Auch beim manuellen Export bleibt ein Schreibfehler sichtbar und veraendert das Transkript nicht. Beleg: src/renderer/src/use-app-state.ts (Pfad- bzw. Fehler-Toast).
 
 ## Approach
 - Das Markdown-Dokument entsteht im Renderer, geschrieben wird es im Rust-Backend. Der Renderer kennt die Segmente und die Sprecher-Aliase; das Backend kennt das Anwendungsverzeichnis und den konfigurierten Zielpfad. So bleibt die Formatierung an einer Stelle und die Pfadauflösung an einer anderen.

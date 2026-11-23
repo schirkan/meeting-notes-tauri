@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.1.6 - 2026-11-23
+
+### Added
+- When quitting during a running or paused transcription, Meeting Notes asks for confirmation and saves finalized text as Markdown before exiting, even when automatic saving is off. Failed stops or writes leave the app open so you can recover the available transcript.
+- **Hide from taskbar** is a separate, default-on window setting with a fallback when the tray cannot initialize.
+
+### Changed
+- Automatic transcription start and stop are under **General**. Settings fields have explanatory tooltips.
+
+### Fixed
+- A delayed **Clear** response no longer deletes a newer automatic session, and taking over an active session preserves its text and speaker aliases when the status changes.
+- Manual Markdown export and Stop show specific errors. A sidecar failure cannot count as a clean shutdown, and reconnects no longer prevent the sidecar from accepting shutdown.
+- The sidecar waits for Azure result delivery before acknowledging a clean stop; fixed protocol fields no longer depend on secret redaction.
+
 ## v0.1.5 - 2026-11-23
 
 ### Added

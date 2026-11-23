@@ -22,7 +22,7 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
 
 ## Aktueller Produktstand
 
-- **Meeting Notes**, veroeffentlichte Version **0.1.4**, ist eine portable Windows-11-x64-Anwendung
+- **Meeting Notes**, veroeffentlichte Version **0.1.5**, ist eine portable Windows-11-x64-Anwendung
   fuer Live-Transkripte mit Azure Speech. Implementierung vorhanden; offene
   Live-/Hardware-/Zielsystem-Abnahmen sind in den Specs ausgewiesen.
 - Die gesamte Oberflaeche, alle Meldungen und die oeffentliche Doku sind
@@ -35,14 +35,17 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
   der naechste Start beginnt ein neues Transkript. Sprecheraliase und Segment-Merge
   sind sitzungsgebunden. Siehe [T-507](./specs/T-507-pause-stop-und-sitzungsgebundene-sprecherzuordnung.md).
 - Automatischer Start beobachtet lokale Core-Audio-Sessions erlaubter Prozesse,
-  ohne Kalender. Der Entwicklungsstand umfasst neben `teams` auch `ms-teams`
-  in der Standardliste (noch nicht in v0.1.4); die Live-Teams-Abnahme ist offen.
+  ohne Kalender. Seit v0.1.5 umfasst die Standardliste `teams` und `ms-teams`;
+  der Detektor beobachtet alle beim Start aktiven Audio-Endpunkte. Die
+  Live-Teams-Abnahme ist offen.
   Auto-Stop betrifft nur die passend automatisch gestartete Aufnahme.
   `user.autoStart.enabled` und `user.autoStart.autoStop` sind standardmaessig aktiv;
   gespeichertes `false` bleibt erhalten. Die Erkennung ist eine Heuristik.
   Siehe [T-513](./specs/T-513-automatische-meeting-erkennung-und-auto-start.md).
 - Schliessen verbirgt das Fenster standardmaessig im Systray, ohne Aufnahme oder
-  Detektor zu stoppen. **Quit** beendet die App. Das Icon ist bei Aufnahme rot,
+  Detektor zu stoppen. Im Entwicklungsstand v0.1.6 wartet bestaetigtes **Quit** bei
+  aktiver Sitzung auf den Stop und den Markdown-Export; Fehler lassen die App offen.
+  **Hide from taskbar** ist eine separate Einstellung. Das Icon ist bei Aufnahme rot,
   bei Pause gelb, nach Stop wieder in Originalfarbe.
   Siehe [T-514](./specs/T-514-systray-und-schliessen-verhalten.md).
 - Einstellungen stehen auf einer scrollenden Seite ohne Tabs oder Bereichsnavigation:
@@ -52,7 +55,7 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
   nach ungespeicherten Aenderungen. Nur **Save** persistiert den Dialog-Draft.
   **Test connection**, letzte Ergebnisse und **Save** liegen im Footer.
   Siehe [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md).
-- Das Drei-Punkte-Menue bietet **About** (Icon, Repo, Author, MIT-Lizenz) und
+- Das Drei-Punkte-Menue bietet **About** (Icon, App-Version, Repo, Author, MIT-Lizenz) und
   **Dev-Tools (F12)**. Webseiten-Kontextmenues sind ausser in editierbaren
   Textfeldern unterdrueckt; native Menues bleiben erhalten.
   Siehe [T-402](./specs/T-402-ui-komponenten-portieren.md).
@@ -136,8 +139,13 @@ Offene Abnahmen und Messverfahren: [T-500](./specs/T-500-qualitaetssicherung-und
 - **Remote:** `origin` = https://github.com/schirkan/meeting-notes-tauri.git.
 - **Eingerichtet am:** historisches Klondatum nicht dokumentiert.
 - **`.gitignore`-Status:** vorhanden; persoenliche Config und Build-Artefakte ausgeschlossen.
-- **Standard-Branch:** `main`; Lizenz [MIT](./LICENSE). Aufgaben stehen in Specs,
-  kein Workboard.
+- **Standard-Branch:** `main`; Lizenz [MIT](./LICENSE). Anforderungen und
+  Abnahmen stehen in den Specs; groessere Umsetzungen werden im Workboard verfolgt.
+
+## Workboard
+
+- Board `meeting-notes-tauri`: Review-Fixes und lokaler Release-Kandidat v0.1.6
+  (`a9c11271-1d10-4911-a382-3b79d3aa4c36`).
 
 ## CI/CD
 
@@ -146,9 +154,8 @@ Offene Abnahmen und Messverfahren: [T-500](./specs/T-500-qualitaetssicherung-und
   Push-/PR-Builds.
 - **Build/Output:** Tauri-App mit self-contained C#-Sidecar, Portable-ZIP und
   `SHA256SUMS.txt` als GitHub-Release-Assets.
-- **Letzter Lauf:** 20.11.2026, Commit `37f0bab6d731602f7878c05c7b17251124157000`,
-  [Run 44790203600](https://github.com/schirkan/meeting-notes-tauri/actions/runs/44790203600), **success**.
-- **Release:** [v0.1.4](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.4),
-  Download-/Hash-/Versions-/Deployment-Nachweis in [T-516](./specs/T-516-englische-oberflaeche-und-oeffentliche-doku.md).
-  Gesamtpruefung 9 Schritte gruen; 98 Node- und 47 Rust-Tests, 539/552 C#-Assertions.
-  Nichtinteraktive MF-Stichprobe bleibt SKIPPED; keine neue Hardware-/Azure-Abnahme.
+- **Letzter Lauf:** 23.11.2026, Commit `91b511a6728b6c5e4f7cb88d3d93c45a4841e079`,
+  [Run 45182209606](https://github.com/schirkan/meeting-notes-tauri/actions/runs/45182209606), **success**.
+- **Release:** [v0.1.5](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.5),
+  Download-/Hash-/Versions-/Deployment-Nachweis in [T-515](./specs/T-515-github-actions-pipeline-und-release.md#release-v015-23112026).
+  98 Node- und 47 Rust-Tests bestanden; Sidecar- und Hardware-Einschraenkungen stehen im Nachweis.

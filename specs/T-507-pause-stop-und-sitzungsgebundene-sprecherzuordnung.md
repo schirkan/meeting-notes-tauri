@@ -76,8 +76,11 @@ zusammengeführt.
   bestehende `sidecar::send_command`-Schale. `TranscriptStatus` erhält
   `paused`; `mark_paused` und `mark_resumed` setzen die Startzeit **nicht**
   zurück.
-- **Stop:** Der Renderer leert Segmente und Aliase beim Start. Damit ist ein
-  Fortsetzen nach Stop technisch ausgeschlossen.
+- **Stop:** Der Renderer leert Segmente und Aliase nur bei einer neuen Sitzung.
+  Der initial geladene Status und spaetere Pause-/Resume-Ereignisse derselben
+  Sitzung loeschen nichts. Eine spaete Quittung fuer **Clear** darf eine inzwischen
+  gestartete Sitzung nicht zuruecksetzen. Native Stop-Fehler zeigen ihre Details
+  auch dann, wenn der Status bereits auf gestoppt gewechselt hat.
 
 ## Offene Punkte
 - Die Azure-Dienstgrenze von **60 Minuten Verbindungsdauer** je Sitzung und

@@ -75,6 +75,23 @@ Pruefsummen wurden anschliessend direkt vom Release heruntergeladen und auf
 Hashes, Versionen, flaches Dateilayout und Deployment geprueft. Detaillierter
 Asset-Nachweis und Abnahmegrenzen stehen in [T-516](./T-516-englische-oberflaeche-und-oeffentliche-doku.md#release-nachweis-20112026).
 
+### Release v0.1.5 (23.11.2026)
+
+[Workflow-Run 45182209606](https://github.com/schirkan/meeting-notes-tauri/actions/runs/45182209606)
+veroeffentlichte [v0.1.5](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.5)
+aus Tag-Commit `91b511a` erfolgreich in 5m27s. ZIP und `SHA256SUMS.txt`
+wurden direkt vom Release heruntergeladen. Das ZIP hat 16.499.926 Bytes;
+GitHub-Digest, externer Pruefsummeneintrag und berechneter SHA256 stimmen ueberein:
+`a0b12dbd5c778972ec6bc413516e40f9811a9ee576298101f004f80e87c559a9`.
+Alle drei internen Dateihashes stimmen. Haupt-EXE ProductVersion 0.1.5,
+Sidecar FileVersion 0.1.5.0; Download-Deployment PASS 9 / FAIL 0.
+
+Lokal: 98 Node- und 47 Rust-Tests, 543 C#-Assertions gegen Quellen und 556
+gegen den gebauten Sidecar im isolierten Nachlauf. Im ersten Lauf fehlte das
+Meeting-Endsignal. Mangels zweitem Mikrofon wurde der Nicht-Standard-Endpunkt
+nicht erneut abgenommen; die MediaFoundation-Stichprobe blieb uebersprungen.
+Keine neue Live-Teams-, Azure- oder Clean-Machine-Abnahme.
+
 ### Weitere Nachweise
 
 - 19.11.2026: Manueller Release-Download und Start auf fremdem Rechner vom Nutzer bestaetigt; siehe auch [T-500](./T-500-qualitaetssicherung-und-akzeptanztests.md).

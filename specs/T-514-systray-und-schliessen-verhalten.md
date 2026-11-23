@@ -38,7 +38,10 @@ Einstellung bestimmt, ob Schliessen die App beendet oder nur im Tray verbirgt.
   loest intern **Stop** aus, uebernimmt die letzten vom Sidecar gelieferten Segmente
   und wartet auf den Markdown-Export (siehe [T-506](./T-506-transkript-markdown-export-und-frontmatter.md)). Erst danach beendet sich die App. Bei einem Stop- oder
   Schreibfehler bleibt die App mit dem Transkript offen; **Quit** kann erneut
-  versucht werden.
+  versucht werden. Ein unaufgeforderter Sidecar-Exit wird der Sitzung als
+  Stop-Fehler zugeordnet, auch wenn ein Bestaetigungsdialog offen ist. Ein erneutes
+  **Quit** nach der Fehlermeldung exportiert bewusst nur die bereits empfangenen
+  finalen Segmente; dies ist kein Nachweis einer sauberen Azure-Beendigung.
 - Kann kein Tray erstellt werden, meldet Windows keine erreichbare Tray-Position
   (`tray.rect()`), oder kann das Fenster nicht verborgen werden, greift derselbe
   Beenden-Weg. Kein unerreichbares Hintergrundfenster.

@@ -24,6 +24,7 @@ struct AppStateInner {
     running: bool,
     paused: bool,
     started_at: Option<String>,
+    stop_error: Option<String>,
     debug_log: Vec<DebugLogEntry>,
     /// T-201: Zahl der fehlerhaften JSON-Zeilen aus dem Sidecar.
     malformed_lines: u64,
@@ -102,6 +103,7 @@ impl AppState {
         inner.paused = false;
         let started_at = Utc::now().to_rfc3339();
         inner.started_at = Some(started_at.clone());
+        inner.stop_error = None;
         TranscriptStatus {
             running: true,
             paused: false,
@@ -134,8 +136,21 @@ impl AppState {
         }
     }
 
+    pub fn has_stop_error(&self) -> bool {
+        self.inner.lock().expect("AppState mutex poisoned").stop_error.is_some()
+    }
+
+    pub fn take_stop_error(&self) -> Option<String> {
+        self.inner.lock().expect("AppState mutex poisoned").stop_error.take()
+    }
+
     pub fn mark_stopped(&self) -> TranscriptStatus {
+        self.mark_stopped_with_error(None)
+    }
+
+    pub fn mark_stopped_with_error(&self, error: Option<String>) -> TranscriptStatus {
         let mut inner = self.inner.lock().expect("AppState mutex poisoned");
+        if error.is_some() { inner.stop_error = error; }
         inner.running = false;
         inner.paused = false;
         inner.started_at = None;
@@ -208,6 +223,21 @@ mod pause_tests {
         assert!(resumed.running);
         assert!(!resumed.paused);
         assert_eq!(resumed.started_at, started_at, "Resuming keeps the start time");
+    }
+
+    #[test]
+    fn unclean_stop_survives_the_idle_transition_until_reported_or_restarted() {
+        let state = AppState::default();
+        state.mark_started();
+        assert!(!state.mark_stopped_with_error(Some("child exited".into())).running);
+        state.mark_stopped();
+        assert!(state.has_stop_error());
+        assert_eq!(state.take_stop_error().as_deref(), Some("child exited"));
+        assert_eq!(state.take_stop_error(), None, "a retry can export the partial transcript");
+
+        state.mark_stopped_with_error(Some("previous failure".into()));
+        state.mark_started();
+        assert!(!state.has_stop_error(), "a new session must not inherit an old failure");
     }
 
     /// Stop beendet die Sitzung endgueltig: kein Pause-Flag, keine Startzeit.
