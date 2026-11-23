@@ -57,10 +57,15 @@ async function copyTranscriptToClipboard(segments: TranscriptSegment[]): Promise
 
 function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
   let unlisten: UnlistenFn | undefined
-  void listen<T>(event, (e) => cb(e.payload)).then((u) => {
-    unlisten = u
+  let disposed = false
+  void listen<T>(event, (e) => {
+    if (!disposed) cb(e.payload)
+  }).then((u) => {
+    if (disposed) u()
+    else unlisten = u
   })
   return () => {
+    disposed = true
     unlisten?.()
   }
 }
@@ -80,7 +85,10 @@ const api: TranscriptApi = {
   getConfig: () => invoke<AppConfigState>(TAURI_COMMANDS.getAppConfig),
   saveSettings: (settings) => invoke<UserSettings>(TAURI_COMMANDS.saveUserSettings, { settings }),
   saveConfig: (config) => invoke<AppConfigState>(TAURI_COMMANDS.saveFixedConfig, { config }),
+  reset: () => invoke<void>(TAURI_COMMANDS.resetTranscript),
   saveTranscriptMarkdown: (markdown) => invoke<string>(TAURI_COMMANDS.saveTranscriptMarkdown, { markdown }),
+  onQuitExport: (cb) => subscribe<string>(TAURI_EVENTS.quitExport, cb),
+  completeQuitExport: (requestId, error) => invoke<void>(TAURI_COMMANDS.completeQuitExport, { requestId, error }),
   selectTranscriptDirectory: () => open({ directory: true, multiple: false, title: 'Choose save folder' }),
   testAzureConnectivity: (payload) => invoke<ConnectivityResult>(TAURI_COMMANDS.testAzureConnectivity, { payload }),
   copyTranscript: (segments) => copyTranscriptToClipboard(segments),

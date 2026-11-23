@@ -20,7 +20,7 @@ export function ProxyPanel(props: ProxyPanelProps) {
       </div>
 
       <div className="settings-block proxy-settings-grid">
-        <label className="checkbox-field full-field">
+        <label className="checkbox-field full-field" title="Connect to Azure Speech through a proxy server">
           <input
             type="checkbox"
             checked={configDraft.useProxy}
@@ -33,7 +33,7 @@ export function ProxyPanel(props: ProxyPanelProps) {
           <span>Use proxy</span>
         </label>
 
-        <label>
+        <label title="Enter the proxy server hostname or IP address">
           Proxy Host
           <input
             type="text"
@@ -43,7 +43,7 @@ export function ProxyPanel(props: ProxyPanelProps) {
           />
         </label>
 
-        <label>
+        <label title="Enter the port on which the proxy accepts connections">
           Proxy Port
           <input
             type="number"
@@ -54,7 +54,7 @@ export function ProxyPanel(props: ProxyPanelProps) {
           />
         </label>
 
-        <label>
+        <label title="Enter a username only if the proxy requires authentication">
           Proxy username (optional)
           <input
             type="text"
@@ -64,7 +64,7 @@ export function ProxyPanel(props: ProxyPanelProps) {
           />
         </label>
 
-        <label>
+        <label title="Enter a password only if the proxy requires authentication">
           Proxy password (optional)
           <input
             type="password"

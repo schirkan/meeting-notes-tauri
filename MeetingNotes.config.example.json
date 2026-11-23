@@ -40,7 +40,8 @@
       "processes": []
     },
     "window": {
-      "minimizeToTrayOnClose": true
+      "minimizeToTrayOnClose": true,
+      "hideFromTaskbar": true
     }
   }
 }

@@ -11,6 +11,7 @@ use crate::state::DebugLogEntry;
 
 pub const EVENT_SEGMENT: &str = "transcript:segment";
 pub const EVENT_STATUS: &str = "transcript:status";
+pub const EVENT_QUIT_EXPORT: &str = "transcript:quit-export";
 pub const EVENT_ERROR: &str = "transcript:error";
 pub const EVENT_DEBUG: &str = "transcript:debug";
 pub const EVENT_SIDECAR_CRASHED: &str = "sidecar:crashed";

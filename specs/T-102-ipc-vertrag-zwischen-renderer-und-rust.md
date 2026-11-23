@@ -21,6 +21,7 @@ Typsicheren IPC-Vertrag zwischen React-Renderer und Rust-Main definieren, versio
 - Electron-Preload-Pattern durch Tauri-Preload-äquivalentes Pattern ersetzen: Renderer spricht niemals direkt mit `window.__TAURI__`, sondern ausschließlich über typisierte Wrapper-Funktionen.
 - Tauri-Commands so granular wie möglich halten (eine Funktion pro Use-Case).
 - Tauri-Events als Broadcast-Modell: Rust emittiert einheitlich `transcript:segment`, `transcript:status`, `transcript:error`, `transcript:debug`.
+- Nach dem Stop fuer bestaetigtes **Quit** sendet Rust `transcript:quit-export` mit einer Anfrage-ID an das Hauptfenster. Der Renderer antwortet mit `complete_quit_export(requestId, error)` nach dem Export; nur die aktuelle Anfrage kann den App-Exit freigeben. Siehe [T-514](./T-514-systray-und-schliessen-verhalten.md).
 
 ## Log
 - 2026-06-25: Spec angelegt.

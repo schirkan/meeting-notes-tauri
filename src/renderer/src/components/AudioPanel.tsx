@@ -23,7 +23,7 @@ export function AudioSources(props: AudioSourcesProps) {
       <div className="audio-source-row full-field">
         <div className="audio-source-field">
           <span className="field-caption"><Icon name="mic" />Microphone</span>
-          <div className="audio-source-control">
+          <div className="audio-source-control" title="Choose the microphone to transcribe; System default follows Windows">
             <input
               type="checkbox"
               aria-label="Transcribe microphone"
@@ -54,7 +54,7 @@ export function AudioSources(props: AudioSourcesProps) {
           </div>
         </div>
 
-        <label className="checkbox-field source-diarization">
+        <label className="checkbox-field source-diarization" title="Distinguish speakers in the microphone transcript">
           <input
             type="checkbox"
             aria-label="Speaker recognition for microphone"
@@ -72,7 +72,7 @@ export function AudioSources(props: AudioSourcesProps) {
       <div className="audio-source-row full-field">
         <div className="audio-source-field">
           <span className="field-caption"><Icon name="speaker" />Speaker Loopback</span>
-          <div className="audio-source-control">
+          <div className="audio-source-control" title="Choose the Windows playback device whose audio to transcribe">
             <input
               type="checkbox"
               aria-label="Transcribe speaker loopback"
@@ -103,7 +103,7 @@ export function AudioSources(props: AudioSourcesProps) {
           </div>
         </div>
 
-        <label className="checkbox-field source-diarization">
+        <label className="checkbox-field source-diarization" title="Distinguish speakers in the speaker loopback transcript">
           <input
             type="checkbox"
             aria-label="Speaker recognition for speaker loopback"

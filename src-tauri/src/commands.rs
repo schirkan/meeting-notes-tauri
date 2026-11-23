@@ -94,12 +94,15 @@ pub async fn start_recording_with_origin(
 ) -> Result<events::TranscriptStatus, String> {
     let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
     let mut lifecycle = lifecycle.lock().await;
+    if app.state::<crate::tray::WindowBehavior>().protects_transcript() {
+        return Err("Finish quitting before starting a new transcription.".into());
+    }
     if state.snapshot_status().running {
-        return Err("A recording is already running.".into());
+        return Err("A transcription is already running.".into());
     }
     lifecycle.auto_origin = None;
     if origin.is_some() && !settings::load_user_settings().await.map_err(|e| e.to_string())?.auto_start.enabled {
-        return Err("Automatic recording start is disabled.".into());
+        return Err("Automatic transcription start is disabled.".into());
     }
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "start_recording called.");
 
@@ -139,11 +142,14 @@ pub async fn start_recording_with_origin(
         *guard = Some(SidecarHandle {
             child: Arc::clone(&handle.child),
             events_rx: tokio::sync::mpsc::channel(1).1,
+            shutdown: None,
         });
     }
 
     lifecycle.auto_origin = origin;
+    lifecycle.stop_error = None;
     let status = state.mark_started();
+    events::emit_status(&app, &status);
     spawn_event_forwarder(app.clone(), handle.events_rx, Arc::clone(&handle.child));
 
     // T-201: Ohne gueltiges Handshake wird der Sidecar beendet - ein
@@ -151,7 +157,6 @@ pub async fn start_recording_with_origin(
     spawn_handshake_timeout(app.clone(), handle.child);
 
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status changed: running.");
-    events::emit_status(&app, &status);
     Ok(status)
 }
 
@@ -162,8 +167,22 @@ pub async fn stop_recording(
 ) -> Result<events::TranscriptStatus, String> {
     let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
     let mut lifecycle = lifecycle.lock().await;
+    let behavior = app.state::<crate::tray::WindowBehavior>();
+    if behavior.is_quit_pending() {
+        return Err("Finish or cancel quitting before stopping transcription.".into());
+    }
     lifecycle.auto_origin = None;
-    stop_recording_inner(&app, &state).await
+    let result = stop_recording_inner(&app, &state).await;
+    if let Err(error) = &result { lifecycle.stop_error = Some(error.clone()); }
+    result
+}
+
+pub async fn stop_recording_for_quit(app: &AppHandle) -> Result<events::TranscriptStatus, String> {
+    let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
+    let mut lifecycle = lifecycle.lock().await;
+    lifecycle.auto_origin = None;
+    if let Some(error) = lifecycle.stop_error.take() { return Err(error); }
+    stop_recording_inner(app, &app.state::<AppState>()).await
 }
 
 /// Only the process that automatically started this recording can end it.
@@ -192,8 +211,9 @@ pub async fn stop_recording_for_meeting(
         return Ok(false);
     }
     lifecycle.auto_origin = None;
-    stop_recording_inner(app, &state).await?;
-    Ok(true)
+    let result = stop_recording_inner(app, &state).await;
+    if let Err(error) = &result { lifecycle.stop_error = Some(error.clone()); }
+    result.map(|_| true)
 }
 
 async fn stop_recording_inner(
@@ -203,23 +223,50 @@ async fn stop_recording_inner(
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "stop_recording called.");
 
     let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
+    let (tx, rx) = tokio::sync::oneshot::channel();
     let handle = {
         let mut guard = cache.lock().await;
-        guard.take()
+        guard.as_mut().map(|handle| {
+            handle.shutdown = Some(tx);
+            SidecarHandle {
+                child: Arc::clone(&handle.child),
+                events_rx: tokio::sync::mpsc::channel(1).1,
+                shutdown: None,
+            }
+        })
     };
-    if let Some(handle) = handle {
-        let _ = sidecar::stop(handle).await;
-    }
+    let result = if let Some(handle) = handle {
+        // Keep the process current until the forwarder has drained its output.
+        let result = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+            sidecar::send_command(&handle, r#"{"type":"shutdown"}"#).await.map_err(|e| e.to_string())?;
+            rx.await.map_err(|_| "The transcription service disconnected before shutdown completed.".to_string())?
+        }).await.unwrap_or_else(|_| Err("The transcription service did not finish stopping within 15 seconds.".into()));
+        if result.is_err() {
+            let mut guard = cache.lock().await;
+            if is_current_sidecar(guard.as_ref(), &handle.child) {
+                guard.take();
+                drop(guard);
+                if let Err(error) = sidecar::kill(handle).await {
+                    push_and_emit_debug(app, state, DebugLogEntrySource::Sidecar, DebugLogEntryLevel::Error, error.to_string());
+                }
+            }
+        }
+        result
+    } else if state.snapshot_status().running {
+        Err("No transcription service is running.".into())
+    } else {
+        return Ok(state.snapshot_status());
+    };
 
     let status = state.mark_stopped();
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status changed: stopped.");
-    events::emit_status(&app, &status);
-    Ok(status)
+    push_and_emit_debug(app, state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status changed: stopped.");
+    events::emit_status(app, &status);
+    result.map(|()| status)
 }
 
 fn require_running_recording(state: &AppState) -> Result<(), String> {
     if state.snapshot_status().running { Ok(()) }
-    else { Err("No recording is running.".into()) }
+    else { Err("No transcription is running.".into()) }
 }
 
 #[cfg(test)]
@@ -245,6 +292,17 @@ mod lifecycle_tests {
         assert!(pause.await.unwrap().is_err());
         assert!(!state.snapshot_status().running);
         assert!(require_running_recording(&state).is_err(), "resume uses the same guard");
+    }
+
+    #[test]
+    fn shutdown_requires_a_structured_stop_ack_and_a_successful_exit() {
+        let ack = serde_json::json!({"type": "status", "payload": {"phase": "stopped", "running": false}});
+        let log = serde_json::json!({"type": "status", "level": "info", "code": "stopped"});
+        let paused = serde_json::json!({"type": "status", "payload": {"phase": "paused", "running": true}});
+        assert!(check_sidecar_shutdown(Some(0), is_sidecar_shutdown_ack(&ack)).is_ok());
+        assert!(check_sidecar_shutdown(Some(0), is_sidecar_shutdown_ack(&log)).is_err());
+        assert!(check_sidecar_shutdown(Some(0), is_sidecar_shutdown_ack(&paused)).is_err());
+        assert!(check_sidecar_shutdown(Some(1), is_sidecar_shutdown_ack(&ack)).is_err());
     }
 
     #[test]
@@ -287,6 +345,7 @@ pub async fn pause_recording(
         guard.as_ref().map(|h| SidecarHandle {
             child: Arc::clone(&h.child),
             events_rx: tokio::sync::mpsc::channel(1).1,
+            shutdown: None,
         })
     };
     if let Some(handle) = handle {
@@ -334,6 +393,7 @@ pub async fn resume_recording(
         guard.as_ref().map(|h| SidecarHandle {
             child: Arc::clone(&h.child),
             events_rx: tokio::sync::mpsc::channel(1).1,
+            shutdown: None,
         })
     };
     if let Some(handle) = handle {
@@ -369,6 +429,14 @@ pub async fn reset_transcript(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
+    let _guard = lifecycle.lock().await;
+    if app.state::<crate::tray::WindowBehavior>().protects_transcript() {
+        return Err("Finish quitting before clearing the transcript.".into());
+    }
+    if state.snapshot_status().running {
+        return Err("Stop transcription before clearing the transcript.".into());
+    }
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "reset_transcript called.");
 
     // Transkript-Buffer wird vom Renderer gehalten. Hier nur ein
@@ -380,6 +448,7 @@ pub async fn reset_transcript(
         guard.as_ref().map(|h| SidecarHandle {
             child: Arc::clone(&h.child),
             events_rx: tokio::sync::mpsc::channel(1).1,
+            shutdown: None,
         })
     };
     if let Some(handle) = handle {
@@ -675,6 +744,7 @@ mod device_deser_tests {
         let handle = SidecarHandle {
             child: Arc::clone(&current),
             events_rx: tokio::sync::mpsc::channel(1).1,
+            shutdown: None,
         };
         assert!(!is_current_sidecar(None, &previous), "Intentional stop is not a crash");
         assert!(!is_current_sidecar(Some(&handle), &previous), "Old events/timeouts must not affect a restarted sidecar");
@@ -721,7 +791,7 @@ pub async fn save_user_settings(
 ) -> Result<UserSettings, String> {
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "save_user_settings called.");
     let saved = settings::save_user_settings(settings).await.map_err(|e| e.to_string())?;
-    app.state::<crate::tray::WindowBehavior>().update(&saved.window);
+    crate::tray::apply_window_settings(&app, &saved.window);
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Main, DebugLogEntryLevel::Info, "User settings saved.");
     Ok(saved)
 }
@@ -843,6 +913,21 @@ fn is_current_sidecar(
     handle.is_some_and(|handle| Arc::ptr_eq(&handle.child, child))
 }
 
+fn is_sidecar_shutdown_ack(parsed: &serde_json::Value) -> bool {
+    parsed.get("level").is_none()
+        && matches!(parsed["type"].as_str(), Some("status" | "transcript:status"))
+        && parsed["payload"]["phase"] == "stopped"
+        && parsed["payload"]["running"] == false
+}
+
+fn check_sidecar_shutdown(code: Option<i32>, acknowledged: bool) -> Result<(), String> {
+    if code == Some(0) && acknowledged {
+        Ok(())
+    } else {
+        Err(format!("The transcription service exited without completing shutdown (exit: {code:?})."))
+    }
+}
+
 fn spawn_event_forwarder(
     app: AppHandle,
     mut events_rx: tokio::sync::mpsc::Receiver<tauri_plugin_shell::process::CommandEvent>,
@@ -850,6 +935,7 @@ fn spawn_event_forwarder(
 ) {
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
+        let mut acknowledged_shutdown = false;
         while let Some(event) = events_rx.recv().await {
             let cache = app_handle.state::<Arc<Mutex<Option<SidecarHandle>>>>();
             if !is_current_sidecar(cache.lock().await.as_ref(), &child) {
@@ -864,7 +950,7 @@ fn spawn_event_forwarder(
                         if !is_current_sidecar(cache.lock().await.as_ref(), &child) { return; }
                         // T-201: Das Handshake wird separat behandelt.
                         if handle_handshake_line(&app_handle, line, &child).await { continue; }
-                        forward_sidecar_line(&app_handle, line);
+                        acknowledged_shutdown |= forward_sidecar_line(&app_handle, line);
                     }
                 }
                 tauri_plugin_shell::process::CommandEvent::Stderr(bytes) => {
@@ -887,7 +973,11 @@ fn spawn_event_forwarder(
                 tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
                     let mut guard = cache.lock().await;
                     if !is_current_sidecar(guard.as_ref(), &child) { return; }
-                    guard.take();
+                    let shutdown = guard.take().and_then(|handle| handle.shutdown);
+                    if let Some(shutdown) = shutdown {
+                        let _ = shutdown.send(check_sidecar_shutdown(payload.code, acknowledged_shutdown));
+                        return;
+                    }
                     let status = app_handle.state::<AppState>().mark_stopped();
                     events::emit_status(&app_handle, &status);
                     let exit_code = payload.code;
@@ -955,6 +1045,7 @@ async fn handle_handshake_line(
         guard.as_ref().map(|h| SidecarHandle {
             child: Arc::clone(&h.child),
             events_rx: tokio::sync::mpsc::channel(1).1,
+            shutdown: None,
         })
     } else {
         let handle = guard.take();
@@ -1007,7 +1098,9 @@ fn spawn_handshake_timeout(app: AppHandle, child: Arc<Mutex<Option<CommandChild>
         .await;
         let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
         let mut guard = cache.lock().await;
-        if !is_current_sidecar(guard.as_ref(), &child) { return; }
+        if !is_current_sidecar(guard.as_ref(), &child) || guard.as_ref().is_some_and(|handle| handle.shutdown.is_some()) {
+            return;
+        }
         let (has_handshake, running) = {
             let state = app.state::<AppState>();
             (
@@ -1060,7 +1153,7 @@ fn parse_sidecar_log(parsed: &serde_json::Value) -> Result<Option<SidecarLog>, s
     serde_json::from_value(parsed.clone()).map(Some)
 }
 
-fn forward_sidecar_line(app: &AppHandle, line: &str) {
+fn forward_sidecar_line(app: &AppHandle, line: &str) -> bool {
     let parsed: serde_json::Value = match serde_json::from_str(line) {
         Ok(v) => v,
         Err(_) => {
@@ -1084,9 +1177,11 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) {
                     events::emit_debug(app, &entry);
                 }
             }
-            return;
+            return false;
         }
     };
+    // Publish the stopped status after the shell has drained both pipes.
+    if is_sidecar_shutdown_ack(&parsed) { return true; }
     let ty = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
     match parse_sidecar_log(&parsed) {
         Ok(Some(log)) => {
@@ -1104,7 +1199,7 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) {
             if log.level == "error" {
                 events::emit_error(app, &serde_json::json!({ "code": log.code, "message": log.message }));
             }
-            return;
+            return false;
         }
         Err(error) => {
             let entry = app.state::<AppState>().push_debug(
@@ -1113,7 +1208,7 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) {
                 format!("Invalid sidecar log entry: {error}"),
             );
             events::emit_debug(app, &entry);
-            return;
+            return false;
         }
         Ok(None) => {}
     }
@@ -1137,7 +1232,7 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) {
                     "Invalid sidecar status event: running must be a boolean.",
                 );
                 events::emit_debug(app, &entry);
-                return;
+                return false;
             };
             let phase = payload.get("phase").and_then(|v| v.as_str()).unwrap_or("");
             // Die Phase steuert den Zustand: "paused"/"resumed" duerfen die
@@ -1192,4 +1287,5 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) {
             events::emit_debug(app, &entry);
         }
     }
+    false
 }

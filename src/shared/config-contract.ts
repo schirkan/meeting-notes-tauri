@@ -54,6 +54,8 @@ export interface AutoStartSettings {
 export interface WindowSettings {
   /** Hide the main window on close; explicit tray Quit always exits. Default true. */
   minimizeToTrayOnClose: boolean
+  /** Omit the main window from the Windows taskbar. Default true. */
+  hideFromTaskbar: boolean
 }
 
 export interface UserSettings {
@@ -93,7 +95,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
     markdownExport: { enabled: true, path: null }
   },
   autoStart: { enabled: true, processes: [], autoStop: true },
-  window: { minimizeToTrayOnClose: true }
+  window: { minimizeToTrayOnClose: true, hideFromTaskbar: true }
 }
 
 const BCP47_PATTERN = /^[a-z]{2,3}-[A-Z]{2}$/
@@ -169,7 +171,10 @@ export function normalizeUserSettings(input: UserSettingsInput | null | undefine
     window: {
       minimizeToTrayOnClose: typeof input?.window?.minimizeToTrayOnClose === 'boolean'
         ? input.window.minimizeToTrayOnClose
-        : DEFAULT_USER_SETTINGS.window.minimizeToTrayOnClose
+        : DEFAULT_USER_SETTINGS.window.minimizeToTrayOnClose,
+      hideFromTaskbar: typeof input?.window?.hideFromTaskbar === 'boolean'
+        ? input.window.hideFromTaskbar
+        : DEFAULT_USER_SETTINGS.window.hideFromTaskbar
     }
   }
 }

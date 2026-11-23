@@ -19,7 +19,7 @@ export function ConnectivityDialog({ isOpen, isTesting, result, onClose }: Conne
           {isTesting ? 'Connection test running … (up to 45 seconds for Speech/WSS)' : result?.reachable ? 'HTTPS and Speech/WSS reachable' : 'Connection test failed'}
         </p>
         <p className="connectivity-result-meta">
-          Checks TLS certificates for HTTPS and Speech/WSS against the system trust store. No audio recording.
+          Checks TLS certificates for HTTPS and Speech/WSS against the system trust store. No audio is captured.
         </p>
         {isTesting && (
           <ul className="connectivity-result-step-list">

@@ -67,11 +67,15 @@ pub struct UserSettings {
 #[serde(default, rename_all = "camelCase")]
 pub struct WindowSettings {
     pub minimize_to_tray_on_close: bool,
+    pub hide_from_taskbar: bool,
 }
 
 impl Default for WindowSettings {
     fn default() -> Self {
-        Self { minimize_to_tray_on_close: true }
+        Self {
+            minimize_to_tray_on_close: true,
+            hide_from_taskbar: true,
+        }
     }
 }
 
@@ -338,8 +342,13 @@ pub async fn write_transcript_markdown(markdown: &str) -> Result<PathBuf, Settin
     let user = load_user_settings().await?;
     let target_dir = markdown_export_dir(&dir, &user.transcript.markdown_export);
     tokio::fs::create_dir_all(&target_dir).await?;
+    static EXPORT_WRITE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _guard = EXPORT_WRITE_LOCK.lock().await;
     let stamp = chrono::Local::now().format("%Y-%m-%d-%H-%M-%S");
-    let path = target_dir.join(format!("transcript-{stamp}.md"));
+    let mut path = target_dir.join(format!("transcript-{stamp}.md"));
+    if tokio::fs::try_exists(&path).await? {
+        path = target_dir.join(format!("transcript-{stamp}-{}.md", uuid::Uuid::new_v4()));
+    }
     write_atomic(&path, markdown.as_bytes()).await?;
     Ok(path)
 }
@@ -519,6 +528,19 @@ mod config_tests {
             assert_eq!(saved.user.transcription, config.user.transcription);
             assert_eq!(saved.user.auto_start, config.user.auto_start);
         }
+    }
+
+    #[test]
+    fn taskbar_hiding_defaults_on_and_preserves_opt_out_independently() {
+        for input in ["{}", r#"{"window":{"minimizeToTrayOnClose":false}}"#] {
+            let user: UserSettings = serde_json::from_str(input).unwrap();
+            assert!(user.window.hide_from_taskbar);
+        }
+        let user: UserSettings =
+            serde_json::from_str(r#"{"window":{"hideFromTaskbar":false}}"#).unwrap();
+        let saved: UserSettings = serde_json::from_str(&serde_json::to_string(&user).unwrap()).unwrap();
+        assert!(!saved.window.hide_from_taskbar);
+        assert!(saved.window.minimize_to_tray_on_close);
     }
 
     #[test]

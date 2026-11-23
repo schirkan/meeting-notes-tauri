@@ -44,7 +44,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <h2>{audioOnly ? 'Audio settings' : 'General'}</h2>
       </div>
 
-      {statusRunning && <div className="settings-inline-hint">Stop the recording to change settings.</div>}
+      {statusRunning && <div className="settings-inline-hint">Stop the transcription to change settings.</div>}
 
       <div className={audioOnly ? 'settings-block audio-settings-grid' : 'settings-block'}>
         {audioOnly && <AudioSources
@@ -55,7 +55,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         />}
 
         {!audioOnly && <>
-          <label className="checkbox-field">
+          <label className="checkbox-field" title="Keep the app running in the system tray when you close the window">
             <input
               type="checkbox"
               checked={settings.window.minimizeToTrayOnClose}
@@ -70,6 +70,42 @@ export function SettingsPanel(props: SettingsPanelProps) {
             />
             <span>Minimize to system tray on close</span>
           </label>
+          <label className="checkbox-field" title="Remove the window from the Windows taskbar; reopen it from the system tray">
+            <input
+              type="checkbox"
+              checked={settings.window.hideFromTaskbar}
+              onChange={(event) => {
+                const hideFromTaskbar = event.currentTarget.checked
+                setSettings((prev) => ({ ...prev, window: { ...prev.window, hideFromTaskbar } }))
+              }}
+              disabled={statusRunning}
+            />
+            <span>Hide from taskbar</span>
+          </label>
+          <label className="checkbox-field" title="Start transcription automatically when a meeting is detected">
+            <input
+              type="checkbox"
+              checked={settings.autoStart.enabled}
+              onChange={(event) => {
+                const enabled = event.currentTarget.checked
+                setSettings((prev) => ({ ...prev, autoStart: { ...prev.autoStart, enabled } }))
+              }}
+              disabled={statusRunning}
+            />
+            <span>Start transcription automatically</span>
+          </label>
+          <label className="checkbox-field" title="Stop an automatically started transcription when its meeting ends">
+            <input
+              type="checkbox"
+              checked={settings.autoStart.autoStop}
+              onChange={(event) => {
+                const autoStop = event.currentTarget.checked
+                setSettings((prev) => ({ ...prev, autoStart: { ...prev.autoStart, autoStop } }))
+              }}
+              disabled={statusRunning || !settings.autoStart.enabled}
+            />
+            <span>Stop transcription automatically</span>
+          </label>
         </>}
       </div>
     </section>
@@ -77,7 +113,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     {!audioOnly && <section className="panel settings">
       <div className="panel-header"><h2>Transcription</h2></div>
       <div className="settings-block">
-          <label className="language-field">
+          <label className="language-field" title="Choose the language Azure Speech should recognize">
             <span className="field-caption"><Icon name="flag" />Primary language</span>
             <select value={settings.language} disabled={statusRunning}
               onChange={(event) => {
@@ -92,32 +128,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
               ))}
             </select>
           </label>
-          <label className="checkbox-field" title="Start recording automatically when a meeting is detected">
-            <input
-              type="checkbox"
-              checked={settings.autoStart.enabled}
-              onChange={(event) => {
-                const enabled = event.currentTarget.checked
-                setSettings((prev) => ({ ...prev, autoStart: { ...prev.autoStart, enabled } }))
-              }}
-              disabled={statusRunning}
-            />
-            <span>Start recording automatically</span>
-          </label>
-          <label className="checkbox-field" title="Stop recording automatically when the meeting was started automatically">
-            <input
-              type="checkbox"
-              aria-label="Stop recording automatically"
-              checked={settings.autoStart.autoStop}
-              onChange={(event) => {
-                const autoStop = event.currentTarget.checked
-                setSettings((prev) => ({ ...prev, autoStart: { ...prev.autoStart, autoStop } }))
-              }}
-              disabled={statusRunning || !settings.autoStart.enabled}
-            />
-            <span>Stop recording automatically</span>
-          </label>
-
           <label className="checkbox-field" title="Save the transcript automatically as Markdown">
             <input
               type="checkbox"
@@ -136,7 +146,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             />
             <span>Save transcript automatically</span>
           </label>
-          <div className="directory-control">
+          <div className="directory-control" title="Save folder for Markdown transcripts. Leave blank to use the application directory.">
             <input
               id="transcript-export-path"
               aria-label="Save path (optional)"

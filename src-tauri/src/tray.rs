@@ -1,32 +1,75 @@
 //! Native Windows tray and close-to-tray policy (T-514).
 use std::sync::{atomic::{AtomicBool, Ordering}, Mutex};
 
-use tauri::{AppHandle, Manager, Window, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, WebviewWindow, Window, WindowEvent};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tokio::sync::Mutex as AsyncMutex;
+
+use crate::autostart::RecordingLifecycle;
 
 use crate::{events, settings, state};
 
 #[derive(Default)]
 pub struct WindowBehavior {
     minimize_on_close: AtomicBool,
+    hide_from_taskbar: AtomicBool,
     tray_available: AtomicBool,
+    quit_pending: AtomicBool,
+    quit_export_required: AtomicBool,
+    quit_export_reply: Mutex<Option<QuitExportReply>>,
     recording_indicator: Mutex<RecordingIndicator>,
 }
 
+struct QuitExportReply {
+    id: String,
+    done: tokio::sync::oneshot::Sender<Result<(), String>>,
+}
+
 impl WindowBehavior {
-    pub fn update(&self, settings: &settings::WindowSettings) {
+    fn update(&self, settings: &settings::WindowSettings) {
         self.minimize_on_close.store(settings.minimize_to_tray_on_close, Ordering::Relaxed);
+        self.hide_from_taskbar.store(settings.hide_from_taskbar, Ordering::Relaxed);
+    }
+    fn should_skip_taskbar(&self) -> bool {
+        self.hide_from_taskbar.load(Ordering::Relaxed) && self.tray_available.load(Ordering::Relaxed)
     }
     fn should_hide(&self, label: &str) -> bool {
         label == "main" && self.minimize_on_close.load(Ordering::Relaxed) &&
             self.tray_available.load(Ordering::Relaxed)
+    }
+    pub fn is_quit_pending(&self) -> bool {
+        self.quit_pending.load(Ordering::Acquire)
+    }
+    pub fn protects_transcript(&self) -> bool {
+        self.is_quit_pending() || self.quit_export_required.load(Ordering::Acquire)
+    }
+    fn begin_quit(&self) -> bool {
+        !self.quit_pending.swap(true, Ordering::AcqRel)
+    }
+    fn cancel_quit(&self) {
+        self.quit_pending.store(false, Ordering::Release);
     }
 }
 
 const SHOW: &str = "tray-show";
 const QUIT: &str = "tray-quit";
 const TRAY_ID: &str = "meeting-notes-tray";
+
+pub fn apply_window_settings(app: &AppHandle, settings: &settings::WindowSettings) {
+    app.state::<WindowBehavior>().update(settings);
+    update_taskbar_visibility(app);
+}
+
+fn update_taskbar_visibility(app: &AppHandle) {
+    let skip_taskbar = app.state::<WindowBehavior>().should_skip_taskbar();
+    if let Some(window) = app.get_webview_window("main") {
+        if let Err(error) = window.set_skip_taskbar(skip_taskbar) {
+            log_error(app, &format!("Taskbar visibility could not be updated: {error}"));
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum RecordingIndicator {
@@ -46,7 +89,7 @@ impl RecordingIndicator {
     fn tooltip(self) -> &'static str {
         match self {
             Self::Idle => "Meeting Notes",
-            Self::Recording => "Meeting Notes - Recording",
+            Self::Recording => "Meeting Notes - Transcribing",
             Self::Paused => "Meeting Notes - Paused",
         }
     }
@@ -87,10 +130,10 @@ pub fn update_recording_indicator(app: &AppHandle) {
         })();
         match result {
             Ok(()) => *current = indicator,
-            Err(error) => log_error(&handle, &format!("The system tray recording status could not be updated: {error}")),
+            Err(error) => log_error(&handle, &format!("The system tray transcription status could not be updated: {error}")),
         }
     }) {
-        log_error(app, &format!("The system tray recording status could not be scheduled: {error}"));
+        log_error(app, &format!("The system tray transcription status could not be scheduled: {error}"));
     }
 }
 
@@ -114,7 +157,7 @@ pub fn init(app: &AppHandle) -> Result<(), String> {
             MenuAction::Show => {
                 if let Err(error) = show_main(app) { log_error(app, &error); }
             }
-            MenuAction::Quit => app.exit(0), // App exit, not window close: bypass close-to-tray.
+            MenuAction::Quit => request_quit(app),
             MenuAction::Ignore => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -132,19 +175,126 @@ fn show_main(app: &AppHandle) -> Result<(), String> {
     let window = app.get_webview_window("main").ok_or("The main window is not available.")?;
     window.show().map_err(|e| e.to_string())?;
     window.unminimize().map_err(|e| e.to_string())?;
+    update_taskbar_visibility(app);
     window.set_focus().map_err(|e| e.to_string())
 }
 
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
     if let WindowEvent::CloseRequested { api, .. } = event {
+        if window.label() != "main" { return; }
+        api.prevent_close();
         let app = window.app_handle();
-        let accessible = app.tray_by_id(TRAY_ID)
-            .and_then(|tray| tray.rect().ok().flatten()).is_some();
-        if app.state::<WindowBehavior>().should_hide(window.label()) && accessible {
+        let behavior = app.state::<WindowBehavior>();
+        if behavior.is_quit_pending() { return; }
+        if behavior.should_hide(window.label()) && app.tray_by_id(TRAY_ID)
+            .and_then(|tray| tray.rect().ok().flatten()).is_some() {
             match window.hide() {
-                Ok(()) => api.prevent_close(),
+                Ok(()) => return,
                 Err(error) => log_error(app, &format!("The window could not be hidden into the system tray: {error}")),
             }
+        }
+        request_quit(app);
+    }
+}
+
+fn request_quit(app: &AppHandle) {
+    if !app.state::<WindowBehavior>().begin_quit() { return; }
+    let was_running = app.state::<state::AppState>().snapshot_status().running;
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let lifecycle = app.state::<AsyncMutex<RecordingLifecycle>>();
+        let running = {
+            // Include a session whose start is already in progress.
+            let _guard = lifecycle.lock().await;
+            app.state::<state::AppState>().snapshot_status().running
+        };
+        if !was_running && !running {
+            if app.state::<WindowBehavior>().quit_export_required.load(Ordering::Acquire) {
+                finish_quit(&app).await;
+            } else {
+                app.exit(0);
+            }
+            return;
+        }
+        let handle = app.clone();
+        if let Err(error) = app.run_on_main_thread(move || show_quit_confirmation(&handle)) {
+            app.state::<WindowBehavior>().cancel_quit();
+            log_error(&app, &format!("The quit confirmation could not be shown: {error}"));
+        }
+    });
+}
+
+fn show_quit_confirmation(app: &AppHandle) {
+    let mut dialog = app.dialog()
+        .message("A transcription session is still open. Quitting stops the session and saves the transcript before closing Meeting Notes.")
+        .title("Quit Meeting Notes?")
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom("Quit".into(), "Cancel".into()));
+    // An unowned prompt is needed while the main window is hidden in the tray.
+    if let Some(window) = app.get_webview_window("main") {
+        if window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false) {
+            dialog = dialog.parent(&window);
+        }
+    }
+    let app = app.clone();
+    dialog.show(move |confirmed| {
+        if confirmed {
+            app.state::<WindowBehavior>().quit_export_required.store(true, Ordering::Release);
+            tauri::async_runtime::spawn(async move { finish_quit(&app).await });
+        } else {
+            app.state::<WindowBehavior>().cancel_quit();
+        }
+    });
+}
+
+async fn finish_quit(app: &AppHandle) {
+    let result = match crate::commands::stop_recording_for_quit(app).await {
+        Ok(_) => request_quit_export(app).await,
+        Err(error) => Err(format!("{error} Quit again to save the transcript collected so far.")),
+    };
+    match result {
+        Ok(()) => app.exit(0),
+        Err(error) => {
+            let message = format!("Meeting Notes stayed open. {error}");
+            log_error(app, &message);
+            let handle = app.clone();
+            if app.run_on_main_thread(move || {
+                let _ = show_main(&handle);
+                handle.dialog().message(message).title("Could not quit Meeting Notes")
+                    .kind(MessageDialogKind::Error).show(move |_| {
+                        handle.state::<WindowBehavior>().cancel_quit();
+                    });
+            }).is_err() {
+                app.state::<WindowBehavior>().cancel_quit();
+            }
+        }
+    }
+}
+
+async fn request_quit_export(app: &AppHandle) -> Result<(), String> {
+    let window = app.get_webview_window("main").ok_or("The main window is not available.")?;
+    let behavior = app.state::<WindowBehavior>();
+    let id = uuid::Uuid::new_v4().to_string();
+    let (done, reply) = tokio::sync::oneshot::channel();
+    *behavior.quit_export_reply.lock().expect("Quit export mutex poisoned") = Some(QuitExportReply { id: id.clone(), done });
+    let result = async {
+        window.emit(events::EVENT_QUIT_EXPORT, id).map_err(|error| error.to_string())?;
+        tokio::time::timeout(std::time::Duration::from_secs(30), reply).await
+            .map_err(|_| "The transcript export did not report completion. Quit again to retry.".to_string())?
+            .map_err(|_| "The transcript export was interrupted. Quit again to retry.".to_string())?
+    }.await;
+    behavior.quit_export_reply.lock().expect("Quit export mutex poisoned").take();
+    result
+}
+
+#[tauri::command]
+pub fn complete_quit_export(window: WebviewWindow, request_id: String, error: Option<String>) {
+    if window.label() != "main" { return; }
+    let behavior = window.state::<WindowBehavior>();
+    let mut reply = behavior.quit_export_reply.lock().expect("Quit export mutex poisoned");
+    if reply.as_ref().is_some_and(|reply| reply.id == request_id) {
+        if let Some(reply) = reply.take() {
+            let _ = reply.done.send(error.map_or(Ok(()), Err));
         }
     }
 }
@@ -197,13 +347,46 @@ mod tests {
     fn close_policy_requires_enabled_setting_available_tray_and_main_window() {
         let behavior = WindowBehavior::default();
         assert!(!behavior.should_hide("main"));
-        behavior.update(&settings::WindowSettings { minimize_to_tray_on_close: true });
+        behavior.update(&settings::WindowSettings::default());
         assert!(!behavior.should_hide("main"), "tray failure must not hide the window");
         behavior.tray_available.store(true, Ordering::Relaxed);
         assert!(behavior.should_hide("main"));
         assert!(!behavior.should_hide("other"));
-        behavior.update(&settings::WindowSettings { minimize_to_tray_on_close: false });
+        behavior.update(&settings::WindowSettings {
+            minimize_to_tray_on_close: false,
+            ..Default::default()
+        });
         assert!(!behavior.should_hide("main"), "explicitly saved false applies immediately");
+    }
+
+    #[test]
+    fn taskbar_policy_requires_tray_and_is_independent_of_close_policy() {
+        let behavior = WindowBehavior::default();
+        let mut settings = settings::WindowSettings {
+            minimize_to_tray_on_close: false,
+            ..Default::default()
+        };
+        behavior.update(&settings);
+        assert!(!behavior.should_skip_taskbar());
+        behavior.tray_available.store(true, Ordering::Relaxed);
+        assert!(behavior.should_skip_taskbar());
+        assert!(!behavior.should_hide("main"));
+        settings.hide_from_taskbar = false;
+        settings.minimize_to_tray_on_close = true;
+        behavior.update(&settings);
+        assert!(!behavior.should_skip_taskbar());
+        assert!(behavior.should_hide("main"));
+    }
+
+    #[test]
+    fn quit_requests_are_deduplicated_until_cancelled() {
+        let behavior = WindowBehavior::default();
+        assert!(behavior.begin_quit());
+        assert!(behavior.is_quit_pending());
+        assert!(!behavior.begin_quit(), "repeated close or Quit must not open another prompt");
+        behavior.cancel_quit();
+        assert!(!behavior.is_quit_pending(), "cancelling allows transcription starts again");
+        assert!(behavior.begin_quit(), "the user can request Quit again after cancelling");
     }
 
     #[test]

@@ -57,6 +57,7 @@ pub enum DetectionEvent {
 #[derive(Default)]
 pub struct RecordingLifecycle {
     pub auto_origin: Option<MeetingDetectedPayload>,
+    pub stop_error: Option<String>,
 }
 
 impl RecordingLifecycle {

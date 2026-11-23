@@ -47,21 +47,22 @@ async function compileAndImport() {
 
 const { contract, utils, speakers, markdown } = await compileAndImport()
 
-test('close-to-tray defaults on for legacy and malformed settings', () => {
+test('window preferences default on for legacy and malformed settings', () => {
   for (const input of [null, undefined, {}, { window: null }, { window: {} },
-    { window: { minimizeToTrayOnClose: 'true' } }, { window: { minimizeToTrayOnClose: 1 } }]) {
-    assert.deepEqual(contract.normalizeUserSettings(input).window, { minimizeToTrayOnClose: true })
+    { window: { minimizeToTrayOnClose: 'true', hideFromTaskbar: 'false' } },
+    { window: { minimizeToTrayOnClose: 1, hideFromTaskbar: 0 } }]) {
+    assert.deepEqual(contract.normalizeUserSettings(input).window, { minimizeToTrayOnClose: true, hideFromTaskbar: true })
   }
 })
 
-test('close-to-tray preserves explicit true and false without changing audio settings', () => {
+test('window preferences preserve explicit values independently without changing audio settings', () => {
   for (const enabled of [false, true]) {
     const result = contract.normalizeUserSettings({
-      window: { minimizeToTrayOnClose: enabled },
+      window: { minimizeToTrayOnClose: enabled, hideFromTaskbar: !enabled },
       transcription: { mic: false, speaker: true },
       autoStart: { enabled: true, processes: ['teams'] }
     })
-    assert.equal(result.window.minimizeToTrayOnClose, enabled)
+    assert.deepEqual(result.window, { minimizeToTrayOnClose: enabled, hideFromTaskbar: !enabled })
     assert.deepEqual(result.transcription, { mic: false, speaker: true })
     assert.equal(result.autoStart.enabled, true)
   }

@@ -21,8 +21,8 @@ used on its own.
 - **Portable app:** Extract the complete folder and run it without an installer. The .NET runtime ships with the app.
 - **Connection diagnostics:** Test Azure connectivity and an optional corporate proxy from the settings dialog.
 - **Application information and diagnostics:** **About** in the three-dot menu shows the app icon, repository, author and MIT license. **Dev-Tools (F12)** toggles developer tools, as does F12. Webpage right-click menus are suppressed except in text fields and editable content; native window and tray menus are unaffected.
-- **System tray:** The tray icon turns **red while recording**, **yellow while paused**, and returns to its original color after stopping or a sidecar crash. Right-click it for **Show** or **Quit**. **Show** and a left double-click restore and focus the main window. **Minimize to system tray on close** under **General** keeps the app, recording and meeting detection running when closing the window. Enabled by default from **v0.1.2**; **Quit** always exits. The preference applies after saving, without restarting.
-- **Automatic recording:** "Start recording automatically when a meeting is detected" is enabled by default from **v0.1.2** and the app watches the Windows audio session graph in the background. An active audio session from an allowed meeting application starts recording. When all of that process's microphone/output sessions remain inactive for 3 seconds, its automatically started recording stops via the normal stop/export path. Manual recordings are never stopped by the detector. Automatic start and matching session-end stop share the same enabled setting. This is an audio-session heuristic, not a definitive meeting signal; real Teams/Zoom acceptance remains open.
+- **System tray:** The tray icon turns **red while transcribing**, **yellow while paused**, and returns to its original color after stopping or a sidecar crash. Right-click it for **Show** or **Quit**. **Show** and a left double-click restore and focus the main window. **Hide from taskbar** under **General** is on by default and takes effect after saving. If the system tray cannot be initialized, the window stays on the taskbar. With **Minimize to system tray on close** enabled, closing the window keeps the app, transcription, and meeting detection running. With it disabled, closing the window quits the app even when **Hide from taskbar** is on. Closing to quit or choosing **Quit** from the tray asks for confirmation while transcription is running or paused. **Cancel** leaves the session open. Confirming **Quit** stops transcription, collects the final segments, and saves them as Markdown in the configured folder before exiting, even if **Save transcript automatically** is off. No file is written if there are no final segments. If stopping or saving fails, the app stays open with the transcript so you can try **Quit** again.
+- **Automatic transcription:** Under **General**, **Start transcription automatically** watches Windows audio sessions and starts transcription when an allowed meeting app becomes active. **Stop transcription automatically** stops that session after the app's audio sessions have been inactive for 3 seconds. Both settings default to on. Auto-stop needs auto-start and never stops a manually started transcription. This is an audio-session heuristic, not a definitive meeting signal; real Teams/Zoom acceptance remains open.
 
 ## Screenshots
 
@@ -113,7 +113,7 @@ the draft without saving it and return to it when the test dialog closes.
 
 ### Transcribe a conversation
 
-1. Select audio devices under **Audio settings** in the empty transcript area on the start page; changes are saved immediately. The panel is shifted 150 px to the right on windows wider than 1100 px; narrower windows retain centered placement to avoid clipping. Select **Primary language** under **Transcription** in the settings dialog and confirm with **Save**. **General** contains only the close-to-tray preference. The dialog keeps its sections on one scrolling page without tabs; **Test connection** is available in its footer when the required Azure fields are filled in. **Save transcript automatically** enables automatic Markdown export; the adjacent path and folder icon select its destination.
+1. Select audio devices under **Audio settings** in the empty transcript area on the start page; changes are saved immediately. The panel is shifted 150 px to the right on windows wider than 1100 px; narrower windows retain centered placement to avoid clipping. Select **Primary language** under **Transcription** in the settings dialog and confirm with **Save**. **General** contains the window and automatic start/stop preferences. Hover over any setting for a tooltip. The dialog keeps its sections on one scrolling page without tabs; **Test connection** is available in its footer when the required Azure fields are filled in. **Save transcript automatically** enables automatic Markdown export; the adjacent path and folder icon select its destination.
 2. Use the checkboxes next to the device selectors to enable microphone audio, speaker playback, or both. At least one source stays enabled.
 3. Enable **Speaker recognition** for either source if needed. Each source has its own checkbox beside its device selector.
 4. Click **Start**. The live transcript appears in the main area.
@@ -127,7 +127,7 @@ transcript, or click **Speakers** to open the mapping overview.
 
 - **Copy** copies the finalized transcript to the clipboard as Markdown.
 - **Export Markdown** in the three-dot menu saves it to a file.
-- Automatic export when a recording ends is enabled by default. Disable it or change the output folder under **Transcription**, then click **Save**.
+- Automatic export when transcription ends is enabled by default. Disable it or change the output folder under **Transcription**, then click **Save**.
 - Use **Choose folder** to choose an export folder with the native folder picker, or enter a path manually.
 
 With no custom path, exports are saved next to the EXE. Relative paths are
@@ -149,7 +149,7 @@ sharing them as well.
 
 With auto-start enabled, the detector watches microphone/output session
 metadata for allowed applications. That happens **locally** - no calendar is read and nothing leaves
-the machine. Still, an automatic recording starts without you pressing the
+the machine. Still, automatic transcription starts without you pressing the
 button, so obtain the participants' agreement beforehand.
 
 ## 🛠️ Troubleshooting
@@ -160,7 +160,7 @@ button, so obtain the participants' agreement beforehand.
 | Microphone or system audio is missing | Make sure the source is enabled and the correct device is selected. Loopback captures playback from the selected output device; no playback means there may be no audio packets. |
 | Connection fails on a corporate network | Check proxy settings and run **Test connection**. HTTP `407` indicates proxy authentication; `401`/`403` alone do not confirm a working Speech connection. |
 | Certificate errors with TLS inspection | The corporate certificate must be trusted by Windows. Both HTTPS and Speech/WSS validate certificates. |
-| The recording service crashes | Export the existing transcript if needed, then click **Start** to begin a new session. Restarting the app is not required; automatic reconnection is not provided. |
+| The transcription service crashes | Export the existing transcript if needed, then click **Start** to begin a new session. Restarting the app is not required; automatic reconnection is not provided. |
 
 Open **Debug log** from the three-dot menu for more details. Only error rows
 and the error counter are highlighted in red.

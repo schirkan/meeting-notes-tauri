@@ -29,7 +29,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
       )}
 
       <div className="settings-block">
-        <label>
+        <label title="Enter the HTTPS endpoint of your Azure Speech resource">
           Endpoint
           <input
             type="text"
@@ -40,7 +40,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
           />
         </label>
 
-        <label>
+        <label title="Enter the region of your Azure Speech resource, such as westeurope">
           Region
           <input
             type="text"
@@ -51,7 +51,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
           />
         </label>
 
-        <label>
+        <label title="Enter an access key from your Azure Speech resource">
           Speech Key
           <input
             type="password"
@@ -62,7 +62,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
           />
         </label>
 
-        <label className="checkbox-field">
+        <label className="checkbox-field" title="Show provisional text while Azure Speech is still recognizing it">
           <input
             type="checkbox"
             checked={configDraft.interimResults}

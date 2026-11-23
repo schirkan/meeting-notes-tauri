@@ -183,7 +183,10 @@ export interface TranscriptApi {
   getConfig: () => Promise<import('./config-contract').AppConfigState>
   saveSettings: (settings: import('./config-contract').UserSettings) => Promise<import('./config-contract').UserSettings>
   saveConfig: (config: import('./config-contract').AzureConfig) => Promise<import('./config-contract').AppConfigState>
+  reset: () => Promise<void>
   saveTranscriptMarkdown: (markdown: string) => Promise<string>
+  onQuitExport: (cb: (requestId: string) => void) => () => void
+  completeQuitExport: (requestId: string, error: string | null) => Promise<void>
   selectTranscriptDirectory: () => Promise<string | null>
   testAzureConnectivity: (payload?: unknown) => Promise<{
     probeUrl: string

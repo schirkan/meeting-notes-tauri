@@ -69,6 +69,7 @@ pub struct SidecarOptions {
 pub struct SidecarHandle {
     pub child: Arc<Mutex<Option<CommandChild>>>,
     pub events_rx: mpsc::Receiver<CommandEvent>,
+    pub shutdown: Option<tokio::sync::oneshot::Sender<Result<(), String>>>,
 }
 
 fn transcription_arguments(settings: &crate::settings::TranscriptionSettings) -> [String; 4] {
@@ -283,6 +284,7 @@ pub async fn start<R: Runtime>(
     Ok(SidecarHandle {
         child: Arc::new(Mutex::new(Some(child))),
         events_rx,
+        shutdown: None,
     })
 }
 
@@ -302,9 +304,12 @@ pub async fn send_command(handle: &SidecarHandle, command: &str) -> Result<(), S
 }
 
 pub async fn stop(handle: SidecarHandle) -> Result<(), SidecarError> {
-    // Politely ask the sidecar to shut down before killing.
     let _ = send_command(&handle, r#"{"type":"shutdown"}"#).await;
     tokio::time::sleep(Duration::from_millis(250)).await;
+    kill(handle).await
+}
+
+pub async fn kill(handle: SidecarHandle) -> Result<(), SidecarError> {
     let mut guard = handle.child.lock().await;
     if let Some(child) = guard.take() {
         child.kill().map_err(|e| SidecarError::Spawn(e.to_string()))?;

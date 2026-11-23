@@ -21,7 +21,8 @@ export const TAURI_COMMANDS = {
   getAppConfig: 'get_app_config',
   saveFixedConfig: 'save_fixed_config',
   testAzureConnectivity: 'test_azure_connectivity',
-  saveTranscriptMarkdown: 'save_transcript_markdown'
+  saveTranscriptMarkdown: 'save_transcript_markdown',
+  completeQuitExport: 'complete_quit_export'
 } as const
 
 export type TauriCommand = (typeof TAURI_COMMANDS)[keyof typeof TAURI_COMMANDS]
@@ -29,6 +30,7 @@ export type TauriCommand = (typeof TAURI_COMMANDS)[keyof typeof TAURI_COMMANDS]
 export const TAURI_EVENTS = {
   segment: 'transcript:segment',
   status: 'transcript:status',
+  quitExport: 'transcript:quit-export',
   error: 'transcript:error',
   debug: 'transcript:debug',
   sidecarCrashed: 'sidecar:crashed',

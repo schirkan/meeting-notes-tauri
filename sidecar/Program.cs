@@ -179,7 +179,7 @@ catch (ArgumentException)
 }
 if (!transcription.Mic && !transcription.Speaker)
 {
-    Logger.Error("SIDECAR_START_FAILED", "No recording source selected for transcription: --transcription-mic or --transcription-speaker must be true.");
+    Logger.Error("SIDECAR_START_FAILED", "No audio source selected for transcription: --transcription-mic or --transcription-speaker must be true.");
     return 23;
 }
 Logger.Info("config", "transcription", $"Transcribed sources: mic={transcription.Mic}, speaker={transcription.Speaker}.");
@@ -395,14 +395,14 @@ try
                         break;
                     case SidecarCommands.Pause:
                         azure?.SetPaused(true);
-                        Logger.Info("sidecar", "pause", "Recording paused; the Azure session stays connected.");
+                        Logger.Info("sidecar", "pause", "Transcription paused; the Azure session stays connected.");
                         Logger.Event("status", new { phase = "paused", running = true });
                         break;
                     case SidecarCommands.Resume:
                         {
                             var restarted = azure is null ? Array.Empty<string>() : await azure.ReconnectDeadStreamsAsync();
                             azure?.SetPaused(false);
-                            Logger.Info("sidecar", "resume", "Recording resumed.");
+                            Logger.Info("sidecar", "resume", "Transcription resumed.");
                             Logger.Event("status", new { phase = "resumed", running = true });
                             foreach (var source in restarted)
                                 Logger.Warn("azure", "speaker_ids_reset",
@@ -459,7 +459,7 @@ try
 
     micSource?.Stop();
     speakerSource?.Stop();
-    if (azure is not null) await azure.StopAsync();
+    if (azure is not null) await azure.StopAsync(requireCleanStop: true);
     Logger.Info("status", "stopped", "Graceful shutdown completed.");
     Logger.Event("status", new { phase = "stopped", running = false });
     return 0;

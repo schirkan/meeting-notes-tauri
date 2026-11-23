@@ -17,14 +17,14 @@ Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1
 Die Checkboxen wurden gegen den **Code** geprueft, nicht gegen den Spec-Status:
 jeder abgehakte Punkt traegt den Beleg im Klartext (`Beleg: …`), jeder offene
 Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **41 Specs** als
-`umgesetzt` bzw. `teils umgesetzt` markiert, **23 offene Punkte in 17 Specs**.
+`umgesetzt` bzw. `teils umgesetzt` markiert, **24 offene Punkte in 17 Specs**.
 Vorher waren ueber 70 Checkboxen offen, obwohl die Funktion ueberwiegend fertig
 und verifiziert war - die Specs sind jetzt mit dem Stand der Implementierung
 deckungsgleich.
 
 _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 
-### Offen und braucht deinen Rechner (11 Punkte)
+### Offen und braucht deinen Rechner (12 Punkte)
 
 | Spec | Punkt |
 |---|---|
@@ -38,7 +38,8 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-509 | Latenz und Ausgabequalitaet sind auf echter Hardware gegen die |
 | T-510 | Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch |
 | T-510 | Befunde sind in `T-504`, `T-500`, `SPEC.md` und `AGENTS.md` nachgezogen. |
-| T-514 | Native Windows-Abnahme: Alt+F4 bei beiden Optionen sowie echter Exit mit laufender Aufnahme, s… |
+| T-514 | Native Windows-Abnahme: X/Alt+F4 mit deaktivierter Tray-Minimierung und **Quit** bei verborgen… |
+| T-514 | Native Windows-Abnahme der Taskleistenoption. |
 
 ### Offen als bewusste Entscheidung (12 Punkte)
 

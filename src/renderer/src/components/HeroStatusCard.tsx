@@ -80,7 +80,7 @@ export function HeroStatusCard(props: HeroStatusCardProps) {
         <button type="button" onClick={() => void props.onCopyTranscript()} disabled={!props.canCopyTranscript}
           aria-label="Copy transcript" title="Copy transcript"><Icon name="copy" /><span>Copy</span></button>
         <button type="button" onClick={() => void props.onResetTranscript()} disabled={!props.canResetTranscript}
-          aria-label="Clear transcript" title={status.running ? 'Stop the recording to clear the transcript' : 'Clear transcript'}>
+          aria-label="Clear transcript" title={status.running ? 'Stop the transcription to clear the transcript' : 'Clear transcript'}>
           <Icon name="trash" /><span>Clear</span>
         </button>
         <button type="button" onClick={props.onToggleSpeakers} aria-expanded={props.speakersOpen}

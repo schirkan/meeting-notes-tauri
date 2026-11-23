@@ -63,8 +63,9 @@ nicht uebersetzt; die Anwendung verfasst ihre eigenen Labels und Meldungen engli
 | Debug-Log | Debug log |
 | Log loeschen | Clear log |
 | Beim Schliessen in den Systray minimieren | Minimize to system tray on close |
-| Aufnahme automatisch starten | Start recording automatically |
-| Aufnahme automatisch beenden | Stop recording automatically |
+| Aus der Taskleiste ausblenden | Hide from taskbar |
+| Transkription automatisch starten | Start transcription automatically |
+| Transkription automatisch beenden | Stop transcription automatically |
 | Transkript automatisch speichern | Save transcript automatically |
 | Speicherpfad (optional) | Save path (optional) |
 | Speicherordner auswaehlen | Choose save folder |
@@ -76,7 +77,7 @@ nicht uebersetzt; die Anwendung verfasst ihre eigenen Labels und Meldungen engli
 | Proxy Benutzername / Passwort (optional) | Proxy username / password (optional) |
 | Anzeigen (Tray) | Show |
 | Beenden (Tray) | Quit |
-| Meeting Notes - Aufnahme | Meeting Notes - Recording |
+| Meeting Notes - Aufnahme | Meeting Notes - Transcribing |
 | Meeting Notes - Pausiert | Meeting Notes - Paused |
 | Deutsch / Englisch / Franzoesisch / Spanisch / Italienisch / Portugiesisch / Niederlaendisch / Polnisch / Tuerkisch / Japanisch | German / English / French / Spanish / Italian / Portuguese / Dutch / Polish / Turkish / Japanese |
 
@@ -93,7 +94,7 @@ wechselt von `lang="de"` auf `lang="en"`.
       autostart,state,lib}.rs` sowie die Sidecar-Logtexte in `sidecar/**.cs` sind uebersetzt.
       Maschinenlesbare Schluessel (Fehlercodes, Step-IDs, Protokoll-Keys) unveraendert.
 - [x] **Tray und Tooltips sind englisch.** Beleg: `src-tauri/src/tray.rs` nutzt `Show`/`Quit`
-      sowie die Tooltips `Meeting Notes - Recording` und `Meeting Notes - Paused`.
+      sowie die Tooltips `Meeting Notes - Transcribing` und `Meeting Notes - Paused`.
 - [x] **Nur `en-US`-Formatierung, kein `de-DE` mehr im Renderer.** Beleg: keine
       `de-DE`-Formatierung in `src/renderer/src/**`; `src/renderer/index.html` traegt
       `lang="en"`.

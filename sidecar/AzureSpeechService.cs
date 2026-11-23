@@ -49,7 +49,8 @@ public sealed class AzureSpeechService : IDisposable
     private SpeechConfig? _speechConfig;
     private bool _initialized;
     private AzureAudioFormat? _format;
-    private bool _stopping;
+    private volatile bool _stopping;
+    private readonly SemaphoreSlim _streamLifecycle = new(1, 1);
 
     public AzureSpeechService(AzureSpeechConfig config, UserSettings settings)
     {
@@ -217,34 +218,46 @@ public sealed class AzureSpeechService : IDisposable
     /// </summary>
     public async Task<string[]> ReconnectDeadStreamsAsync()
     {
-        if (_format is null) return Array.Empty<string>();
-        var restarted = new List<string>();
-        foreach (var source in _streams.Where(pair => pair.Value.SessionDead).Select(pair => pair.Key).ToArray())
+        await _streamLifecycle.WaitAsync();
+        try
         {
-            var dead = _streams[source];
-            FinalizeStream(dead);
-            _streams.TryRemove(source, out _);
-            var fresh = EnsureStreamForFormat(source, _format);
-            await StartStreamAsync(fresh);
-            restarted.Add(source);
+            if (_stopping || _format is null) return Array.Empty<string>();
+            var restarted = new List<string>();
+            foreach (var source in _streams.Where(pair => pair.Value.SessionDead).Select(pair => pair.Key).ToArray())
+            {
+                var dead = _streams[source];
+                FinalizeStream(dead);
+                _streams.TryRemove(source, out _);
+                var fresh = EnsureStreamForFormat(source, _format);
+                await StartStreamAsync(fresh);
+                restarted.Add(source);
+            }
+            if (restarted.Count > 0)
+                Logger.Info("azure", "session_restarted",
+                    $"{restarted.Count} source(s) reconnected: {string.Join(", ", restarted)}. " +
+                    "The speaker IDs were reassigned.");
+            return restarted.ToArray();
         }
-        if (restarted.Count > 0)
-            Logger.Info("azure", "session_restarted",
-                $"{restarted.Count} source(s) reconnected: {string.Join(", ", restarted)}. " +
-                "The speaker IDs were reassigned.");
-        return restarted.ToArray();
+        finally { _streamLifecycle.Release(); }
     }
 
-    public async Task StopAsync()
+    public async Task StopAsync(bool requireCleanStop = false)
     {
         _stopping = true;
-        Logger.Info("azure", "stopping", $"{_streams.Count} active stream(s) are being stopped.");
-        var closeTasks = _streams.Values.Select(state => Task.Run(() => FinalizeStream(state))).ToArray();
-        await Task.WhenAll(closeTasks);
-        _streams.Clear();
-        lock (_missingSpeakerIdLogged) _missingSpeakerIdLogged.Clear();
-        _firstFrameLogged.Clear();
-        _pushCounters.Clear();
+        await _streamLifecycle.WaitAsync();
+        try
+        {
+            Logger.Info("azure", "stopping", $"{_streams.Count} active stream(s) are being stopped.");
+            var closeTasks = _streams.Values.Select(state => Task.Run(() => FinalizeStream(state))).ToArray();
+            var closed = await Task.WhenAll(closeTasks);
+            _streams.Clear();
+            lock (_missingSpeakerIdLogged) _missingSpeakerIdLogged.Clear();
+            _firstFrameLogged.Clear();
+            _pushCounters.Clear();
+            if (requireCleanStop && closed.Any(success => !success))
+                throw new InvalidOperationException("An Azure recognizer could not be stopped cleanly.");
+        }
+        finally { _streamLifecycle.Release(); }
     }
 
     public void Dispose() => StopAsync().GetAwaiter().GetResult();
@@ -338,8 +351,9 @@ public sealed class AzureSpeechService : IDisposable
         }
     }
 
-    private void FinalizeStream(StreamState state)
+    private bool FinalizeStream(StreamState state)
     {
+        var success = true;
         try
         {
             if (state.Mode == "conversationTranscriber")
@@ -353,11 +367,13 @@ public sealed class AzureSpeechService : IDisposable
         }
         catch (Exception ex)
         {
+            success = false;
             Logger.Warn("azure", "stop_error", $"stop error ({state.Mode}/{state.Source}): {ex.Message}");
         }
         try { state.PushStream.Close(); } catch { /* ignore */ }
         try { state.RecognizerBase.Dispose(); } catch { /* ignore */ }
         Logger.Info("azure", "stream_closed", $"Recognizer closed (mode={state.Mode}, started={state.Started}).");
+        return success;
     }
 
     private void AttachCommonDiagnostics(Recognizer recognizer, StreamState state)

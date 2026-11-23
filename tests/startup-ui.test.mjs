@@ -101,9 +101,21 @@ async function openApp(options) {
         window.lastSavedConfig = config
         return { exists: true, path: 'test-config', config }
       },
+      reset: async () => {},
       saveTranscriptMarkdown: async (markdown) => {
         window.lastSavedMarkdown = markdown
+        window.transcriptWrites = (window.transcriptWrites ?? 0) + 1
+        if (input.deferTranscriptWrite) {
+          await new Promise((resolve, reject) => {
+            window.completeTranscriptWrite = (error) => error ? reject(error) : resolve()
+          })
+        }
         return 'D:/Notes/transcript-2026-11-11-22-05-00.md'
+      },
+      onQuitExport: (callback) => { window.emitQuitExport = callback; return () => { delete window.emitQuitExport } },
+      completeQuitExport: async (requestId, error) => {
+        window.quitExportReplies ??= []
+        window.quitExportReplies.push({ requestId, error })
       },
       selectTranscriptDirectory: async () => {
         window.directoryPickerCalls = (window.directoryPickerCalls ?? 0) + 1
@@ -164,7 +176,9 @@ test('settings drafts are isolated, warn on close, discard and only persist on s
     const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
     const close = dialog.getByRole('button', { name: 'Close dialog', exact: true })
     const language = dialog.getByRole('combobox', { name: 'Primary language', exact: true })
+    const hideFromTaskbar = dialog.getByRole('checkbox', { name: 'Hide from taskbar', exact: true })
     await page.waitForFunction(() => document.activeElement?.classList.contains('settings-save-button'))
+    await hideFromTaskbar.uncheck()
     await language.selectOption('en-US')
     await dialog.getByLabel('Endpoint', { exact: true }).fill('https://draft.test')
     await dialog.getByRole('checkbox', { name: 'Save transcript automatically', exact: true }).uncheck()
@@ -184,6 +198,7 @@ test('settings drafts are isolated, warn on close, discard and only persist on s
     await page.getByRole('checkbox', { name: 'Speaker recognition for microphone', exact: true }).uncheck()
     await page.waitForFunction(() => window.lastSavedSettings?.diarization.mic === false)
     assert.equal(await page.evaluate(() => window.lastSavedSettings.language), 'de-DE')
+    assert.equal(await page.evaluate(() => window.lastSavedSettings.window.hideFromTaskbar), true)
     assert.equal(await page.evaluate(() => window.lastSavedSettings.transcript.markdownExport.enabled), true)
     assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
     await reopenSettings(page)
@@ -364,17 +379,25 @@ test('settings shows all sections without navigation and preserves two-column la
     ])
     assert.equal(endpointBox.y, regionBox.y)
     assert.ok(endpointBox.x + endpointBox.width <= regionBox.x)
-    const general = panels.nth(1)
-    assert.equal(await panels.nth(0).getByRole('checkbox').count(), 1)
-    const languageField = general.locator('.language-field')
+    const general = panels.nth(0)
+    const transcription = panels.nth(1)
+    assert.equal(await general.getByRole('checkbox').count(), 4)
+    assert.equal(await transcription.getByRole('checkbox').count(), 1)
+    const autoStart = general.getByRole('checkbox', { name: 'Start transcription automatically', exact: true })
+    const autoStop = general.getByRole('checkbox', { name: 'Stop transcription automatically', exact: true })
+    await autoStart.uncheck()
+    assert.equal(await autoStop.isDisabled(), true)
+    await autoStart.check()
+    assert.equal(await autoStop.isDisabled(), false)
+    const languageField = transcription.locator('.language-field')
     const [caption, languageBox] = await Promise.all([
       languageField.locator('.field-caption').boundingBox(), languageField.getByRole('combobox').boundingBox()
     ])
     assert.ok(caption.x + caption.width <= languageBox.x)
     assert.ok(Math.abs(caption.y + caption.height / 2 - languageBox.y - languageBox.height / 2) < 1)
     for (const [left, right] of [
-      [general.getByRole('checkbox', { name: 'Start recording automatically', exact: true }).locator('..'), general.getByRole('checkbox', { name: 'Stop recording automatically', exact: true }).locator('..')],
-      [general.getByRole('checkbox', { name: 'Save transcript automatically', exact: true }).locator('..'), general.locator('.directory-control')]
+      [autoStart.locator('..'), autoStop.locator('..')],
+      [transcription.getByRole('checkbox', { name: 'Save transcript automatically', exact: true }).locator('..'), transcription.locator('.directory-control')]
     ]) {
       const [leftBox, rightBox] = await Promise.all([left.boundingBox(), right.boundingBox()])
       assert.equal(leftBox.y, rightBox.y)
@@ -394,9 +417,9 @@ test('settings shows all sections without navigation and preserves two-column la
       assert.equal(box.width, 14)
       assert.equal(box.height, 14)
     }
-    const exportControl = general.locator('.directory-control')
+    const exportControl = transcription.locator('.directory-control')
     assert.equal(await exportControl.locator('label').count(), 0)
-    const toggleBox = await general.getByRole('checkbox', { name: 'Save transcript automatically', exact: true }).boundingBox()
+    const toggleBox = await transcription.getByRole('checkbox', { name: 'Save transcript automatically', exact: true }).boundingBox()
     const pathBox = await exportControl.getByRole('textbox').boundingBox()
     assert.ok(toggleBox.x + toggleBox.width < pathBox.x)
     assert.ok(Math.abs(toggleBox.y + toggleBox.height / 2 - pathBox.y - pathBox.height / 2) < 1)
@@ -461,8 +484,9 @@ test('settings offers a single save button in the footer that persists config an
     const footer = dialog.locator('.settings-dialog-footer')
 
     assert.equal(await dialog.boundingBox().then((box) => box.height), 620)
-    assert.equal(await dialog.locator('.settings-dialog-grid').getByText('Changes apply to the next recording after saving.', { exact: true }).count(), 0)
-    const hint = footer.getByText('Changes apply to the next recording after saving.', { exact: true })
+    const hintText = 'After saving, window settings apply immediately. Transcription settings apply to the next session.'
+    assert.equal(await dialog.locator('.settings-dialog-grid').getByText(hintText, { exact: true }).count(), 0)
+    const hint = footer.getByText(hintText, { exact: true })
     assert.equal(await hint.count(), 1)
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 860 })
@@ -798,16 +822,50 @@ test('close-to-tray checkbox defaults on and saves both states via the existing 
   } finally { await page.close() }
 })
 
-test('automatic recording default on and explicitly disabled preferences are shown correctly', async () => {
+test('settings inputs and the folder picker have tooltips, including disabled fields', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    const audio = page.locator('.idle-audio-panel')
+    await audio.waitFor()
+    await page.getByRole('button', { name: 'Open settings dialog' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
+    for (const inputs of [audio.locator('input, select'), dialog.locator('.settings-block :is(input, select, button)')]) {
+      const missing = await inputs.evaluateAll(elements => elements
+        .filter(element => !element.closest('[title]')?.title.trim())
+        .map(element => element.getAttribute('aria-label') ?? element.outerHTML))
+      assert.deepEqual(missing, [])
+    }
+  } finally { await page.close() }
+})
+
+test('Hide from taskbar defaults on and only applies the changed preference on Save', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.getByRole('button', { name: 'Open settings dialog' }).click()
+    const checkbox = page.getByRole('checkbox', { name: 'Hide from taskbar', exact: true })
+    assert.equal(await checkbox.isChecked(), true)
+    for (const enabled of [false, true]) {
+      await checkbox.setChecked(enabled)
+      await page.getByRole('button', { name: 'Save', exact: true }).click()
+      await page.waitForFunction(value => window.lastSavedSettings?.window.hideFromTaskbar === value, enabled)
+      assert.equal(await page.evaluate(() => window.lastSavedSettings.window.minimizeToTrayOnClose), true)
+      await reopenSettings(page)
+      assert.equal(await checkbox.isChecked(), enabled)
+    }
+  } finally { await page.close() }
+})
+
+test('automatic transcription defaults on and explicitly disabled preferences load correctly', async () => {
   for (const explicitFalse of [false, true]) {
     const page = await openApp({
       configState: { exists: true, path: 'test-config', config: validConfig },
       autoStart: explicitFalse ? { enabled: false, processes: [] } : undefined,
-      windowSettings: explicitFalse ? { minimizeToTrayOnClose: false } : undefined
+      windowSettings: explicitFalse ? { minimizeToTrayOnClose: false, hideFromTaskbar: false } : undefined
     })
     try {
       await page.getByRole('button', { name: 'Open settings dialog' }).click()
-      assert.equal(await page.getByRole('checkbox', { name: 'Start recording automatically', exact: true }).isChecked(), !explicitFalse)
+      assert.equal(await page.getByRole('checkbox', { name: 'Start transcription automatically', exact: true }).isChecked(), !explicitFalse)
+      assert.equal(await page.getByRole('checkbox', { name: 'Hide from taskbar', exact: true }).isChecked(), !explicitFalse)
       assert.equal(await page.getByRole('checkbox', { name: 'Minimize to system tray on close', exact: true }).isChecked(), !explicitFalse)
     } finally { await page.close() }
   }
@@ -1057,6 +1115,80 @@ async function emitSegments(page, count = 2) {
   }, count)
   await page.locator('.segment').nth(count - 1).waitFor()
 }
+
+test('Quit export includes late finals and aliases and reports write failure before allowing a retry', async () => {
+  const page = await openApp({
+    configState: { exists: true, path: 'test-config', config: validConfig },
+    running: true,
+    transcript: { markdownExport: { enabled: false } },
+    deferTranscriptWrite: true
+  })
+  try {
+    await emitSegments(page, 1)
+    const tag = page.locator('.speaker-editor').first()
+    await tag.locator('button').click()
+    const input = tag.getByRole('textbox', { name: 'Speaker name', exact: true })
+    await input.fill('Anita')
+    await input.press('Enter')
+    await page.evaluate(() => {
+      window.emitSegment({ id: 'shutdown-final', sessionId: 'console-session', source: 'mic', speaker: 'Guest-1',
+        timestampIso: '2026-11-16T14:34:45Z', text: 'Final words during shutdown.', state: 'final' })
+      window.emitStatus({ running: false, paused: false })
+      window.emitQuitExport('first')
+    })
+    await page.waitForFunction(() => window.transcriptWrites === 1)
+    assert.match(await page.evaluate(() => window.lastSavedMarkdown), /Anita.*Final words during shutdown\./)
+    assert.equal(await page.evaluate(() => window.quitExportReplies), undefined)
+    await page.evaluate(() => window.completeTranscriptWrite('Folder is not writable'))
+    await page.waitForFunction(() => window.quitExportReplies?.length === 1)
+    assert.match(await page.evaluate(() => window.quitExportReplies[0].error), /Folder is not writable/)
+    await page.getByText(/Final words during shutdown/).waitFor()
+    await page.evaluate(() => window.emitQuitExport('retry'))
+    await page.waitForFunction(() => window.transcriptWrites === 2)
+    assert.equal(await page.evaluate(() => window.quitExportReplies.length), 1)
+    await page.evaluate(() => window.completeTranscriptWrite())
+    await page.waitForFunction(() => window.quitExportReplies?.length === 2)
+    assert.deepEqual(await page.evaluate(() => window.quitExportReplies[1]), { requestId: 'retry', error: null })
+  } finally { await page.close() }
+})
+
+test('Quit export reuses an in-flight automatic write and waits for it to finish', async () => {
+  const page = await openApp({
+    configState: { exists: true, path: 'test-config', config: validConfig },
+    running: true,
+    deferTranscriptWrite: true
+  })
+  try {
+    await emitSegments(page, 1)
+    await page.evaluate(() => window.emitStatus({ running: false, paused: false }))
+    await page.waitForFunction(() => window.transcriptWrites === 1)
+    await page.evaluate(() => {
+      window.emitQuitExport('quit')
+      window.emitQuitExport('quit')
+    })
+    await page.evaluate(() => window.completeTranscriptWrite())
+    await page.waitForFunction(() => window.quitExportReplies?.length === 1)
+    assert.deepEqual(await page.evaluate(() => ({ writes: window.transcriptWrites, replies: window.quitExportReplies })), {
+      writes: 1, replies: [{ requestId: 'quit', error: null }]
+    })
+  } finally { await page.close() }
+})
+
+test('Quit export does not write a file for an interim-only session', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, running: true })
+  try {
+    await page.waitForFunction(() => typeof window.emitQuitExport === 'function')
+    await page.evaluate(() => {
+      window.emitSegment({ id: 'interim', sessionId: 'console-session', source: 'mic', speaker: 'Guest-1',
+        timestampIso: '2026-11-16T14:34:45Z', text: 'Unconfirmed words.', state: 'interim' })
+      window.emitStatus({ running: false, paused: false })
+      window.emitQuitExport('empty')
+    })
+    await page.waitForFunction(() => window.quitExportReplies?.length === 1)
+    assert.deepEqual(await page.evaluate(() => window.quitExportReplies[0]), { requestId: 'empty', error: null })
+    assert.equal(await page.evaluate(() => window.transcriptWrites), undefined)
+  } finally { await page.close() }
+})
 
 async function toggleDebug(page) {
   await page.locator('.overflow-menu > summary').click()

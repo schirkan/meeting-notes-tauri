@@ -60,10 +60,6 @@ pub fn run() {
       });
       events::emit_fixed_config_status(&handle, &config_status);
 
-      // Load the persisted close policy once; successful saves update it live.
-      if let Ok(user) = tauri::async_runtime::block_on(settings::load_user_settings()) {
-        handle.state::<tray::WindowBehavior>().update(&user.window);
-      }
       if let Err(error) = tray::init(&handle) {
         let entry = state.push_debug(
           state::DebugLogEntrySource::Main,
@@ -72,6 +68,11 @@ pub fn run() {
         );
         events::emit_debug(&handle, &entry);
       }
+
+      let window_settings = tauri::async_runtime::block_on(settings::load_user_settings())
+        .map(|user| user.window)
+        .unwrap_or_default();
+      tray::apply_window_settings(&handle, &window_settings);
 
       // T-513: Erkennungsmodus starten, wenn der Auto-Start aktiviert
       // ist. Der Prozess beobachtet nur die Audiositzungen und startet
@@ -106,6 +107,7 @@ pub fn run() {
       commands::get_app_config,
       commands::save_fixed_config,
       commands::save_transcript_markdown,
+      tray::complete_quit_export,
       commands::test_azure_connectivity,
     ])
     .build(tauri::generate_context!())
@@ -183,7 +185,7 @@ async fn stop_recording_on_meeting_end(
             let entry = app.state::<AppState>().push_debug(
                 state::DebugLogEntrySource::Main,
                 state::DebugLogEntryLevel::Info,
-                format!("Audio sessions of {} ended; the automatic recording was stopped.", payload.process_name),
+                format!("Audio sessions of {} ended; the automatic transcription was stopped.", payload.process_name),
             );
             events::emit_debug(app, &entry);
             events::emit_meeting_ended(app, &payload);
@@ -193,7 +195,7 @@ async fn stop_recording_on_meeting_end(
             let entry = app.state::<AppState>().push_debug(
                 state::DebugLogEntrySource::Main,
                 state::DebugLogEntryLevel::Error,
-                format!("The automatic recording stop failed: {error}"),
+                format!("Could not stop the automatic transcription: {error}"),
             );
             events::emit_debug(app, &entry);
         }
@@ -213,7 +215,7 @@ async fn start_recording_on_detection(
         let entry = state.push_debug(
             state::DebugLogEntrySource::Main,
             state::DebugLogEntryLevel::Info,
-            format!("Meeting detected, but a recording is already running: {description}"),
+            format!("Meeting detected, but transcription is already running: {description}"),
         );
         events::emit_debug(app, &entry);
         return;
@@ -245,7 +247,7 @@ async fn start_recording_on_detection(
     let entry = state.push_debug(
         state::DebugLogEntrySource::Main,
         state::DebugLogEntryLevel::Info,
-        format!("Meeting detected, the recording starts automatically: {description}"),
+        format!("Meeting detected, transcription starts automatically: {description}"),
     );
     events::emit_debug(app, &entry);
 
@@ -257,7 +259,7 @@ async fn start_recording_on_detection(
         let entry = app.state::<AppState>().push_debug(
             state::DebugLogEntrySource::Main,
             state::DebugLogEntryLevel::Error,
-            format!("The automatic recording start failed: {error}"),
+            format!("Could not start the automatic transcription: {error}"),
         );
         events::emit_debug(app, &entry);
     }

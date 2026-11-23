@@ -154,7 +154,7 @@ export function App() {
         footer={
           <div className="settings-dialog-footer-content">
             <div className="settings-dialog-footer-copy">
-              <p className="meta">Changes apply to the next recording after saving.</p>
+              <p className="meta">After saving, window settings apply immediately. Transcription settings apply to the next session.</p>
               {configState && <p className="meta-path">Configuration: {configState.path}</p>}
             </div>
             <div className="settings-dialog-footer-actions">

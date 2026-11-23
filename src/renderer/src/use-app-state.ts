@@ -49,6 +49,7 @@ const initialDevices: AudioDeviceSnapshot = {
 export function useAppState() {
   const [status, setStatus] = useState<TranscriptStatus>(initialStatus)
   const [segments, setSegments] = useState<TranscriptSegment[]>([])
+  const [quitExportRequest, setQuitExportRequest] = useState<string | null>(null)
   const [lastError, setLastError] = useState<TranscriptError | null>(null)
   const [runtimeIssue, setRuntimeIssue] = useState<string | null>(null)
   const [settings, setSettings] = useState(DEFAULT_USER_SETTINGS)
@@ -76,9 +77,21 @@ export function useAppState() {
   const [speakerAliases, setSpeakerAliases] = useState<Record<string, string>>({})
   const [now, setNow] = useState(() => Date.now())
   const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null)
+  const observedStartRef = useRef<string | null>(null)
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
   const autoScrollEnabledRef = useRef(true)
   const transcriptListRef = useRef<HTMLUListElement | null>(null)
+
+  const observeRecordingStart = (nextStatus: TranscriptStatus) => {
+    const startedAt = nextStatus.startedAt
+    if (!nextStatus.running || !startedAt || observedStartRef.current === startedAt) return
+    observedStartRef.current = startedAt
+    setSegments([])
+    setSpeakerAliases({})
+    autoScrollEnabledRef.current = true
+    setAutoScrollEnabled(true)
+    setSessionStartedAt(startedAt)
+  }
 
   const onToggleDevtools = async () => {
     try {
@@ -226,9 +239,12 @@ export function useAppState() {
     })
 
     const unsubStatus = transcriptApi.onStatus((nextStatus) => {
+      observeRecordingStart(nextStatus)
       setNow(Date.now())
       setStatus(nextStatus)
     })
+
+    const unsubQuitExport = transcriptApi.onQuitExport(setQuitExportRequest)
 
     const unsubDebugLog = transcriptApi.onDebugLog((entry) => {
       setDebugLog((prev) => [entry, ...prev].slice(0, 300))
@@ -240,7 +256,7 @@ export function useAppState() {
       setMeetingDetected(detected)
       setToast({
         message:
-          `Meeting detected (${detected.processName}). Recording starts automatically.`,
+          `Meeting detected (${detected.processName}). Transcription starts automatically.`,
         variant: 'info',
         persistent: false
       })
@@ -250,13 +266,13 @@ export function useAppState() {
     // Das Ereignis kam bisher bis zum Preload, wurde aber von niemandem
     // abonniert - die Oberflaeche blieb bei einem Crash stumm.
     const unsubCrashed = window.transcriptSidecar?.onCrashed((payload) => {
-      setLastError({ code: 'SIDECAR_UNAVAILABLE', message: 'The recording service has crashed.' })
+      setLastError({ code: 'SIDECAR_UNAVAILABLE', message: 'The transcription service has crashed.' })
       setStatus((prev) => ({ ...prev, running: false, paused: false }))
       setIsStarting(false)
       setToast({
         message:
           `Sidecar crashed (exit code ${payload.exitCode ?? 'unknown'}). ` +
-          'The recording must be restarted.',
+          'The transcription must be restarted.',
         variant: 'error',
         persistent: true
       })
@@ -267,6 +283,8 @@ export function useAppState() {
       unsubSegment()
       unsubError()
       unsubStatus()
+      unsubQuitExport()
+      unsubMeetingDetected()
       unsubDebugLog()
       unsubCrashed?.()
     }
@@ -364,7 +382,7 @@ export function useAppState() {
 
   const statusDescription = useMemo(() => {
     if (isStarting) return 'Transcription is starting ...'
-    if (status.paused) return 'Recording paused - the session stays active'
+    if (status.paused) return 'Transcription paused - the session stays active'
     if (status.running) return 'Transcription active'
     if (!isConfigReady) return 'Configuration incomplete'
     return 'Ready to start'
@@ -476,18 +494,11 @@ export function useAppState() {
       await settingsSaveQueueRef.current
       if (settingsSaveErrorRef.current) throw new Error(settingsSaveErrorRef.current)
       setLastError(null)
-      // Ein Start nach Stop beginnt immer ein NEUES Transkript (T-507):
-      // Segmente und Sprecherbasis werden zurueckgesetzt, damit die
-      // Sprecher-IDs der neuen Azure-Sitzung nicht auf die alte Zuordnung
-      // fallen.
-      setSegments([])
-      setSpeakerAliases({})
-      autoScrollEnabledRef.current = true
-      setAutoScrollEnabled(true)
       const next = await window.transcriptApi.start()
+      // The native start event resets the transcript before the first segment.
+      observeRecordingStart(next)
       setNow(Date.now())
       setStatus(next)
-      setSessionStartedAt(next.startedAt ?? new Date().toISOString())
       setToast({ message: 'New transcript started.', variant: 'info', persistent: false })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Start failed.'
@@ -552,6 +563,12 @@ export function useAppState() {
       return
     }
 
+    try {
+      await window.transcriptApi.reset()
+    } catch (error) {
+      setToast({ message: errorDetail(error, 'The transcript could not be reset.'), variant: 'error', persistent: true })
+      return
+    }
     setSegments([])
     setSpeakerAliases({})
     setSessionStartedAt(null)
@@ -777,13 +794,29 @@ export function useAppState() {
   // Metadaten der Sitzung; geschrieben wird es ueber das Backend, damit
   // der Zielordner (App-Verzeichnis oder konfigurierter Pfad) dort
   // aufgeloest wird.
-  const persistTranscript = async (segmentsToExport: TranscriptSegment[]) => {
-    try {
-      const markdown = buildTranscriptMarkdown(segmentsToExport)
-      const path = await window.transcriptApi.saveTranscriptMarkdown(markdown)
+  const pendingExportsRef = useRef(new Map<string, Promise<void>>())
+  const lastSavedExportRef = useRef<string | null>(null)
+  const persistTranscript = async (segmentsToExport: TranscriptSegment[], reuseSaved = false) => {
+    if (!segmentsToExport.some((segment) => segment.state === 'final')) return
+    const markdown = buildTranscriptMarkdown(segmentsToExport)
+    const key = JSON.stringify([segmentsToExport.at(-1)?.sessionId, settingsRef.current.transcript.markdownExport.path, markdown])
+    const pending = pendingExportsRef.current
+    const current = pending.get(key)
+    if (current) return current
+    if (reuseSaved && lastSavedExportRef.current === key) return
+    const write = window.transcriptApi.saveTranscriptMarkdown(markdown).then((path) => {
+      lastSavedExportRef.current = key
       setToast({ message: `Transcript saved: ${path}`, variant: 'info', persistent: false })
+    }).finally(() => pending.delete(key))
+    pending.set(key, write)
+    return write
+  }
+
+  const autoSaveTranscript = async (segmentsToExport: TranscriptSegment[]) => {
+    try {
+      await persistTranscript(segmentsToExport)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'The transcript could not be saved.'
+      const message = errorDetail(error, 'The transcript could not be saved.')
       setToast({ message, variant: 'error', persistent: true })
     }
   }
@@ -836,14 +869,14 @@ export function useAppState() {
   }, [saveRequest, status.running, labeledSegments])
 
   useEffect(() => {
-    if (saveRequest === 0) return
+    if (saveRequest === 0 || quitExportRequest !== null) return
     if (!settings.transcript.markdownExport.enabled) return
     if (exportSegmentsRef.current.length === 0) return
     if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current)
     saveTimerRef.current = window.setTimeout(() => {
       saveTimerRef.current = null
       setSaveRequest(0)
-      void persistTranscript(exportSegmentsRef.current)
+      void autoSaveTranscript(exportSegmentsRef.current)
     }, 500)
     return () => {
       if (saveTimerRef.current !== null) {
@@ -851,7 +884,31 @@ export function useAppState() {
         saveTimerRef.current = null
       }
     }
-  }, [saveRequest, settings.transcript.markdownExport.enabled])
+  }, [saveRequest, settings.transcript.markdownExport.enabled, quitExportRequest])
+
+  const handledQuitExportRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (quitExportRequest === null || handledQuitExportRef.current === quitExportRequest) return
+    handledQuitExportRef.current = quitExportRequest
+    setSaveRequest(0)
+    // Use the committed snapshot: the last segment may have arrived in the same batch as the request.
+    void (async () => {
+      let error: string | null = null
+      try {
+        await settingsSaveQueueRef.current
+        await persistTranscript(labeledSegments, true)
+      } catch (cause) {
+        error = `The transcript could not be saved: ${errorDetail(cause, 'Unknown error.')}`
+      }
+      try {
+        await window.transcriptApi.completeQuitExport(quitExportRequest, error)
+      } catch (cause) {
+        setToast({ message: errorDetail(cause, 'The quit export could not be acknowledged.'), variant: 'error', persistent: true })
+      } finally {
+        setQuitExportRequest((current) => current === quitExportRequest ? null : current)
+      }
+    })()
+  }, [quitExportRequest, labeledSegments])
 
   return {
     onToggleDevtools,
