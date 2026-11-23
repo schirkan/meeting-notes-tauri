@@ -12,7 +12,7 @@ Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1
 
 ---
 
-## Stand der Specs (Abgleich 20.11.2026)
+## Stand der Specs (Abgleich 23.11.2026)
 
 Die Checkboxen wurden gegen den **Code** geprueft, nicht gegen den Spec-Status:
 jeder abgehakte Punkt traegt den Beleg im Klartext (`Beleg: …`), jeder offene

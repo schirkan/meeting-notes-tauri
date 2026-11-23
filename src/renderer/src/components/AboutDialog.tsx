@@ -1,3 +1,4 @@
+import { version } from '../../../../package.json'
 import appIcon from '../../../../src-tauri/icons/app-icon.svg'
 import { SettingsDialog } from './SettingsDialog'
 
@@ -14,6 +15,7 @@ export function AboutDialog(props: AboutDialogProps) {
         <img src={appIcon} alt="Meeting Notes Icon" />
         <div className="about-details">
           <h2>Meeting Notes</h2>
+          <p>Version: {version}</p>
           <a href="https://github.com/schirkan/meeting-notes-tauri" onClick={(event) => {
             event.preventDefault()
             void props.onOpenRepository()

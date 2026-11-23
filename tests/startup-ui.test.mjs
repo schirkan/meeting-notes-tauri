@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
 import { chromium } from 'playwright'
+import packageJson from '../package.json' with { type: 'json' }
 
 let server
 let browser
@@ -242,6 +243,7 @@ test('About has only a close button, repository link and focus trap; menu and F1
     assert.equal(await dialog.getByRole('button').count(), 1)
     await page.waitForFunction(() => document.activeElement?.classList.contains('settings-dialog-close'))
     assert.equal(await dialog.getByRole('heading', { name: 'Meeting Notes', exact: true }).count(), 1)
+    assert.equal(await dialog.getByText(`Version: ${packageJson.version}`, { exact: true }).isVisible(), true)
     assert.match(await dialog.innerText(), /Martin Pietschmann/)
     assert.match(await dialog.innerText(), /License: MIT/)
     const [icon, details] = await Promise.all([dialog.getByRole('img').boundingBox(), dialog.locator('.about-details').boundingBox()])
