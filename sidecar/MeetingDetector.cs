@@ -29,8 +29,9 @@ public sealed class MeetingDetector : IDisposable
     private readonly List<AudioSessionManager> _managers = new();
     private readonly List<MMDevice> _devices = new();
     // Keep both COM session and handler alive, then unregister on disposal.
-    private readonly Dictionary<long, (AudioSessionControl Session, SessionEvents Handler, string Key)> _sessions = new();
-    private readonly HashSet<string> _sessionKeys = new(StringComparer.Ordinal);
+    private readonly Dictionary<long, (AudioSessionControl Session, SessionEvents Handler, SessionKey Key)> _sessions = new();
+    private readonly HashSet<SessionKey> _sessionKeys = new();
+    private readonly record struct SessionKey(string EndpointId, string InstanceId);
     private readonly MeetingSessionTracker _tracker = new();
     private readonly object _gate = new();
     private long _nextSessionId;
@@ -48,10 +49,10 @@ public sealed class MeetingDetector : IDisposable
         try
         {
             using var enumerator = new MMDeviceEnumerator();
-            _devices.Add(enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia));
-            _devices.Add(enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia));
-            Watch(_devices[0], "mic");
-            Watch(_devices[1], "speaker");
+            var watched = WatchEndpoints(enumerator, DataFlow.Capture, "mic") +
+                WatchEndpoints(enumerator, DataFlow.Render, "speaker");
+            if (watched == 0)
+                throw new InvalidOperationException("No active audio endpoint could be monitored.");
         }
         catch (Exception ex)
         {
@@ -64,20 +65,50 @@ public sealed class MeetingDetector : IDisposable
     internal static HashSet<string> CreateProcessFilter(IEnumerable<string>? meetingProcesses = null) =>
         new(meetingProcesses ?? DefaultMeetingProcesses, StringComparer.OrdinalIgnoreCase);
 
+    private int WatchEndpoints(MMDeviceEnumerator enumerator, DataFlow flow, string signal)
+    {
+        var watched = 0;
+        try
+        {
+            using var devices = enumerator.EnumerateAudioEndPoints(flow, DeviceState.Active);
+            foreach (var device in devices)
+            {
+                _devices.Add(device);
+                try
+                {
+                    Watch(device, signal);
+                    watched++;
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("MEETING_DETECTOR_FAILED", $"A '{signal}' endpoint could not be monitored: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("MEETING_DETECTOR_FAILED", $"The '{signal}' endpoints could not be enumerated: {ex.Message}");
+        }
+        return watched;
+    }
+
     private void Watch(MMDevice device, string signal)
     {
+        var endpointId = device.ID;
         var manager = device.AudioSessionManager;
         _managers.Add(manager);
-        manager.OnSessionCreated += (_, session) => Track(session, signal);
+        manager.OnSessionCreated += (_, session) => Track(session, endpointId, signal);
         // Subscribe first, then enumerate: apps may reuse a session created before us.
         manager.RefreshSessions();
         var existing = manager.Sessions;
-        for (var i = 0; i < existing.Count; i++) Track(existing[i], signal);
-        Logger.Info("meeting_detector", "watching", $"The endpoint '{signal}' is being watched.");
+        var count = existing.Count;
+        for (var i = 0; i < count; i++) Track(existing[i], endpointId, signal);
+        Logger.Info("meeting_detector", "watching", $"A '{signal}' endpoint is being watched.");
     }
 
-    private void Track(AudioSessionControl session, string signal)
+    private void Track(AudioSessionControl session, string endpointId, string signal)
     {
+        var retained = false;
         try
         {
             var processId = session.GetProcessID;
@@ -90,13 +121,15 @@ public sealed class MeetingDetector : IDisposable
             lock (_gate)
             {
                 if (_disposed) return;
-                var key = signal + "|" + session.GetSessionInstanceIdentifier;
-                if (!_sessionKeys.Add(key)) return;
+                var key = new SessionKey(endpointId, session.GetSessionInstanceIdentifier);
+                if (_sessionKeys.Contains(key)) return;
                 var id = ++_nextSessionId;
-                _tracker.Track(id, processId, processName, signal);
                 var handler = new SessionEvents(this, id);
                 session.RegisterEventClient(handler);
+                _sessionKeys.Add(key);
+                _tracker.Track(id, processId, processName, signal);
                 _sessions.Add(id, (session, handler, key));
+                retained = true;
                 // Creation may precede Active; also handle an already-active session.
                 Update(id, session.State == AudioSessionState.AudioSessionStateActive);
             }
@@ -104,6 +137,10 @@ public sealed class MeetingDetector : IDisposable
         catch (Exception ex)
         {
             Logger.Error("MEETING_DETECTOR_FAILED", $"The session could not be evaluated: {ex.Message}");
+        }
+        finally
+        {
+            if (!retained) session.Dispose();
         }
     }
 
@@ -193,13 +230,13 @@ public sealed class MeetingDetector : IDisposable
 
     public void Dispose()
     {
-        (AudioSessionControl Session, SessionEvents Handler, string Key)[] sessions;
+        (AudioSessionControl Session, SessionEvents Handler, SessionKey Key)[] sessions;
         lock (_gate)
         {
             if (_disposed) return;
             _disposed = true;
             _cts.Cancel();
-            sessions = new List<(AudioSessionControl, SessionEvents, string)>(_sessions.Values).ToArray();
+            sessions = new List<(AudioSessionControl, SessionEvents, SessionKey)>(_sessions.Values).ToArray();
             _sessions.Clear();
             _sessionKeys.Clear();
         }

@@ -166,10 +166,25 @@ try
             var detectorReady = false;
             var captured = false;
             using (var enumerator = new NAudio.CoreAudioApi.MMDeviceEnumerator())
+            using (var defaultMic = enumerator.GetDefaultAudioEndpoint(NAudio.CoreAudioApi.DataFlow.Capture, NAudio.CoreAudioApi.Role.Multimedia))
+            using (var inputs = enumerator.EnumerateAudioEndPoints(NAudio.CoreAudioApi.DataFlow.Capture, NAudio.CoreAudioApi.DeviceState.Active))
             {
-                var mic = enumerator.GetDefaultAudioEndpoint(NAudio.CoreAudioApi.DataFlow.Capture, NAudio.CoreAudioApi.Role.Multimedia);
-                var recorder = new NAudio.Wave.WasapiRecorderBuilder()
-                    .WithDevice(mic)
+                NAudio.CoreAudioApi.MMDevice? alternateMic = null;
+                foreach (var input in inputs)
+                {
+                    if (input.ID != defaultMic.ID)
+                    {
+                        alternateMic = input;
+                        break;
+                    }
+                    input.Dispose();
+                }
+                using var ownedAlternate = alternateMic;
+                Console.WriteLine(alternateMic is null
+                    ? "SKIPPED: non-default endpoint probe (only a default microphone is available)."
+                    : "Testing detection on a non-default microphone.");
+                using var recorder = new NAudio.Wave.WasapiRecorderBuilder()
+                    .WithDevice(alternateMic ?? defaultMic)
                     .WithSharedMode()
                     .WithEventSync()
                     .WithFormat(new NAudio.Wave.WaveFormat(8000, 16, 1))
@@ -178,7 +193,6 @@ try
                 captured = true;
                 await Task.Delay(TimeSpan.FromSeconds(4));
                 recorder.StopRecording();
-                recorder.Dispose();
             }
             Check(captured, "Detection probe opened a capture session");
             await Task.Delay(TimeSpan.FromSeconds(5));

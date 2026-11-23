@@ -485,6 +485,39 @@ Prozessnamen (ohne `.exe`, ohne Beachtung der Gross-/Kleinschreibung).
 allgemeinen WebView2-Prozess aus und sichert die benutzerdefinierte Liste ab.
 Die Live-Abnahme in einem Teams-Anruf bleibt offen.
 
+### Zielsystemprobe: Teams unter Horizon (23.11.2026)
+
+Bei zwei Teams-Testanrufen meldete der aktuelle Sidecar im Modus
+`--detect-only` kein `meeting_detected`. Eine parallele Metadatenprobe
+aller aktiven Core-Audio-Endpunkte der VM sah keine aktive Anruf-Session,
+auch nicht am separaten Standard-Kommunikationsmikrofon. Teams hatte
+`vdibridge_wv2.dll` und `horizon-vvc.dll` geladen; der Nutzer hat den
+optimierten Modus dieser VDI bestaetigt. Die Probe nutzte einen normalen
+.NET-Build ohne Single-File-Publish und erfasste weder Audio noch Azure-Daten.
+
+Bei [optimiertem Teams unter VDI](https://learn.microsoft.com/en-us/microsoftteams/vdi-2#verifying-that-the-endpoint-is-optimized)
+verarbeitet der Endpunkt die Anrufmedien statt der VM. Ohne lokale
+Core-Audio-Session hilft weder ein weiterer Prozessname noch ein anderer
+Audio-Endpunkt in der VM. Ein Fenster-Fallback koennte allenfalls ein
+Anrufsignal liefern, nicht die umgeleitete Audiospur.
+
+### Lokale Audioverarbeitung: abweichende Geraete (23.11.2026)
+
+Der bisherige Detektor beobachtete ausschliesslich die Multimedia-Standardgeraete.
+Ein explizit gewaehltes Geraet oder ein abweichendes Kommunikations-Standardgeraet
+konnte deshalb fehlen. Der Sidecar beobachtet jetzt alle beim Start aktiven
+Aufnahme- und Wiedergabe-Endpunkte. Sitzungen werden pro Endpunkt und Instanz
+identifiziert. Ausgefallene Endpunkte verhindern die restliche Ueberwachung
+nicht. Nach Anschluss eines neuen Geraets muss der Detektor neu starten.
+Die Geraeteauswahl der Transkription selbst aendert sich nicht.
+
+Die Fremdprozess-Probe in `npm run test:sidecar` verwendet ein Mikrofon abseits
+des Multimedia-Standards, wenn eines verfuegbar ist. In der Test-VM fehlte
+vor der Korrektur `meeting_detected`; danach bestanden 543 Assertions, inklusive
+`meeting_detected` und `meeting_ended` am abweichenden Mikrofon. Die bekannte
+MediaFoundation-Stichprobe blieb uebersprungen. Die Teams-Live-Abnahme auf dem
+Laptop bleibt offen; der Test belegt nicht die Ursache des konkreten Anrufs.
+
 ## Aktualisierung v0.1.2 (18.11.2026)
 Auto-Aufnahme samt passendem Auto-Stop ist jetzt standardmaessig an.
 Explizit gespeichertes false bleibt erhalten; die Umsetzung nutzt weiterhin
