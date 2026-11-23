@@ -101,13 +101,12 @@ pub async fn start_recording_with_origin(
         return Err("A transcription is already running.".into());
     }
     lifecycle.auto_origin = None;
-    if origin.is_some() && !settings::load_user_settings().await.map_err(|e| e.to_string())?.auto_start.enabled {
+    // Manual and automatic starts use one persisted snapshot for this sidecar.
+    let settings::AppConfig { azure, user } = settings::load_app_config().await.map_err(|e| e.to_string())?;
+    if origin.is_some() && !user.auto_start.enabled {
         return Err("Automatic transcription start is disabled.".into());
     }
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "start_recording called.");
-
-    let azure = settings::load_azure_config().await.map_err(|e| e.to_string())?;
-    let user = settings::load_user_settings().await.map_err(|e| e.to_string())?;
 
     let speech_key = azure.as_ref().map(|a| a.speech_key.clone());
     let speech_region = azure.as_ref().map(|a| a.region.clone());

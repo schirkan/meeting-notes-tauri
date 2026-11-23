@@ -36,6 +36,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     onChooseDirectory,
     choosingDirectory = false
   } = props
+  const hasBothSources = settings.transcription.mic && settings.transcription.speaker
 
   return (
     <>
@@ -169,6 +170,24 @@ export function SettingsPanel(props: SettingsPanelProps) {
               disabled={statusRunning || !settings.transcript.markdownExport.enabled || choosingDirectory}
               aria-label="Choose save folder" title="Choose folder"><Icon name="folder" /></button>
           </div>
+          <label className="checkbox-field full-field" title="Reduces speaker audio picked up by your microphone. Requires both microphone and speaker loopback. Applies to the next transcription.">
+            <input
+              type="checkbox"
+              checked={settings.transcription.echoCancellation}
+              onChange={(event) => {
+                const echoCancellation = event.currentTarget.checked
+                setSettings((prev) => ({ ...prev, transcription: { ...prev.transcription, echoCancellation } }))
+              }}
+              disabled={statusRunning}
+              aria-describedby={hasBothSources ? undefined : 'echo-cancellation-source-hint'}
+            />
+            <span>Echo cancellation (Alpha)</span>
+          </label>
+          {!hasBothSources && (
+            <p className="meta full-field" id="echo-cancellation-source-hint">
+              Echo cancellation won’t apply unless both Microphone and Speaker Loopback are enabled in Audio settings.
+            </p>
+          )}
       </div>
     </section>}
     </>

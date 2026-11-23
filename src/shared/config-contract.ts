@@ -26,6 +26,8 @@ export interface DiarizationSettings {
 export interface TranscriptionSettings {
   mic: boolean
   speaker: boolean
+  /** Alpha opt-in; only effective when both sources are active. */
+  echoCancellation: boolean
 }
 
 export interface MarkdownExportSettings {
@@ -85,7 +87,7 @@ export interface AppConfigState {
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   language: 'de-DE',
-  transcription: { mic: true, speaker: true },
+  transcription: { mic: true, speaker: true, echoCancellation: false },
   diarization: { mic: true, speaker: true },
   devices: {
     micId: null,
@@ -129,7 +131,8 @@ export function normalizeUserSettings(input: UserSettingsInput | null | undefine
       speaker:
         typeof input?.transcription?.speaker === 'boolean'
           ? input.transcription.speaker
-          : DEFAULT_USER_SETTINGS.transcription.speaker
+          : DEFAULT_USER_SETTINGS.transcription.speaker,
+      echoCancellation: input?.transcription?.echoCancellation === true
     },
     diarization: {
       mic: typeof input?.diarization?.mic === 'boolean' ? input.diarization.mic : DEFAULT_USER_SETTINGS.diarization.mic,

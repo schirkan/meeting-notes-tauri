@@ -30,7 +30,7 @@ export function AudioSources(props: AudioSourcesProps) {
               checked={settings.transcription.mic}
               onChange={(event) => {
                 const mic = event.currentTarget.checked
-                setSettings((prev) => ({ ...prev, transcription: { mic, speaker: !mic || prev.transcription.speaker } }))
+                setSettings((prev) => ({ ...prev, transcription: { ...prev.transcription, mic, speaker: !mic || prev.transcription.speaker } }))
               }}
               disabled={statusRunning}
               title="Transcribe microphone"
@@ -79,7 +79,7 @@ export function AudioSources(props: AudioSourcesProps) {
               checked={settings.transcription.speaker}
               onChange={(event) => {
                 const speaker = event.currentTarget.checked
-                setSettings((prev) => ({ ...prev, transcription: { speaker, mic: !speaker || prev.transcription.mic } }))
+                setSettings((prev) => ({ ...prev, transcription: { ...prev.transcription, speaker, mic: !speaker || prev.transcription.mic } }))
               }}
               disabled={statusRunning}
               title="Transcribe speaker loopback"

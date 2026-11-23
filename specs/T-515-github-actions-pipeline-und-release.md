@@ -92,6 +92,21 @@ Meeting-Endsignal. Mangels zweitem Mikrofon wurde der Nicht-Standard-Endpunkt
 nicht erneut abgenommen; die MediaFoundation-Stichprobe blieb uebersprungen.
 Keine neue Live-Teams-, Azure- oder Clean-Machine-Abnahme.
 
+### Release v0.1.6 (23.11.2026)
+
+[Workflow-Run 45243730261](https://github.com/schirkan/meeting-notes-tauri/actions/runs/45243730261)
+veroeffentlichte [v0.1.6](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.6)
+aus Tag-Commit `33e02de` in 4m55s. Download-ZIP: 16.540.163 Bytes.
+GitHub-Digest, `SHA256SUMS.txt` und berechneter ZIP-Hash stimmen ueberein:
+`f3d6711bbfc6c7f88f48ddc7c673f0b53d0d4f621bbfc856d20ec1199021ee46`.
+Vier Dateien im ZIP; interne Dateihashes 3/3, Haupt-EXE ProductVersion 0.1.6,
+Sidecar FileVersion 0.1.6.0, Download-Deployment PASS 9 / FAIL 0.
+
+Lokal: 9 Verifikationsschritte, 106 Node- und 52 Rust-Tests, 553 C#-Assertions
+gegen Quellen und 566 gegen den publizierten Sidecar. MediaFoundation-Probe und
+Nicht-Standard-Mikrofontest uebersprungen. Native Quit-/Taskleisten-Abnahme und
+Live-Test des letzten Azure-Ergebnisses stehen aus.
+
 ### Weitere Nachweise
 
 - 19.11.2026: Manueller Release-Download und Start auf fremdem Rechner vom Nutzer bestaetigt; siehe auch [T-500](./T-500-qualitaetssicherung-und-akzeptanztests.md).

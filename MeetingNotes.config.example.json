@@ -18,7 +18,8 @@
     "language": "de-DE",
     "transcription": {
       "mic": true,
-      "speaker": true
+      "speaker": true,
+      "echoCancellation": false
     },
     "diarization": {
       "mic": true,

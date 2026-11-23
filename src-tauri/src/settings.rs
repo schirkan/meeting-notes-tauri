@@ -116,6 +116,16 @@ impl Default for AutoStartSettings {
 pub struct TranscriptionSettings {
     pub mic: bool,
     pub speaker: bool,
+    #[serde(default, deserialize_with = "deserialize_echo_cancellation")]
+    pub echo_cancellation: bool,
+}
+
+fn deserialize_echo_cancellation<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    // A malformed opt-in must not discard the rest of the user's settings.
+    Ok(serde_json::Value::deserialize(deserializer)?.as_bool() == Some(true))
 }
 
 impl Default for TranscriptionSettings {
@@ -123,6 +133,7 @@ impl Default for TranscriptionSettings {
         Self {
             mic: true,
             speaker: true,
+            echo_cancellation: false,
         }
     }
 }
@@ -433,14 +444,38 @@ mod config_tests {
             let raw = format!(r#"{{"language":"invalid","devices":{{}}{options}}}"#);
             let settings = normalize_user_settings(serde_json::from_str(&raw).unwrap());
             assert_eq!(settings.language, DEFAULT_LANGUAGE);
-            assert_eq!(settings.transcription, TranscriptionSettings { mic, speaker });
+            assert_eq!(settings.transcription, TranscriptionSettings { mic, speaker, echo_cancellation: false });
             let persisted = serde_json::to_string_pretty(&settings).unwrap();
             let json: serde_json::Value = serde_json::from_str(&persisted).unwrap();
-            assert_eq!(json["transcription"], serde_json::json!({"mic": mic, "speaker": speaker}));
+            assert_eq!(json["transcription"], serde_json::json!({"mic": mic, "speaker": speaker, "echoCancellation": false}));
             assert_eq!(
                 serde_json::from_str::<UserSettings>(&persisted).unwrap().transcription,
                 settings.transcription
             );
+        }
+    }
+
+    #[test]
+    fn echo_cancellation_requires_a_boolean_opt_in_without_resetting_other_settings() {
+        for (value, enabled) in [
+            ("true", true),
+            ("false", false),
+            (r#""true""#, false),
+            ("1", false),
+            ("null", false),
+            ("{}", false),
+            ("[true]", false),
+        ] {
+            let raw = format!(r#"{{"language":"en-US","transcription":{{"mic":false,"echoCancellation":{value}}}}}"#);
+            let settings: UserSettings = serde_json::from_str(&raw).unwrap();
+            assert_eq!(settings.language, "en-US");
+            assert!(!settings.transcription.mic);
+            assert!(settings.transcription.speaker);
+            assert_eq!(settings.transcription.echo_cancellation, enabled);
+            let saved = serde_json::to_value(&settings).unwrap();
+            assert_eq!(saved["transcription"]["echoCancellation"], serde_json::json!(enabled));
+            let roundtrip: UserSettings = serde_json::from_value(saved).unwrap();
+            assert_eq!(roundtrip.transcription, settings.transcription);
         }
     }
 

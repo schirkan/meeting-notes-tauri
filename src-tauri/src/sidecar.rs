@@ -72,9 +72,13 @@ pub struct SidecarHandle {
     pub shutdown: Option<tokio::sync::oneshot::Sender<Result<(), String>>>,
 }
 
-fn transcription_arguments(settings: &crate::settings::TranscriptionSettings) -> [String; 4] {
-    ["--transcription-mic".into(), settings.mic.to_string(),
-        "--transcription-speaker".into(), settings.speaker.to_string()]
+fn transcription_arguments(settings: &crate::settings::TranscriptionSettings) -> Vec<String> {
+    let mut args = vec!["--transcription-mic".into(), settings.mic.to_string(),
+        "--transcription-speaker".into(), settings.speaker.to_string()];
+    if settings.echo_cancellation && settings.mic && settings.speaker {
+        args.extend(["--echo-cancellation".to_string(), "true".to_string()]);
+    }
+    args
 }
 
 fn diarization_arguments(settings: &crate::settings::DiarizationSettings) -> [String; 4] {
@@ -173,13 +177,21 @@ mod connectivity_tests {
     use super::*;
 
     #[test]
-    fn transcription_arguments_forward_independent_explicit_booleans() {
+    fn transcription_arguments_preserve_sources_and_gate_echo_cancellation() {
         for mic in [true, false] {
             for speaker in [true, false] {
-                let settings = crate::settings::TranscriptionSettings { mic, speaker };
-                assert_eq!(transcription_arguments(&settings),
-                    ["--transcription-mic".to_string(), mic.to_string(),
-                        "--transcription-speaker".to_string(), speaker.to_string()]);
+                for echo_cancellation in [true, false] {
+                    let settings = crate::settings::TranscriptionSettings { mic, speaker, echo_cancellation };
+                    let args = transcription_arguments(&settings);
+                    assert_eq!(&args[..4],
+                        ["--transcription-mic".to_string(), mic.to_string(),
+                            "--transcription-speaker".to_string(), speaker.to_string()]);
+                    if echo_cancellation && mic && speaker {
+                        assert_eq!(&args[4..], ["--echo-cancellation", "true"]);
+                    } else {
+                        assert_eq!(args.len(), 4);
+                    }
+                }
             }
         }
         let options: SidecarOptions = serde_json::from_str(r#"{"sampleRate":16000}"#).unwrap();

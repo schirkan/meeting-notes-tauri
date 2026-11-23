@@ -75,6 +75,12 @@ if (args.Contains("--loopback-hardware"))
     }
     return;
 }
+EchoCancellationValidation.Run(Check);
+if (args.Contains("--echo-only"))
+{
+    Console.WriteLine($"PASS: {assertions} echo cancellation assertions (deterministic PCM; no audio devices or Azure).");
+    return;
+}
 MeetingDetectionValidation.Run(Check);
 DiarizationValidation.Run(Check);
 TranscriptionValidation.Run(Check);

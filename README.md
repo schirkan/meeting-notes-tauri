@@ -17,6 +17,7 @@ This README describes `main`. For the behavior of an installed release, use the 
 
 - **Live transcripts:** See interim text during the conversation and finalized results as recognition completes.
 - **Independent audio sources:** Choose a microphone, speaker playback (loopback), or both.
+- **Echo cancellation (Alpha, v0.1.7+):** Opt in under **Settings → Transcription**. With both sources enabled, Meeting Notes uses speaker loopback to reduce playback picked up by the microphone before sending mic audio to Azure. It is off by default and applies to the next transcription. It does not change system playback, calls in other apps, or speaker-loopback transcription. If the reference is unavailable or unreliable, the mic remains unfiltered. This is experimental; results can vary by device and room.
 - **Speaker mapping:** Enable speaker recognition separately for each source and replace speaker labels with names.
 - **Pause and resume:** Pause transcription and continue within the same session.
 - **Markdown export:** Save or copy finalized transcripts with timestamps, speakers, and session metadata.

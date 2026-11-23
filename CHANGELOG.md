@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.7 - 2026-11-23
+
+### Added
+- **Echo cancellation (Alpha):** Opt in under **Settings → Transcription**. When both microphone and speaker loopback are enabled, Meeting Notes uses the selected playback device as a local reference to reduce speaker audio picked up by the microphone. It does not change system playback or the speaker transcript.
+- The option stays off by default and applies to the next transcription. If the reference is missing or cannot be matched reliably, microphone audio passes through unfiltered. Real-device and live Azure validation remain open.
+
 ## v0.1.6 - 2026-11-23
 
 ### Added

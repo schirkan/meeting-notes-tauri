@@ -63,7 +63,7 @@ test('window preferences preserve explicit values independently without changing
       autoStart: { enabled: true, processes: ['teams'] }
     })
     assert.deepEqual(result.window, { minimizeToTrayOnClose: enabled, hideFromTaskbar: !enabled })
-    assert.deepEqual(result.transcription, { mic: false, speaker: true })
+    assert.deepEqual(result.transcription, { mic: false, speaker: true, echoCancellation: false })
     assert.equal(result.autoStart.enabled, true)
   }
 })
@@ -140,24 +140,24 @@ test('diarization normalization preserves every independent boolean combination'
 
   test('transcription defaults enable both sources for legacy and partial settings', () => {
     for (const input of [null, undefined, {}, { language: 'en-US' }, { transcription: null }, { transcription: {} }]) {
-      assert.deepEqual(contract.normalizeUserSettings(input).transcription, { mic: true, speaker: true })
+      assert.deepEqual(contract.normalizeUserSettings(input).transcription, { mic: true, speaker: true, echoCancellation: false })
     }
-    assert.deepEqual(contract.normalizeUserSettings({ transcription: { mic: false } }).transcription, { mic: false, speaker: true })
-    assert.deepEqual(contract.normalizeUserSettings({ transcription: { speaker: false } }).transcription, { mic: true, speaker: false })
+    assert.deepEqual(contract.normalizeUserSettings({ transcription: { mic: false } }).transcription, { mic: false, speaker: true, echoCancellation: false })
+    assert.deepEqual(contract.normalizeUserSettings({ transcription: { speaker: false } }).transcription, { mic: true, speaker: false, echoCancellation: false })
   })
 
   test('transcription normalization preserves every independent boolean combination', () => {
     for (const mic of [true, false]) {
       for (const speaker of [true, false]) {
         const settings = contract.normalizeUserSettings({ transcription: { mic, speaker } })
-        assert.deepEqual(settings.transcription, { mic, speaker })
-        assert.deepEqual(contract.normalizeUserSettings(JSON.parse(JSON.stringify(settings))).transcription, { mic, speaker })
+        assert.deepEqual(settings.transcription, { mic, speaker, echoCancellation: false })
+        assert.deepEqual(contract.normalizeUserSettings(JSON.parse(JSON.stringify(settings))).transcription, { mic, speaker, echoCancellation: false })
       }
     }
   })
 
   test('malformed transcription values do not become truthy checkbox settings', () => {
-    assert.deepEqual(contract.normalizeUserSettings({ transcription: { mic: 'false', speaker: 0 } }).transcription, { mic: true, speaker: true })
+    assert.deepEqual(contract.normalizeUserSettings({ transcription: { mic: 'false', speaker: 0 } }).transcription, { mic: true, speaker: true, echoCancellation: false })
   })
 
   test('transcription and diarization stay independent axes', () => {
@@ -165,9 +165,23 @@ test('diarization normalization preserves every independent boolean combination'
       transcription: { mic: false, speaker: true },
       diarization: { mic: true, speaker: false }
     })
-    assert.deepEqual(settings.transcription, { mic: false, speaker: true })
+    assert.deepEqual(settings.transcription, { mic: false, speaker: true, echoCancellation: false })
     assert.deepEqual(settings.diarization, { mic: true, speaker: false })
   })
+
+test('echo cancellation defaults off, requires a boolean opt-in, and is independent of source selection', () => {
+  assert.equal(contract.DEFAULT_USER_SETTINGS.transcription.echoCancellation, false)
+  const example = JSON.parse(readFileSync(join(ROOT, 'MeetingNotes.config.example.json'), 'utf8'))
+  assert.equal(example.user.transcription.echoCancellation, false)
+  for (const echoCancellation of [undefined, null, false, 'true', 1, [], {}, true]) {
+    const settings = contract.normalizeUserSettings({
+      language: 'en-US', transcription: { mic: false, speaker: true, echoCancellation }
+    })
+    assert.deepEqual(settings.transcription, { mic: false, speaker: true, echoCancellation: echoCancellation === true })
+    assert.equal(settings.language, 'en-US')
+    assert.deepEqual(contract.normalizeUserSettings(JSON.parse(JSON.stringify(settings))), settings)
+  }
+})
 
 test('malformed diarization values do not become truthy checkbox settings', () => {
   assert.deepEqual(contract.normalizeUserSettings({ diarization: { mic: 'false', speaker: 0 } }).diarization, { mic: true, speaker: true })

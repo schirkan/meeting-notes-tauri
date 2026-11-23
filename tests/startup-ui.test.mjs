@@ -201,7 +201,10 @@ test('settings drafts are isolated, warn on close, discard and only persist on s
     const close = dialog.getByRole('button', { name: 'Close dialog', exact: true })
     const language = dialog.getByRole('combobox', { name: 'Primary language', exact: true })
     const hideFromTaskbar = dialog.getByRole('checkbox', { name: 'Hide from taskbar', exact: true })
+    const echoCancellation = dialog.getByRole('checkbox', { name: 'Echo cancellation (Alpha)', exact: true })
     await page.waitForFunction(() => document.activeElement?.classList.contains('settings-save-button'))
+    assert.equal(await echoCancellation.isChecked(), false)
+    await echoCancellation.check()
     await hideFromTaskbar.uncheck()
     await language.selectOption('en-US')
     await dialog.getByLabel('Endpoint', { exact: true }).fill('https://draft.test')
@@ -215,6 +218,7 @@ test('settings drafts are isolated, warn on close, discard and only persist on s
     await close.click()
     assert.equal(await dialog.isVisible(), true)
     assert.equal(await language.inputValue(), 'en-US')
+    assert.equal(await echoCancellation.isChecked(), true)
     page.once('dialog', confirmation => confirmation.accept())
     await close.click()
     await dialog.waitFor({ state: 'hidden' })
@@ -224,9 +228,11 @@ test('settings drafts are isolated, warn on close, discard and only persist on s
     assert.equal(await page.evaluate(() => window.lastSavedSettings.language), 'de-DE')
     assert.equal(await page.evaluate(() => window.lastSavedSettings.window.hideFromTaskbar), true)
     assert.equal(await page.evaluate(() => window.lastSavedSettings.transcript.markdownExport.enabled), true)
+    assert.equal(await page.evaluate(() => window.lastSavedSettings.transcription.echoCancellation), false)
     assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
     await reopenSettings(page)
     assert.equal(await language.inputValue(), 'de-DE')
+    assert.equal(await echoCancellation.isChecked(), false)
     assert.equal(await dialog.getByLabel('Endpoint', { exact: true }).inputValue(), validConfig.endpoint)
     await language.selectOption('fr-FR')
     await dialog.getByRole('button', { name: 'Save', exact: true }).click()
@@ -238,6 +244,48 @@ test('settings drafts are isolated, warn on close, discard and only persist on s
     await close.click()
     assert.equal(prompted, false)
     await dialog.waitFor({ state: 'hidden' })
+  } finally { await page.close() }
+})
+
+test('echo cancellation can be saved with one source and is locked while running or paused', async () => {
+  const page = await openApp({
+    configState: { exists: true, path: 'test-config', config: validConfig },
+    transcription: { mic: true, speaker: false }
+  })
+  try {
+    await reopenSettings(page)
+    const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
+    const echoCancellation = dialog.getByRole('checkbox', { name: 'Echo cancellation (Alpha)', exact: true })
+    const sourceHint = dialog.getByText('Echo cancellation won’t apply unless both Microphone and Speaker Loopback are enabled in Audio settings.', { exact: true })
+    await sourceHint.waitFor()
+    assert.equal(await echoCancellation.locator('..').getAttribute('title'), 'Reduces speaker audio picked up by your microphone. Requires both microphone and speaker loopback. Applies to the next transcription.')
+    assert.equal(await echoCancellation.isEnabled(), true)
+    await echoCancellation.check()
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    assert.deepEqual(await page.evaluate(() => window.lastSavedSettings.transcription), {
+      mic: true, speaker: false, echoCancellation: true
+    })
+
+    const speaker = page.getByRole('checkbox', { name: 'Transcribe speaker loopback', exact: true })
+    await speaker.check()
+    await page.waitForFunction(() => window.lastSavedSettings?.transcription.speaker === true)
+    const mic = page.getByRole('checkbox', { name: 'Transcribe microphone', exact: true })
+    await mic.uncheck()
+    await page.waitForFunction(() => window.lastSavedSettings?.transcription.mic === false)
+    assert.equal(await page.evaluate(() => window.lastSavedSettings.transcription.echoCancellation), true)
+    await mic.check()
+    await page.waitForFunction(() => window.lastSavedSettings?.transcription.mic === true)
+    await reopenSettings(page)
+    assert.equal(await echoCancellation.isChecked(), true)
+    assert.equal(await sourceHint.count(), 0)
+
+    const startedAt = new Date().toISOString()
+    for (const paused of [false, true]) {
+      await page.evaluate(value => window.emitStatus(value), { running: true, paused, startedAt })
+      await page.waitForFunction(value => document.querySelector('.live-badge')?.classList.contains('paused') === value, paused)
+      assert.equal(await echoCancellation.isDisabled(), true)
+    }
   } finally { await page.close() }
 })
 
@@ -438,7 +486,7 @@ test('settings shows all sections without navigation and preserves two-column la
     const general = panels.nth(0)
     const transcription = panels.nth(1)
     assert.equal(await general.getByRole('checkbox').count(), 4)
-    assert.equal(await transcription.getByRole('checkbox').count(), 1)
+    assert.equal(await transcription.getByRole('checkbox').count(), 2)
     const autoStart = general.getByRole('checkbox', { name: 'Start transcription automatically', exact: true })
     const autoStop = general.getByRole('checkbox', { name: 'Stop transcription automatically', exact: true })
     await autoStart.uncheck()

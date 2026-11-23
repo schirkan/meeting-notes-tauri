@@ -16,15 +16,15 @@ Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1
 
 Die Checkboxen wurden gegen den **Code** geprueft, nicht gegen den Spec-Status:
 jeder abgehakte Punkt traegt den Beleg im Klartext (`Beleg: …`), jeder offene
-Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **41 Specs** als
-`umgesetzt` bzw. `teils umgesetzt` markiert, **24 offene Punkte in 17 Specs**.
+Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **43 Specs** als
+`umgesetzt` bzw. `teils umgesetzt` markiert, **27 offene Punkte in 19 Specs**.
 Vorher waren ueber 70 Checkboxen offen, obwohl die Funktion ueberwiegend fertig
 und verifiziert war - die Specs sind jetzt mit dem Stand der Implementierung
 deckungsgleich.
 
 _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 
-### Offen und braucht deinen Rechner (12 Punkte)
+### Offen und braucht deinen Rechner (14 Punkte)
 
 | Spec | Punkt |
 |---|---|
@@ -40,8 +40,10 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-510 | Befunde sind in `T-504`, `T-500`, `SPEC.md` und `AGENTS.md` nachgezogen. |
 | T-514 | Native Windows-Abnahme: X/Alt+F4 mit deaktivierter Tray-Minimierung und **Quit** bei verborgen… |
 | T-514 | Native Windows-Abnahme der Taskleistenoption. |
+| T-519 | A/B mit Laptop-Lautsprechern und zweitem Geraetepaar belegt Nutzen gegen Doppeleintraege und E… |
+| T-519 | Portable misst Verhalten bei Luecken, Resume und Last; Latenz, CPU, Queue und Drop-Zaehler sin… |
 
-### Offen als bewusste Entscheidung (12 Punkte)
+### Offen als bewusste Entscheidung (13 Punkte)
 
 | Spec | Punkt | Warum offen |
 |---|---|---|
@@ -57,6 +59,7 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-513 | Das Ende nutzt mehrere Signale (Stille, Session-Ende), nicht nur eine… | Session-Ende ist umgesetzt, Pegel-/Stille-Erkennung hingegen nicht. Der Detektor beobachtet Session-Metadaten, keine Audiodaten. |
 | T-513 | Live-Abnahme: ein echtes Meeting (Teams oder Zoom) startet die Aufnah… | braucht einen echten Rechner mit Teams oder Zoom und einen Podcast-Playback als Gegenprobe. |
 | T-513 | Der Fenster-/Applikations-Fallback (Stufe 2) ist gebaut, falls Stufe… | laut Entscheidung vom 2026-11-18 erst umsetzen, **wenn** die Session-Erkennung in der Praxis nicht trägt. |
+| T-518 | Echte Windows-Capture-Queues, Rueckkehr nach Geraetestoerungen und A/… | Native Zielgeraete-/Azure-Abnahme folgt in T-519. |
 
 ### Nächste Schritte auf deinem Rechner (die 11 offenen Punkte)
 
@@ -324,6 +327,8 @@ generierte Uebersicht im Abschnitt **Stand der Specs** fasst offene Punkte zusam
 - [T-509: WasapiRecorderBuilder](./specs/T-509-audio-capture-auf-wasapirecorderbuilder-umstellen.md)
 - [T-511: Transkriptionsquellen](./specs/T-511-transkriptions-quellen-auswaehlen.md)
 - [T-512: Target-Framework und Single-File-Sidecar](./specs/T-512-sidecar-targetframeworks-und-single-file.md)
+- [T-517: Echo cancellation (Alpha) – Opt-in und Einstellungen](./specs/T-517-echo-cancellation-alpha.md)
+- [T-518: Echo cancellation – lokale Audio-Pipeline](./specs/T-518-echo-cancellation-audio-pipeline.md)
 
 ### Orchestrierung und Persistenz
 - [T-300: Tauri-Main](./specs/T-300-tauri-main-als-orchestrator.md)
@@ -355,3 +360,4 @@ generierte Uebersicht im Abschnitt **Stand der Specs** fasst offene Punkte zusam
 - [T-508: Abhaengigkeiten und Laufzeit](./specs/T-508-abhaengigkeiten-laufzeit-und-referenzen-aktualisieren.md)
 - [T-510: Clean-Machine-Deployment](./specs/T-510-clean-machine-deployment-windows-11.md)
 - [T-515: GitHub-Actions und Release](./specs/T-515-github-actions-pipeline-und-release.md)
+- [T-519: Echo cancellation (Alpha) – Hardware-Abnahme](./specs/T-519-echo-cancellation-alpha-abnahme.md)

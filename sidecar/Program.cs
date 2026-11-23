@@ -184,6 +184,17 @@ if (!transcription.Mic && !transcription.Speaker)
 }
 Logger.Info("config", "transcription", $"Transcribed sources: mic={transcription.Mic}, speaker={transcription.Speaker}.");
 
+bool echoEnabled;
+try
+{
+    echoEnabled = ArgsParser.ParseEchoCancellation(argsMap, transcription);
+}
+catch (ArgumentException)
+{
+    Logger.Error("SIDECAR_START_FAILED", "Invalid echo cancellation option: --echo-cancellation must be true or false.");
+    return 11;
+}
+
 AzureProxyConfig? proxy;
 try
 {
@@ -238,11 +249,18 @@ AzureSpeechService? azure = null;
 AudioRecorderSource? micSource = null;
 AudioRecorderSource? speakerSource = null;
 var captureCleanupAssigned = false;
+EchoCancellation? echo = null;
+if (echoEnabled)
+{
+    try { echo = new EchoCancellation(sampleRate); }
+    catch (Exception) { Logger.Debug("audio", "echo_cancellation", "Echo cancellation (Alpha): Bypass (initialization failed)."); }
+}
 
 void RequestStop()
 {
     azure?.RequestStop();
     cts.Cancel();
+    echo?.Stop();
 }
 
 ConsoleCancelEventHandler onCancel = (_, e) =>
@@ -305,6 +323,7 @@ try
     }
 
     var azurePushLock = new object();
+    EchoCancellation.Phase? lastEchoPhase = null;
 
     // T-511: Nur transkribierte Quellen werden aufgenommen. Eine abgeschaltete
     // Quelle erhaelt weder Recorder noch Azure-Stream.
@@ -315,11 +334,22 @@ try
         loopback: false,
         targetWaveFormat,
         "Mic",
-        (pcm, capturedAtTicks, captureLatencyMs) =>
+        timestampForEcho: echo is not null,
+        (pcm, capturedAtTicks, captureLatencyMs, echoTimestamp) =>
         {
             try
             {
                 if (pcm.Length == 0) return;
+                if (echo is not null)
+                {
+                    pcm = echo.ProcessMic(pcm, echoTimestamp);
+                    var phase = echo.State;
+                    if (lastEchoPhase != phase)
+                    {
+                        lastEchoPhase = phase;
+                        Logger.Debug("audio", "echo_cancellation", $"Echo cancellation (Alpha): {phase}.");
+                    }
+                }
                 lock (azurePushLock)
                 {
                     azure?.PushFrame(new AudioFrame(
@@ -343,11 +373,13 @@ try
         loopback: true,
         targetWaveFormat,
         "Speaker-Loopback",
-        (pcm, capturedAtTicks, captureLatencyMs) =>
+        timestampForEcho: echo is not null,
+        (pcm, capturedAtTicks, captureLatencyMs, echoTimestamp) =>
         {
             try
             {
                 if (pcm.Length == 0) return;
+                echo?.AddReference(pcm, echoTimestamp);
                 lock (azurePushLock)
                 {
                     azure?.PushFrame(new AudioFrame(
@@ -420,12 +452,14 @@ try
                 break;
             case SidecarCommands.Pause:
                 azure?.SetPaused(true);
+                echo?.SetPaused(true);
                 Logger.Info("sidecar", "pause", "Transcription paused; the Azure session stays connected.");
                 Logger.Event("status", new { phase = "paused", running = true });
                 break;
             case SidecarCommands.Resume:
                 await ReconnectAsync(resuming: true);
                 stopping.ThrowIfCancellationRequested();
+                echo?.SetPaused(false);
                 azure?.SetPaused(false);
                 Logger.Info("sidecar", "resume", "Transcription resumed.");
                 Logger.Event("status", new { phase = "resumed", running = true });
@@ -499,6 +533,7 @@ catch (Exception ex)
 finally
 {
     Console.CancelKeyPress -= onCancel;
+    echo?.Stop();
     // Successful or timed-out shutdown already owns recorder disposal. Never
     // retry it here; native code may still be working on the same handles.
     if (!captureCleanupAssigned)

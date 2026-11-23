@@ -31,21 +31,24 @@ internal sealed class AudioRecorderSource : IDisposable
     private readonly MMDevice _device;
     private readonly bool _loopback;
     private readonly WaveFormat _targetFormat;
-    private readonly Action<byte[], long, int> _onFrame;
+    private readonly Action<byte[], long, int, long?> _onFrame;
     private readonly string _label;
+    private readonly bool _timestampForEcho;
 
     private WasapiRecorder _recorder;
     private BufferedWaveProvider? _mixBuffer;
     private AudioResampler? _resampler;
     private bool _engineMode;
     private bool _disposed;
+    private bool _resamplerDiscontinuity;
 
     private AudioRecorderSource(
         MMDevice device,
         bool loopback,
         WaveFormat targetFormat,
         string label,
-        Action<byte[], long, int> onFrame,
+        bool timestampForEcho,
+        Action<byte[], long, int, long?> onFrame,
         WasapiRecorder recorder)
     {
         _device = device;
@@ -53,6 +56,7 @@ internal sealed class AudioRecorderSource : IDisposable
         _targetFormat = targetFormat;
         _label = label;
         _onFrame = onFrame;
+        _timestampForEcho = timestampForEcho;
         _recorder = recorder;
         _engineMode = true;
     }
@@ -82,10 +86,11 @@ internal sealed class AudioRecorderSource : IDisposable
         bool loopback,
         WaveFormat targetFormat,
         string label,
-        Action<byte[], long, int> onFrame)
+        bool timestampForEcho,
+        Action<byte[], long, int, long?> onFrame)
     {
         var recorder = BuildRecorder(device, loopback, targetFormat);
-        var source = new AudioRecorderSource(device, loopback, targetFormat, label, onFrame, recorder);
+        var source = new AudioRecorderSource(device, loopback, targetFormat, label, timestampForEcho, onFrame, recorder);
         source.Attach(recorder);
         return source;
     }
@@ -207,19 +212,36 @@ internal sealed class AudioRecorderSource : IDisposable
             var capturedAtTicks = Stopwatch.GetTimestamp();
             var captureLatencyMs = _recorder.LatencyMilliseconds;
 
+            // WASAPI packet start in the shared QPC clock (100 ns units), not
+            // callback arrival time. A missing/invalid timestamp resets AEC only.
+            const AudioClientBufferFlags badTiming = AudioClientBufferFlags.DataDiscontinuity | AudioClientBufferFlags.TimestampError;
+            long? echoTimestamp = _timestampForEcho && qpcPosition > 0 && (flags & badTiming) == 0 ? qpcPosition : null;
+
             if (_mixBuffer is not null && _resampler is not null)
             {
                 // Resampler-Modus: Geraete-Mixformat -> Zielformat.
+                if (_timestampForEcho) _resamplerDiscontinuity |= echoTimestamp is null;
                 _mixBuffer.AddSamples(buffer);
                 var pcm = _resampler.DrainToBuffer();
                 if (pcm.Length == 0) return;
-                _onFrame(pcm, capturedAtTicks, captureLatencyMs);
+                if (_timestampForEcho)
+                {
+                    var mixFormat = _mixBuffer.WaveFormat;
+                    var inputSeconds = (double)(buffer.Length / mixFormat.BlockAlign) / mixFormat.SampleRate;
+                    var outputSeconds = (double)(pcm.Length / _targetFormat.BlockAlign) / _targetFormat.SampleRate;
+                    // A steady conversion delay can be found by correlation. When
+                    // the resampler batches audio, do not assign an unreliable clock.
+                    if (_resamplerDiscontinuity || Math.Abs(inputSeconds - outputSeconds) > 0.005)
+                        echoTimestamp = null;
+                    _resamplerDiscontinuity = false;
+                }
+                _onFrame(pcm, capturedAtTicks, captureLatencyMs, echoTimestamp);
                 return;
             }
 
             // Engine-Modus: das Zielformat soll direkt aus der Engine kommen.
             // Der Span gilt nur fuer die Dauer des Callbacks, deshalb kopieren.
-            _onFrame(buffer.ToArray(), capturedAtTicks, captureLatencyMs);
+            _onFrame(buffer.ToArray(), capturedAtTicks, captureLatencyMs, echoTimestamp);
         }
         catch (Exception ex)
         {

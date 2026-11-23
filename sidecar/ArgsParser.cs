@@ -30,6 +30,14 @@ public static class ArgsParser
         return new TranscriptionSettings(Enabled("--transcription-mic"), Enabled("--transcription-speaker"));
     }
 
+    public static bool ParseEchoCancellation(IReadOnlyDictionary<string, string?> args, TranscriptionSettings sources)
+    {
+        const string key = "--echo-cancellation";
+        if (!args.TryGetValue(key, out var raw)) return false;
+        if (!bool.TryParse(raw, out var enabled)) throw new ArgumentException($"{key} must be true or false.");
+        return enabled && sources.Mic && sources.Speaker;
+    }
+
     public static Dictionary<string, string?> Parse(string[] args)
     {
         var result = new Dictionary<string, string?>(System.StringComparer.OrdinalIgnoreCase);
