@@ -45,7 +45,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <h2>{audioOnly ? 'Audio settings' : 'General'}</h2>
       </div>
 
-      {statusRunning && <div className="settings-inline-hint">Stop the transcription to change settings.</div>}
+      {statusRunning && <div className="settings-inline-hint">Stop the transcription to save settings.</div>}
 
       <div className={audioOnly ? 'settings-block audio-settings-grid' : 'settings-block'}>
         {audioOnly && <AudioSources

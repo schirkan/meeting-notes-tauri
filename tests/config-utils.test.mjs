@@ -338,7 +338,6 @@ test('toConfigDraft maps null config to empty defaults', () => {
   assert.equal(draft.region, '')
   assert.equal(draft.speechKey, '')
   assert.equal(draft.interimResults, true)
-  assert.equal(draft.useProxy, false)
   assert.equal(draft.proxyHost, '')
   assert.equal(draft.proxyPort, '')
 })
@@ -350,7 +349,6 @@ test('toConfigDraft maps existing config to draft', () => {
   })
   assert.equal(draft.endpoint, 'wss://e')
   assert.equal(draft.interimResults, false)
-  assert.equal(draft.useProxy, true)
   assert.equal(draft.proxyHost, 'h')
   assert.equal(draft.proxyPort, '8080')
   assert.equal(draft.proxyUsername, 'u')
@@ -360,40 +358,40 @@ test('toConfigDraft maps existing config to draft', () => {
 test('draftToConfig throws on missing required fields', () => {
   assert.throws(() => utils.draftToConfig({
     endpoint: '', region: 'r', speechKey: 'k', interimResults: true,
-    useProxy: false, proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
+    proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
   }), /endpoint/i)
   assert.throws(() => utils.draftToConfig({
     endpoint: 'e', region: '', speechKey: 'k', interimResults: true,
-    useProxy: false, proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
+    proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
   }), /region/i)
   assert.throws(() => utils.draftToConfig({
     endpoint: 'e', region: 'r', speechKey: '', interimResults: true,
-    useProxy: false, proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
+    proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
   }), /speech key/i)
 })
 
-test('draftToConfig produces config without proxy when useProxy=false', () => {
+test('draftToConfig produces config without proxy when the proxy host is blank', () => {
   const c = utils.draftToConfig({
     endpoint: 'wss://e', region: 'r', speechKey: 'k', interimResults: false,
-    useProxy: false, proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
+    proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
   })
   assert.equal(c.endpoint, 'wss://e')
   assert.equal(c.interimResults, false)
   assert.equal(c.proxy, undefined)
 })
 
-test('draftToConfig requires proxy host/port when useProxy=true', () => {
+test('draftToConfig requires a valid port when a proxy host is set', () => {
   assert.throws(() => utils.draftToConfig({
     endpoint: 'e', region: 'r', speechKey: 'k', interimResults: true,
-    useProxy: true, proxyHost: '', proxyPort: '8080', proxyUsername: '', proxyPassword: ''
-  }), /proxy/i)
-  assert.throws(() => utils.draftToConfig({
-    endpoint: 'e', region: 'r', speechKey: 'k', interimResults: true,
-    useProxy: true, proxyHost: 'h', proxyPort: '0', proxyUsername: '', proxyPassword: ''
+    proxyHost: 'h', proxyPort: '', proxyUsername: '', proxyPassword: ''
   }), /port/i)
   assert.throws(() => utils.draftToConfig({
     endpoint: 'e', region: 'r', speechKey: 'k', interimResults: true,
-    useProxy: true, proxyHost: 'h', proxyPort: 'abc', proxyUsername: '', proxyPassword: ''
+    proxyHost: 'h', proxyPort: '0', proxyUsername: '', proxyPassword: ''
+  }), /port/i)
+  assert.throws(() => utils.draftToConfig({
+    endpoint: 'e', region: 'r', speechKey: 'k', interimResults: true,
+    proxyHost: 'h', proxyPort: 'abc', proxyUsername: '', proxyPassword: ''
   }), /port/i)
 })
 
@@ -409,14 +407,14 @@ test('proxy port must fit the Rust u16 contract', () => {
   }
 })
 
-test('diagnostic draft normalization preserves proxy credentials and drops disabled proxy', () => {
+test('diagnostic draft normalization preserves proxy credentials and uses a direct connection when the host is cleared', () => {
   const config = {
     endpoint: 'https://example.test', region: 'r', speechKey: 'k', interimResults: true,
     proxy: { host: 'proxy.test', port: 8080, username: 'u', password: 'p' }
   }
   const draft = utils.toConfigDraft(config)
-  assert.deepEqual(utils.draftToConfig(draft), config)
-  assert.equal(utils.draftToConfig({ ...draft, useProxy: false }).proxy, undefined)
+  assert.deepEqual(utils.draftToConfig({ ...draft, proxyHost: ' proxy.test ' }), config)
+  assert.equal(utils.draftToConfig({ ...draft, proxyHost: '  ' }).proxy, undefined)
 })
 
 test('isConfigComplete recognises minimal + proxy configs', () => {

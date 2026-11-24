@@ -2,16 +2,10 @@ import type { ConfigDraft } from '../config-utils'
 
 type ProxyPanelProps = {
   configDraft: ConfigDraft
-  statusRunning: boolean
   setConfigDraft: React.Dispatch<React.SetStateAction<ConfigDraft>>
 }
 
-export function ProxyPanel(props: ProxyPanelProps) {
-  const {
-    configDraft,
-    statusRunning,
-    setConfigDraft
-  } = props
+export function ProxyPanel({ configDraft, setConfigDraft }: ProxyPanelProps) {
 
   return (
     <section className="panel settings">
@@ -20,26 +14,12 @@ export function ProxyPanel(props: ProxyPanelProps) {
       </div>
 
       <div className="settings-block proxy-settings-grid">
-        <label className="checkbox-field full-field" title="Connect to Azure Speech through a proxy server">
-          <input
-            type="checkbox"
-            checked={configDraft.useProxy}
-            onChange={(event) => {
-              const useProxy = event.currentTarget.checked
-              setConfigDraft((prev) => ({ ...prev, useProxy }))
-            }}
-            disabled={statusRunning}
-          />
-          <span>Use proxy</span>
-        </label>
-
-        <label title="Enter the proxy server hostname or IP address">
+        <label title="Enter the proxy server hostname or IP address. Leave blank for a direct connection.">
           Proxy Host
           <input
             type="text"
             value={configDraft.proxyHost}
             onChange={(event) => setConfigDraft((prev) => ({ ...prev, proxyHost: event.target.value }))}
-            disabled={statusRunning || !configDraft.useProxy}
           />
         </label>
 
@@ -48,9 +28,9 @@ export function ProxyPanel(props: ProxyPanelProps) {
           <input
             type="number"
             min={1}
+            max={65535}
             value={configDraft.proxyPort}
             onChange={(event) => setConfigDraft((prev) => ({ ...prev, proxyPort: event.target.value }))}
-            disabled={statusRunning || !configDraft.useProxy}
           />
         </label>
 
@@ -60,7 +40,6 @@ export function ProxyPanel(props: ProxyPanelProps) {
             type="text"
             value={configDraft.proxyUsername}
             onChange={(event) => setConfigDraft((prev) => ({ ...prev, proxyUsername: event.target.value }))}
-            disabled={statusRunning || !configDraft.useProxy}
           />
         </label>
 
@@ -70,7 +49,6 @@ export function ProxyPanel(props: ProxyPanelProps) {
             type="password"
             value={configDraft.proxyPassword}
             onChange={(event) => setConfigDraft((prev) => ({ ...prev, proxyPassword: event.target.value }))}
-            disabled={statusRunning || !configDraft.useProxy}
           />
         </label>
       </div>

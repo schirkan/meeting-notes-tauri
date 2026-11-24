@@ -29,6 +29,7 @@ Alle UI-Komponenten aus `../meeting-notes/src/renderer/src/components/` portiere
 - Spezielle Edge-Cases (Focus-Trap, Auto-Scroll-Pause bei mehr als 24 px Scroll-Distanz) müssen bei der Port-Validierung gegengetestet werden.
 
 ## Log
+- 2026-11-24: About ist maximal 450 px breit; bei schmalen Fenstern schrumpft der Dialog. Die Textzeilen haben gleiche sichtbare Abstaende. Links neben **Clear log** kopiert **Copy log** die aktuellen Eintraege in Anzeigereihenfolge als tabgetrennten Text; ohne Eintraege ist die Schaltflaeche deaktiviert. Beleg: Die fokussierten About- und Debug-Dock-Tests in `startup-ui.test.mjs` bestanden mit Playwright Chromium, Zwischenablage im Test gemockt.
 - 2026-11-20: About und Dev-Tools im Drei-Punkte-Menue, selektive Webseiten-Kontextmenues und feste Repository-Oeffnung hinzugefuegt. Integrierter Mock-Browser erfolgreich; CLI-UI-Lauf vor Assertions mit Edge Exit 21 blockiert. Native Abnahme bleibt offen.
 - 2026-06-25: Spec angelegt.
 - 2026-11-16: Darstellung auf das Console-Mockup umgestellt (siehe Fortschreibung AD-004): kompakter Header, Inline-Aliase, einklappbare Sprecherzuordnung, größenstabiler Tab-Dialog und aufwärts öffnender Debug-Dock. Regressionstests prüfen Layoutgrenzen, Alias-Export, Audio-Synchronisation, gestopptes Löschen, Debug-Höhenlimit, Auto-Scroll und Timer-Lebenszyklus. Backend- und Audio-Akzeptanz werden dadurch nicht ersetzt.

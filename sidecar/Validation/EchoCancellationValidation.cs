@@ -58,6 +58,11 @@ internal static class EchoCancellationValidation
         check(filter.State == EchoCancellation.Phase.WarmingUp, "Session starts in warm-up");
         check(ReferenceEquals(filter.ProcessMic(first, At(0)), first) && filter.State == EchoCancellation.Phase.Bypass,
             "Missing initial reference bypasses without changing a Mic byte");
+        var bypassStats = filter.TakeDiagnosticSummary();
+        check(bypassStats is not null && bypassStats.Contains("filtered=0/1 blocks") &&
+            bypassStats.Contains("ReferenceUnavailable=1") && bypassStats.Contains("candidateDelayMs=n/a") &&
+            bypassStats.Contains("micReductionDb=n/a") && filter.TakeDiagnosticSummary() is null,
+            "AEC diagnostics report missing reference and drain the interval once");
         double before = 0, after = 0;
         var speakerIntact = true;
         var originalsIntact = true;
@@ -83,8 +88,25 @@ internal static class EchoCancellationValidation
         check(filter.State == EchoCancellation.Phase.Active && after < 0.06 * before && after > 0.02 * before,
             "Known echo is attenuated by actual subtraction (>12 dB), not muted, across ring wrap");
 
+        _ = filter.TakeDiagnosticSummary();
         before = after = 0;
-        for (var n = 70; n < 100; n++)
+        for (var n = 70; n < 73; n++)
+        {
+            var sample = n * Frame;
+            var mic = Mic(sample);
+            filter.AddReference(Far(sample), At(sample));
+            var output = filter.ProcessMic(mic, At(sample));
+            before += Energy(mic);
+            after += Energy(output);
+        }
+        var activeStats = filter.TakeDiagnosticSummary();
+        var expectedReduction = FormattableString.Invariant($"micReductionDb={10 * Math.Log10(before / after):F2}");
+        check(activeStats is not null && activeStats.Contains("filtered=3/3 blocks") &&
+            activeStats.Contains("candidateDelayMs=40.06..40.06") && activeStats.Contains("absCorrelation=1.000..1.000") &&
+            activeStats.Contains(expectedReduction), "AEC diagnostics report accepted delay and measured Mic reduction");
+
+        before = after = 0;
+        for (var n = 73; n < 100; n++)
         {
             var sample = n * Frame;
             var mic = Mic(sample, voice: 0.43);
@@ -96,6 +118,7 @@ internal static class EchoCancellationValidation
         }
         check(after < 0.15 * before, "Double talk: output is closer to the isolated near voice (>8 dB lower error)");
 
+        _ = filter.TakeDiagnosticSummary();
         var nearIntact = true;
         for (var n = 100; n < 135; n++)
         {
@@ -105,6 +128,10 @@ internal static class EchoCancellationValidation
             nearIntact &= ReferenceEquals(filter.ProcessMic(mic, At(sample)), mic);
         }
         check(nearIntact, "Near-only Mic remains byte-identical while unrelated loopback plays");
+        var nearStats = filter.TakeDiagnosticSummary();
+        check(nearStats is not null && nearStats.Contains("filtered=0/35 blocks") &&
+            nearStats.Contains("LowCorrelation=") && nearStats.Contains("micReductionDb=0.00"),
+            "AEC diagnostics distinguish low correlation from missing reference and report unchanged Mic level");
         var silenceIntact = true;
         for (var n = 135; n < 150; n++)
         {

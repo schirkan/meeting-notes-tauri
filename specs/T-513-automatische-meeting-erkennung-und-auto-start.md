@@ -1,7 +1,7 @@
 # T-513: Automatische Meeting-Erkennung und Auto-Start im Hintergrund
 
 ## Kontext
-Status: teils umgesetzt (Stufe 1 im Code, Live-Abnahme offen)
+Status: teils umgesetzt (Auto-Start und Auto-Stop im Praxistest bestätigt, Podcast-Gegenprobe offen)
 Priorität: medium
 Abhängigkeiten: T-300, T-305, T-403, T-509, T-511
 
@@ -18,7 +18,7 @@ Der Umfang dieses Specs ist bewusst zweigeteilt:
 
 Urspruenglich war dies ein reines Recherche-Spec. Die Session-Erkennung,
 Auto-Aufnahme und der identitaetsgebundene Auto-Stop sind inzwischen umgesetzt;
-Live-Abnahme und weitere Signalwege bleiben offen (siehe Done When).
+Auto-Start und Auto-Stop wurden im Praxistest bestätigt. Podcast-Gegenprobe und weitere Signalwege bleiben offen (siehe Done When).
 
 ## Recherche: wie machen es andere Produkte?
 
@@ -276,7 +276,7 @@ Eingangsreihenfolge verarbeitet, nicht als unabhaengige Async-Tasks.
 
 **Grenze:** Audio-Sitzungsende ist kein definitives Meeting-Ende. Teams/Zoom
 koennen Streams laenger als 3 Sekunden schliessen oder nach Call-Ende offen
-halten. Live-Abnahme steht aus. Pegel-/Stille-Erkennung wird nicht behauptet
+halten. Der bestätigte Praxistest deckt nicht alle Meeting-Apps und Audio-Setups ab. Pegel-/Stille-Erkennung wird nicht behauptet
 und ist weiterhin unimplementiert. Kein Kalender oder Fenster-Fallback.
 
 ### Die rechtliche Grenze
@@ -473,7 +473,8 @@ Der Kalender ist **kein** Bestandteil (Entscheidung vom 2026-11-18).
 - [x] Recherche-Beleg: fuer Meeting Notes ist der Bot-Weg (Kalender plus Bot, wie bei Fireflies, tl;dv, Avoma, Fathom, Sembly, Read AI) ausgeschlossen - fuer Teams, Zoom und Meet gibt es keine oeffentlichen lokalen Desktop-Hooks, und ein Bot braucht den Einladungslink. Beleg: learn.microsoft.com (graph/changenotifications-for-onlinemeeting), developers.zoom.us (docs/api/webhooks), developers.google.com (workspace/meet/api/guides/overview).
 - [x] Recherche-Beleg: die rechtliche Grenze ist technisch nicht loesbar - eine Aufnahme ohne Zustimmung der Teilnehmer ist in Deutschland problematisch (§ 201 StGB), und bei externen Rekordern erfolgt die Teilnehmer-Benachrichtigung oft nicht. Beleg: docs.granola.ai (help-center/consent-security-privacy/security-privacy-data-faqs.md - "Granola requires you to click to start recording").
 - [x] Verifikation: Node-Tests, Rust-Tests und C#-Validierung gruen. Beleg: Typecheck, 85 Node-Tests, 41 Rust-Tests, 539 C#-Assertions gegen Quellen und 552 gegen den publizierten/getrimmten Sidecar (18.11.2026); bekannte MF-Stichprobe SKIPPED, neue Session-Proben bestanden. Testnachweis: npm run typecheck, npm run test:unit, cargo test --manifest-path src-tauri/Cargo.toml, npm run test:sidecar, npm run test:sidecar:published, npm run check:specs.
-- [ ] Live-Abnahme: ein echtes Meeting (Teams oder Zoom) startet die Aufnahme ohne Nutzeraktion, und ein normales Podcast-Playback löst **keinen** Auto-Start aus. Beleg: manuelle Abnahme am Zielrechner - die Zielrechner-Abnahme ist eine bewusste Lücke in diesem Spec. - **offen**: braucht einen echten Rechner mit Teams oder Zoom und einen Podcast-Playback als Gegenprobe.
+- [x] Auto-Start und Auto-Stop funktionieren im Praxistest. Beleg: Nutzerbestaetigung vom 24.11.2026; Meeting-App, Build und Geraete wurden nicht angegeben.
+- [ ] Ein normales Podcast-Playback loest **keinen** Auto-Start aus. - **offen**: Fuer die Gegenprobe am Zielrechner liegt kein Ergebnis vor.
 - [ ] Der Fenster-/Applikations-Fallback (Stufe 2) ist gebaut, falls Stufe 1 nicht ausreicht. Beleg: EnumWindows/GetWindowTextW mit PID-Korrelation. - **offen**: laut Entscheidung vom 2026-11-18 erst umsetzen, **wenn** die Session-Erkennung in der Praxis nicht trägt.
 
 ## Neues Microsoft Teams (20.11.2026)
@@ -544,8 +545,8 @@ Live-Teams-/Zoom-Abnahme und Podcast-Gegenprobe bleiben offen.
   bestehende Sitzungs-Semantik einfügen: Pause hält die Azure-Sitzung,
   Stop beendet sie endgültig. Ein automatisch gestarteter Durchlauf darf
   eine laufende Sitzung nicht verdrängen.
-- **Zielrechner-Abnahme.** Die Live-Prüfung an einem echten Meeting ist
-  eine Zielrechner-Abnahme und steht aus - wie bei T-510.
+- **Zielrechner-Abnahme.** Auto-Start und Auto-Stop sind durch den Nutzer bestätigt.
+  Die Podcast-Gegenprobe und eine Bestätigung für das dokumentierte Horizon-Setup stehen aus.
 - **Rechtliche Bewertung.** Eine automatisch gestartete Aufnahme von
   Mikrofon und Systemton kann personenbezogene Daten erfassen. Die
   Bewertung der Aufzeichnungspflicht und der Anzeige obliegt dem Betreiber;

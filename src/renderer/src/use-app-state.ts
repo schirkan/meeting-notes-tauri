@@ -769,6 +769,19 @@ export function useAppState() {
     }
   }
 
+  const onCopyDebugLog = async () => {
+    if (debugLog.length === 0) return
+    const rows = debugLog.map(({ timestampIso, source, level, message }) => [
+      new Date(timestampIso).toLocaleTimeString('en-US'), source.toUpperCase(), level, message
+    ].join('\t'))
+    try {
+      await navigator.clipboard.writeText(['Time\tSource\tLevel\tMessage', ...rows].join('\n'))
+      setToast({ message: 'Debug log copied to the clipboard.', variant: 'info', persistent: false })
+    } catch {
+      setToast({ message: 'The debug log could not be copied to the clipboard.', variant: 'error', persistent: true })
+    }
+  }
+
   const onClearDebugLog = async () => {
     try {
       const result = await window.transcriptApi.clearDebugLog()
@@ -1001,6 +1014,7 @@ export function useAppState() {
     transcriptListRef,
     openDebugPanel: () => setDebugOpen(true),
     closeDebugPanel: () => setDebugOpen(false),
+    onCopyDebugLog,
     onClearDebugLog,
     closeSettingsDialog: () => {
       if (isSavingSettings || isChoosingDirectory) return

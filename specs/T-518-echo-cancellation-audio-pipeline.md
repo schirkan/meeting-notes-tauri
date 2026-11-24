@@ -34,13 +34,40 @@ Cloud-Verarbeitung und kein Roh-Audio in IPC, Logs oder Dateien.
    (fehlende Referenz, Discontinuity, Engine-Fehler). In Warmup und Bypass
    unveraendertes Mic liefern; bei Referenzrueckkehr neu ausrichten. Stille ist
    nicht automatisch eine fehlerhafte Referenz. Doppelsprache darf kein
-   Mic-Mute ausloesen. Debug-Meldungen nur bei Zustandswechseln, ohne Audiopayload.
+   Mic-Mute ausloesen. Neben Zustandswechseln meldet `echo_cancellation_stats`
+   bei eingeschalteter AEC etwa alle 5 s und beim geordneten Stop die Mic-Bloecke
+   mit wirksamer Subtraktion, Bypass-/Filtergruende sowie Min/Max der getesteten
+   Delay-Kandidaten (ms) und absoluten Korrelation. Leere Intervalle werden
+   ausgelassen. `micReductionDb` ist die Energiedifferenz des Mic-Signals vor/nach
+   dem Filter fuer das ganze gemessene Intervall (positiv = leiser, `n/a` bei
+   fehlender Eingangsenergie); sie isoliert Echo nur im Gegenstellen-Test ohne
+   Nahstimme. Es werden keine Audiodaten gespeichert oder geloggt.
 4. **Lifecycle.** Referenzpuffer und Filterstatus gehoeren zur Sitzung und
    zum Geraetepaar. Pause leitet weiterhin kein Audio an Azure; bei Resume
    nach einer Luecke Warmup, ohne Azure-Session oder Sprecheraliase neu zu
    starten. Stop/Quit gibt AEC-State samt Puffern frei. Wenn der bestehende
    Capture-Pfad nach einem Geraetewechsel keine Referenz mehr liefert, bleibt
    AEC im Bypass; die Alpha fuehrt kein eigenes Hot-Swapping ein.
+
+## Fehleranalyse (24.11.2026)
+
+Der Ein-Tap-Filter in `EchoCancellation.cs` verlangt zum Einrasten eine
+Korrelation von mindestens 0,84 zu **einer** verzoegerten Kopie. Ein direkter
+Schallpfad plus eine aehnlich starke Reflexion koennen jeweils darunter liegen.
+Dann bleibt die Phase `WarmingUp`, und die App schickt das Mikrofon unveraendert
+an Azure. Das ist mit dem unveraenderten Filter und synthetischem PCM reproduziert:
+bei einem Pfad (641 Samples Verzoegerung) 13,98 dB Daempfung und 380 aktive Pakete,
+bei zwei gleich starken Pfaden (641 und 823 Samples, 16 kHz) 0 dB und kein aktives
+Paket. Die bisherigen Tests modellieren jeweils nur eine verzögerte Echokopie.
+
+Die Probe belegt eine Grenze des Filters, nicht die Ursache auf dem Zielgeraet.
+Die App kann auch bei fehlender oder ungueltig getakteter Loopback-Referenz
+(`AudioRecorderSource.cs`, unter anderem im Resampler-Fallback) unveraendertes
+Mikrofon liefern. Zur Unterscheidung auf dem Zielgeraet: ausgewaehlten
+Speaker-Endpunkt und `recorder_mode` abgleichen und bei reiner Gegenstelle
+`echo_cancellation` im **Debug log** pruefen. Dauerhaft `Bypass` deutet auf
+Referenz-/Timingprobleme; dauerhaft `WarmingUp` auf fehlende stabile Korrelation.
+Ein Hardware-Nachweis und die A/B-Abnahme bleiben in [T-519](./T-519-echo-cancellation-alpha-abnahme.md) offen.
 
 ## Done When
 - [x] Managed-Engine ohne zusaetzliche native Abhaengigkeit integriert. Beleg: `sidecar/EchoCancellation.cs`; die Integration erfordert keine neuen Pakete.

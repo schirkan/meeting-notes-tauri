@@ -28,6 +28,23 @@ Geraetepaar, Build, Ausgangspegel und Betriebsart dokumentieren. Eine reine
 PCM-Simulation ersetzt die Hardware-/Azure-Abnahme nicht. Bis zum Nachweis
 bleibt der Status **Alpha**, der Schalter bleibt standardmaessig aus.
 
+## Praxisrueckmeldung (24.11.2026)
+
+Der Nutzer bestaetigt identische Mic-Transkripte mit und ohne AEC; Mix entspricht
+zudem Speaker. Damit ist in diesem A/B-Test kein Nutzen im Mic-Transkript
+nachweisbar. Identischer Text schliesst eine Pegelreduktion nicht aus.
+Der Lauf mit AEC zeigt Mic und Speaker beide im Engine-Modus bei 16 kHz,
+16 Bit, Mono. AEC erreicht zeitweise `Active`, faellt aber wiederholt auf
+`WarmingUp` und zum Ende auf `Bypass` zurueck. Die Hardware-Abnahme bleibt offen.
+
+Naechster Schritt: A/B auf Zielhardware wiederholen und im Durchlauf mit AEC
+`echo_cancellation_stats` aus dem **Debug log** sichern. Synthetische
+Sidecar-Tests bestaetigen die Diagnose fuer fehlende Referenz, bekannten Delay
+und berechnete Mic-Pegeldifferenz; echte Hardwarewerte stehen noch aus.
+Mix ist kein Daempfungsnachweis, weil AEC nur Mic bearbeitet. Die reproduzierte
+Grenze des Ein-Tap-Filters steht
+in [T-518](./T-518-echo-cancellation-audio-pipeline.md#fehleranalyse-24112026).
+
 ## Done When
 - [ ] A/B mit Laptop-Lautsprechern und zweitem Geraetepaar belegt Nutzen gegen Doppeleintraege und Erhalt der Nahstimme bei Doppelsprache. - **offen**: Windows-Hardware und Azure-Testzugang fuer echte Transkripte sind erforderlich.
 - [ ] Portable misst Verhalten bei Luecken, Resume und Last; Latenz, CPU, Queue und Drop-Zaehler sind dokumentiert. - **offen**: Dauerlauf auf Zielhardware fehlt.

@@ -69,6 +69,8 @@ so two captures - from the top and from the bottom - show the whole dialog.
 
 ### Debug log
 
+Use **Copy log** next to **Clear log** to copy the current entries as tab-separated text.
+
 ![Debug log dock](docs/native/06-debug-log.png)
 
 ## 📦 Installation
@@ -104,7 +106,7 @@ Azure Speech: [Documentation](https://learn.microsoft.com/en-us/azure/ai-service
 Settings open automatically on first launch if the Azure configuration is missing.
 
 1. Under **Azure**, enter your Azure Speech endpoint, region, and Speech Key.
-2. If needed, configure your HTTP proxy under **Proxy**. Enter only the hostname or IP address, without `http://` or a path.
+2. To use an HTTP proxy, enter its hostname or IP address and port under **Proxy**. Do not include `http://` or a path. Leave **Proxy Host** blank for a direct connection.
 3. Use **Test connection** to check connectivity. This test does not capture microphone or system audio, but it does connect to Azure.
 4. Click **Save**. Successful saving closes the dialog; errors leave it open with an explanation.
 

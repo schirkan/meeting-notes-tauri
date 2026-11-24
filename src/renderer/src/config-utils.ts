@@ -5,7 +5,6 @@ export type ConfigDraft = {
   region: string
   speechKey: string
   interimResults: boolean
-  useProxy: boolean
   proxyHost: string
   proxyPort: string
   proxyUsername: string
@@ -18,7 +17,6 @@ export function toConfigDraft(config: AzureConfig | null): ConfigDraft {
     region: config?.region ?? '',
     speechKey: config?.speechKey ?? '',
     interimResults: config?.interimResults ?? true,
-    useProxy: !!config?.proxy,
     proxyHost: config?.proxy?.host ?? '',
     proxyPort: config?.proxy?.port != null ? String(config.proxy.port) : '',
     proxyUsername: config?.proxy?.username ?? '',
@@ -35,9 +33,9 @@ export function draftToConfig(draft: ConfigDraft): AzureConfig {
     throw new Error('Please fill in endpoint, region and speech key.')
   }
 
-  const proxyPort = draft.proxyPort.trim()
+  const proxyHost = draft.proxyHost.trim()
 
-  if (!draft.useProxy) {
+  if (!proxyHost) {
     return {
       endpoint,
       region,
@@ -46,8 +44,9 @@ export function draftToConfig(draft: ConfigDraft): AzureConfig {
     }
   }
 
-  if (!draft.proxyHost.trim() || !proxyPort) {
-    throw new Error('Proxy is enabled. Please fill in host and port.')
+  const proxyPort = draft.proxyPort.trim()
+  if (!proxyPort) {
+    throw new Error('Please enter a port for the proxy host.')
   }
 
   const parsedPort = Number(proxyPort)
@@ -61,7 +60,7 @@ export function draftToConfig(draft: ConfigDraft): AzureConfig {
     speechKey,
     interimResults: draft.interimResults,
     proxy: {
-      host: draft.proxyHost.trim(),
+      host: proxyHost,
       port: parsedPort,
       username: draft.proxyUsername.trim() || undefined,
       password: draft.proxyPassword.trim() || undefined

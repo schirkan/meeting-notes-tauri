@@ -6,10 +6,11 @@ type DebugLogPanelProps = {
   debugLog: DebugLogEntry[]
   onOpenDebug: () => void
   onCloseDebug: () => void
+  onCopyDebug: () => Promise<void>
   onClearDebug: () => Promise<void>
 }
 
-export function DebugLogPanel({ debugOpen, debugLog, onOpenDebug, onCloseDebug, onClearDebug }: DebugLogPanelProps) {
+export function DebugLogPanel({ debugOpen, debugLog, onOpenDebug, onCloseDebug, onCopyDebug, onClearDebug }: DebugLogPanelProps) {
   const errorCount = debugLog.filter((entry) => entry.level === 'error').length
   return (
     <section className={`console-debug ${errorCount > 0 ? 'has-errors' : ''}`} id="console-debug" aria-label="Debug log">
@@ -18,7 +19,10 @@ export function DebugLogPanel({ debugOpen, debugLog, onOpenDebug, onCloseDebug, 
           aria-label={debugOpen ? 'Close debug log' : 'Open debug log'}>
           <Icon name="terminal" />Debug log <span className="count-pill">{errorCount} {errorCount === 1 ? 'error' : 'errors'}</span>
         </button>
-        <button type="button" onClick={() => void onClearDebug()}><Icon name="trash" />Clear log</button>
+        <div className="debug-actions">
+          <button type="button" disabled={debugLog.length === 0} onClick={() => void onCopyDebug()}><Icon name="copy" />Copy log</button>
+          <button type="button" onClick={() => void onClearDebug()}><Icon name="trash" />Clear log</button>
+        </div>
       </div>
       {debugOpen && <div className="debug-content" id="debug-content">
         {debugLog.length === 0 ? <p className="empty">No debug entries yet.</p> : (

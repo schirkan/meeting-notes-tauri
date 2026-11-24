@@ -250,10 +250,17 @@ AudioRecorderSource? micSource = null;
 AudioRecorderSource? speakerSource = null;
 var captureCleanupAssigned = false;
 EchoCancellation? echo = null;
+Task echoDiagnostics = Task.CompletedTask;
 if (echoEnabled)
 {
     try { echo = new EchoCancellation(sampleRate); }
     catch (Exception) { Logger.Debug("audio", "echo_cancellation", "Echo cancellation (Alpha): Bypass (initialization failed)."); }
+}
+
+void LogEchoDiagnostics(EchoCancellation filter)
+{
+    if (filter.TakeDiagnosticSummary() is { } summary)
+        Logger.Debug("audio", "echo_cancellation_stats", summary);
 }
 
 void RequestStop()
@@ -399,6 +406,19 @@ try
     micSource?.Start();
     speakerSource?.Start();
 
+    if (echo is { } filter)
+    {
+        echoDiagnostics = Task.Run(async () =>
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+            try
+            {
+                while (await timer.WaitForNextTickAsync(stopping)) LogEchoDiagnostics(filter);
+            }
+            catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
+        });
+    }
+
     var activeSources = new List<string>();
     if (micSource is not null) activeSources.Add("Mic");
     if (speakerSource is not null) activeSources.Add("Speaker-Loopback");
@@ -521,6 +541,11 @@ try
             finally { speakerSource?.Dispose(); }
         }
 
+        if (echo is { } filter)
+        {
+            await echoDiagnostics.WaitAsync(shutdownToken);
+            LogEchoDiagnostics(filter);
+        }
         if (azure is not null) await azure.StopAsync(requireCleanStop: true, shutdownToken);
     }, shutdownToken);
     return 0;

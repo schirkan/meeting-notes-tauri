@@ -7,6 +7,37 @@ internal sealed class EchoCancellation
 {
     internal enum Phase { WarmingUp, Active, Bypass, Off }
 
+    private enum Outcome
+    {
+        Filtered, MicProcessingBusy, InvalidMicPacket, MicDiscontinuity, ReferenceSnapshotBusy, ReferenceUnavailable,
+        ReferenceTimestampOffset, PartialBlock, MicClipped, MicQuiet, ReferenceWindowUnavailable,
+        SearchCooldown, NoReferenceMatch, LowCorrelation, GainOutOfRange, GainUnstable, WarmingUp,
+        ReferenceChanged, ProcessingError
+    }
+
+    private static readonly Outcome[] Outcomes = Enum.GetValues<Outcome>();
+
+    private sealed class Diagnostics
+    {
+        internal readonly long[] Blocks = new long[Outcomes.Length];
+        internal long Candidates;
+        internal int MinDelay = int.MaxValue, MaxDelay = int.MinValue;
+        internal double MinCorrelation = 1, MaxCorrelation;
+        internal double InputEnergy, OutputEnergy;
+
+        internal void Candidate(int delay, double correlation)
+        {
+            Candidates++;
+            MinDelay = Math.Min(MinDelay, delay);
+            MaxDelay = Math.Max(MaxDelay, delay);
+            MinCorrelation = Math.Min(MinCorrelation, correlation);
+            MaxCorrelation = Math.Max(MaxCorrelation, correlation);
+        }
+    }
+
+    private Diagnostics _diagnostics = new();
+    private long _micBusyBlocks;
+
     private readonly object _gate = new(); // Mic processing and lifecycle
     private readonly object _historyGate = new(); // only packet copy / snapshot
     private readonly int _rate;
@@ -50,6 +81,45 @@ internal sealed class EchoCancellation
 
     internal Phase State => _state;
 
+    internal string? TakeDiagnosticSummary()
+    {
+        var next = new Diagnostics();
+        Diagnostics interval;
+        Phase phase;
+        if (!Monitor.TryEnter(_gate)) return null;
+        try
+        {
+            interval = _diagnostics;
+            _diagnostics = next;
+            phase = _state;
+        }
+        finally { Monitor.Exit(_gate); }
+        interval.Blocks[(int)Outcome.MicProcessingBusy] = Interlocked.Exchange(ref _micBusyBlocks, 0);
+        var total = interval.Blocks.Sum();
+        if (total == 0) return null;
+        var filtered = interval.Blocks[(int)Outcome.Filtered];
+        var skipped = string.Join(", ", Outcomes.Skip(1).Where(reason => interval.Blocks[(int)reason] > 0)
+            .Select(reason => $"{reason}={interval.Blocks[(int)reason]}"));
+        var candidates = interval.Candidates == 0 ? "candidateDelayMs=n/a; absCorrelation=n/a" :
+            FormattableString.Invariant($"candidateDelayMs={1000.0 * interval.MinDelay / _rate:F2}..{1000.0 * interval.MaxDelay / _rate:F2}; absCorrelation={interval.MinCorrelation:F3}..{interval.MaxCorrelation:F3}");
+        var reduction = interval.InputEnergy == 0 ? "n/a" : interval.OutputEnergy == 0 ? "inf" :
+            FormattableString.Invariant($"{10 * Math.Log10(interval.InputEnergy / interval.OutputEnergy):F2}");
+        return FormattableString.Invariant($"Echo cancellation (Alpha): phase={phase}; filtered={filtered}/{total} blocks ({100.0 * filtered / total:F1}%); skipped=[{skipped}]; candidates={interval.Candidates}; {candidates}; micReductionDb={reduction}.");
+    }
+
+    private void Count(Outcome outcome, int blocks = 1) => _diagnostics.Blocks[(int)outcome] += blocks;
+
+    private void MeasureMic(ReadOnlySpan<short> input, byte[]? corrected)
+    {
+        double inputEnergy = 0, outputEnergy = 0;
+        foreach (var sample in input) inputEnergy += (double)sample * sample;
+        if (corrected is null) outputEnergy = inputEnergy;
+        else foreach (var sample in MemoryMarshal.Cast<byte, short>(corrected.AsSpan()))
+            outputEnergy += (double)sample * sample;
+        _diagnostics.InputEnergy += inputEnergy;
+        _diagnostics.OutputEnergy += outputEnergy;
+    }
+
     // Neither capture callback waits. Mic takes a bounded snapshot, so it
     // doesn't contend with the reference callback during the delay scan.
     internal void AddReference(ReadOnlySpan<byte> pcm, long? qpc)
@@ -91,24 +161,37 @@ internal sealed class EchoCancellation
 
     internal byte[] ProcessMic(byte[] pcm, long? qpc)
     {
-        if (!Monitor.TryEnter(_gate)) return pcm;
+        var input = MemoryMarshal.Cast<byte, short>(pcm.AsSpan());
+        var blocks = input.Length == 0 ? 1 : (input.Length - 1) / _block + 1;
+        if (!Monitor.TryEnter(_gate))
+        {
+            if (_state != Phase.Off) Interlocked.Add(ref _micBusyBlocks, blocks);
+            return pcm;
+        }
+        var skipped = 0;
         try
         {
             if (_paused || _stopped) return pcm;
             if (!IsValidPacket(pcm, qpc))
             {
+                Count(Outcome.InvalidMicPacket, blocks);
+                if (pcm.Length % 2 == 0 && input.Length <= _rate / 10) MeasureMic(input, null);
                 ResetMic();
                 _micTime = 0;
                 return pcm;
             }
 
             var time = qpc.GetValueOrDefault();
-            var input = MemoryMarshal.Cast<byte, short>(pcm.AsSpan());
             var continuous = IsContinuous(time, _micTime, _micLength);
             _micTime = time;
             _micLength = input.Length;
-            if (!continuous || !TrySnapshot(time, out var nominal))
+            var snapshot = Outcome.MicDiscontinuity;
+            var nominal = 0L;
+            if (continuous) snapshot = TrySnapshot(time, out nominal);
+            if (snapshot != Outcome.Filtered)
             {
+                Count(snapshot, blocks);
+                MeasureMic(input, null);
                 ResetMic();
                 return pcm;
             }
@@ -123,8 +206,16 @@ internal sealed class EchoCancellation
                 _micTail.AsSpan(_tailLength - keep, keep).CopyTo(_micTail);
                 mic.CopyTo(_micTail.AsSpan(keep));
                 _tailLength = keep + count;
-                if (_tailLength < _block || !TryPredict(_micTail, nominal + offset - keep, count, out var reference, out var gain))
+                ReadOnlySpan<short> reference = default;
+                double gain = 0;
+                var outcome = _tailLength < _block ? Outcome.PartialBlock :
+                    Predict(_micTail, nominal + offset - keep, count, out reference, out gain);
+                if (outcome != Outcome.Filtered)
+                {
+                    Count(outcome);
+                    skipped++;
                     continue;
+                }
                 corrected ??= (byte[])pcm.Clone();
                 var output = MemoryMarshal.Cast<byte, short>(corrected.AsSpan()).Slice(offset, count);
                 for (var i = 0; i < mic.Length; i++)
@@ -132,12 +223,21 @@ internal sealed class EchoCancellation
             }
             // A concurrent reference drop also invalidates this result. The
             // original Mic bytes have never been touched, even on exceptions.
-            if (_readRevision == Volatile.Read(ref _historyRevision)) return corrected ?? pcm;
+            if (_readRevision == Volatile.Read(ref _historyRevision))
+            {
+                Count(Outcome.Filtered, blocks - skipped);
+                MeasureMic(input, corrected);
+                return corrected ?? pcm;
+            }
+            Count(Outcome.ReferenceChanged, blocks - skipped);
+            MeasureMic(input, null);
             ResetMic();
             return pcm;
         }
         catch (Exception)
         {
+            Count(Outcome.ProcessingError, blocks - skipped);
+            MeasureMic(input, null);
             Interlocked.Increment(ref _historyRevision);
             ResetMic();
             return pcm;
@@ -170,17 +270,17 @@ internal sealed class EchoCancellation
         }
     }
 
-    private bool TrySnapshot(long time, out long nominal)
+    private Outcome TrySnapshot(long time, out long nominal)
     {
         nominal = 0;
-        if (!Monitor.TryEnter(_historyGate)) return false;
+        if (!Monitor.TryEnter(_historyGate)) return Outcome.ReferenceSnapshotBusy;
         try
         {
             var revision = Volatile.Read(ref _historyRevision);
             var relativeTime = time - _referenceTime;
-            if (_referenceTime == 0 || _writtenRevision != revision ||
-                relativeTime is > TimeSpan.TicksPerMillisecond * 75 or < -TimeSpan.TicksPerMillisecond * 100)
-                return false;
+            if (_referenceTime == 0 || _writtenRevision != revision) return Outcome.ReferenceUnavailable;
+            if (relativeTime is > TimeSpan.TicksPerMillisecond * 75 or < -TimeSpan.TicksPerMillisecond * 100)
+                return Outcome.ReferenceTimestampOffset;
             if (_readRevision != revision)
             {
                 ResetMic();
@@ -192,12 +292,12 @@ internal sealed class EchoCancellation
             _snapshotLength = (int)Math.Min(_head, _capacity);
             _snapshotStart = _head - _snapshotLength;
             _reference.AsSpan((int)(_snapshotStart % _capacity), _snapshotLength).CopyTo(_snapshot);
-            return true;
+            return Outcome.Filtered;
         }
         finally { Monitor.Exit(_historyGate); }
     }
 
-    private bool TryPredict(ReadOnlySpan<short> mic, long nominal, int newSamples, out ReadOnlySpan<short> reference, out double gain)
+    private Outcome Predict(ReadOnlySpan<short> mic, long nominal, int newSamples, out ReadOnlySpan<short> reference, out double gain)
     {
         reference = default;
         gain = 0;
@@ -214,14 +314,15 @@ internal sealed class EchoCancellation
         double micPower = 0;
         foreach (var sample in mic)
         {
-            if (sample is >= 32700 or <= -32700) return false;
+            if (sample is >= 32700 or <= -32700) return Outcome.MicClipped;
             micPower += (double)sample * sample;
         }
-        if (micPower < mic.Length * 32 * 32 || from > to) return false;
+        if (micPower < mic.Length * 32 * 32) return Outcome.MicQuiet;
+        if (from > to) return Outcome.ReferenceWindowUnavailable;
         _searchCooldown -= newSamples;
         if (_matches == 0)
         {
-            if (_searchCooldown > 0) return false;
+            if (_searchCooldown > 0) return Outcome.SearchCooldown;
             _searchCooldown = 4 * _block;
         }
 
@@ -241,16 +342,21 @@ internal sealed class EchoCancellation
                 best = start;
             }
         }
+        var rejection = Outcome.NoReferenceMatch;
         if (best >= 0)
         {
             var candidate = ReferenceAt(best);
             var (cross, power) = Compare(mic, candidate, 1);
             var confidence = cross * cross / (power * micPower);
             var estimate = cross / power;
-            if (confidence >= (active ? 0.65 * 0.65 : 0.84 * 0.84) && Math.Abs(estimate) is >= 0.03 and <= 1.25 &&
-                (_matches == 0 || estimate / _gain is >= 0.70 and <= 1.35))
+            var delay = (int)(nominal - best);
+            _diagnostics.Candidate(delay, Math.Sqrt(confidence));
+            if (!(confidence >= (active ? 0.65 * 0.65 : 0.84 * 0.84))) rejection = Outcome.LowCorrelation;
+            else if (Math.Abs(estimate) is not (>= 0.03 and <= 1.25)) rejection = Outcome.GainOutOfRange;
+            else if (_matches != 0 && estimate / _gain is not (>= 0.70 and <= 1.35)) rejection = Outcome.GainUnstable;
+            else
             {
-                _delay = (int)(nominal - best);
+                _delay = delay;
                 _misses = 0;
                 // Freeze the gain on likely double talk; only subtract the
                 // independently learned echo estimate, never duck the Mic mix.
@@ -260,11 +366,11 @@ internal sealed class EchoCancellation
                 {
                     _matches += newSamples;
                     if (_matches >= 3 * _block) _state = Phase.Active;
-                    return false;
+                    return Outcome.WarmingUp;
                 }
                 reference = candidate;
                 gain = 0.8 * _gain;
-                return true;
+                return Outcome.Filtered;
             }
         }
 
@@ -272,7 +378,7 @@ internal sealed class EchoCancellation
         // unmatched blocks reassess delay, but always pass these blocks intact.
         _misses += newSamples;
         if (!active || _misses >= 8 * _block) ResetMatch(Phase.WarmingUp);
-        return false;
+        return rejection;
     }
 
     private ReadOnlySpan<short> ReferenceAt(long start) => _snapshot.AsSpan((int)(start - _snapshotStart), _block);

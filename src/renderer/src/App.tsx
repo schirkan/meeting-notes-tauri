@@ -33,6 +33,7 @@ export function App() {
     onExportTranscript,
     autoScrollEnabled,
     onFollowTranscript,
+    onCopyDebugLog,
     onClearDebugLog,
     onOpenSettingsDialog,
     onPause,
@@ -142,6 +143,7 @@ export function App() {
           debugLog={debugLog}
           onOpenDebug={openDebugPanel}
           onCloseDebug={closeDebugPanel}
+          onCopyDebug={onCopyDebugLog}
           onClearDebug={onClearDebugLog}
         />}
       </div>
@@ -202,7 +204,6 @@ export function App() {
 
         <ProxyPanel
           configDraft={configDraft}
-          statusRunning={status.running}
           setConfigDraft={setConfigDraft}
         />
       </SettingsDialog>

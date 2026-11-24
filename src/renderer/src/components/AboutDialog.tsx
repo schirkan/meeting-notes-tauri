@@ -10,7 +10,7 @@ type AboutDialogProps = {
 
 export function AboutDialog(props: AboutDialogProps) {
   return (
-    <SettingsDialog isOpen={props.isOpen} onClose={props.onClose} title="About">
+    <SettingsDialog isOpen={props.isOpen} onClose={props.onClose} title="About" className="about-dialog">
       <div className="about-content">
         <img src={appIcon} alt="Meeting Notes Icon" />
         <div className="about-details">

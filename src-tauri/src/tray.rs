@@ -171,7 +171,7 @@ pub fn init(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn show_main(app: &AppHandle) -> Result<(), String> {
+pub(crate) fn show_main(app: &AppHandle) -> Result<(), String> {
     let window = app.get_webview_window("main").ok_or("The main window is not available.")?;
     window.show().map_err(|e| e.to_string())?;
     window.unminimize().map_err(|e| e.to_string())?;

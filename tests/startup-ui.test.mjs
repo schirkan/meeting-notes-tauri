@@ -295,7 +295,6 @@ test('testing unsaved settings preserves drafts without persisting and footer bu
     await page.getByRole('button', { name: 'Open settings dialog' }).click()
     const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
     await dialog.getByRole('combobox', { name: 'Primary language', exact: true }).selectOption('en-US')
-    await dialog.getByLabel('Use proxy').check()
     await dialog.getByLabel('Proxy Host', { exact: true }).fill('draft.proxy')
     await dialog.getByLabel('Proxy Port', { exact: true }).fill('8080')
     await dialog.getByRole('button', { name: 'Test connection', exact: true }).click()
@@ -327,6 +326,7 @@ test('About has only a close button, repository link and focus trap; menu and F1
     await page.getByLabel('More actions', { exact: true }).click()
     await page.getByRole('button', { name: 'About', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: 'About', exact: true })
+    assert.equal((await dialog.boundingBox()).width, 450)
     assert.equal(await dialog.getByRole('button').count(), 1)
     await page.waitForFunction(() => document.activeElement?.classList.contains('settings-dialog-close'))
     assert.equal(await dialog.getByRole('heading', { name: 'Meeting Notes', exact: true }).count(), 1)
@@ -335,6 +335,11 @@ test('About has only a close button, repository link and focus trap; menu and F1
     assert.match(await dialog.innerText(), /License: MIT/)
     const [icon, details] = await Promise.all([dialog.getByRole('img').boundingBox(), dialog.locator('.about-details').boundingBox()])
     assert.ok(icon.width >= 96 && icon.x + icon.width < details.x)
+    const gaps = await dialog.locator('.about-details > *').evaluateAll(elements => {
+      const boxes = elements.map(element => element.getBoundingClientRect())
+      return boxes.slice(1).map((box, index) => box.top - boxes[index].bottom)
+    })
+    assert.ok(gaps[0] > 0 && gaps.every(gap => gap === gaps[0]), `Uneven About spacing: ${gaps.join(', ')}`)
     await dialog.getByRole('link').click()
     assert.equal(await page.evaluate(() => window.repositoryOpened), true)
     await page.keyboard.press('Tab')
@@ -464,7 +469,7 @@ test('settings shows all sections without navigation and preserves two-column la
     assert.equal(await dialog.getByRole('tab').count(), 0)
     assert.equal(await dialog.getByRole('combobox', { name: 'Microphone', exact: true }).count(), 0)
     await azure.getByRole('heading', { name: 'Azure', exact: true }).scrollIntoViewIfNeeded()
-    assert.equal(await azure.getByLabel('Use proxy').count(), 0)
+    assert.equal(await azure.getByLabel('Proxy Host', { exact: true }).count(), 0)
     assert.equal(await proxy.getByRole('button', { name: 'Test connection', exact: true }).count(), 0)
     assert.equal(await azure.getByRole('button', { name: 'Test connection', exact: true }).count(), 0)
     assert.equal(await panels.locator('.meta-path').count(), 0)
@@ -536,8 +541,8 @@ test('settings shows all sections without navigation and preserves two-column la
     assert.ok(proxyBox.y < gridBox.y + gridBox.height, 'Proxy-Abschnitt bleibt im sichtbaren Bereich')
     assert.equal(await panels.count(), 4)
     assert.equal(await proxy.locator('.settings-inline-hint').count(), 0)
-    assert.equal(await proxy.getByLabel('Proxy Host', { exact: true }).isDisabled(), true)
-    await proxy.getByLabel('Use proxy').check()
+    assert.equal(await proxy.getByRole('checkbox').count(), 0)
+    assert.equal(await proxy.locator('input:disabled').count(), 0)
     await proxy.getByLabel('Proxy Host', { exact: true }).fill('proxy.test')
     await proxy.getByLabel('Proxy Port', { exact: true }).fill('8080')
     await proxy.getByLabel('Proxy username (optional)', { exact: true }).fill('test-user')
@@ -575,6 +580,11 @@ test('settings shows all sections without navigation and preserves two-column la
     await footer.getByRole('button', { name: 'Test connection', exact: true }).click()
     await page.getByRole('dialog', { name: 'Connection test', exact: true }).locator('tbody tr').waitFor()
     assert.deepEqual(await page.evaluate(() => window.lastConnectivityPayload), { ...validConfig, proxy: proxyConfig, language: 'de-DE' })
+    await page.getByRole('dialog', { name: 'Connection test', exact: true }).getByRole('button', { name: 'Close dialog', exact: true }).click()
+    await proxy.getByLabel('Proxy Host', { exact: true }).fill('')
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), validConfig)
   } finally {
     await page.close()
   }
@@ -776,11 +786,14 @@ test('export folder picker errors leave the previous path intact and visible', a
   } finally { await page.close() }
 })
 
-test('language dropdown remains disabled during recording', async () => {
+test('proxy fields stay editable while the language dropdown and Save are disabled during recording', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, running: true })
   try {
     await page.getByRole('button', { name: 'Open settings dialog' }).click()
     assert.equal(await page.getByRole('combobox', { name: 'Primary language', exact: true }).isDisabled(), true)
+    await page.getByLabel('Proxy Host', { exact: true }).fill('proxy.test')
+    assert.equal(await page.locator('.proxy-settings-grid input:disabled').count(), 0)
+    assert.equal(await page.getByRole('button', { name: 'Save', exact: true }).isDisabled(), true)
     assert.equal(await page.getByRole('checkbox', { name: 'Speaker recognition for microphone', exact: true }).count(), 0)
     assert.equal(await page.getByRole('checkbox', { name: 'Speaker recognition for speaker loopback', exact: true }).count(), 0)
   } finally {
@@ -1527,9 +1540,22 @@ test('Debug dock starts hidden, opens upward within half the workspace, and clea
       assert.ok(Math.abs(content.y + content.height - footer.y) <= 1)
       assert.equal(footer.y + footer.height, height)
     }
-    await page.getByRole('button', { name: 'Clear log', exact: true }).click()
+    const copy = page.getByRole('button', { name: 'Copy log', exact: true })
+    const clear = page.getByRole('button', { name: 'Clear log', exact: true })
+    assert.ok((await copy.boundingBox()).x < (await clear.boundingBox()).x)
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+        writeText: async (text) => { window.copiedLog = text }
+      } })
+    })
+    const rows = await page.locator('.debug-log-table tr').evaluateAll(elements =>
+      elements.map(row => Array.from(row.cells, cell => cell.textContent).join('\t')))
+    await copy.click()
+    assert.equal(await page.evaluate(() => window.copiedLog), rows.join('\n'))
+    await clear.click()
     await page.waitForFunction(() => !!window.lastClearLogCalled)
     await page.locator('.debug-content .empty').waitFor()
+    assert.equal(await copy.isDisabled(), true)
     assert.equal(await page.locator('.debug-summary .count-pill').innerText(), '0 errors')
     await page.getByRole('button', { name: 'Close debug log', exact: true }).click()
     await toggleDebug(page)

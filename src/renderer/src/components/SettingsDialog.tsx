@@ -10,6 +10,7 @@ type SettingsDialogProps = {
   footer?: React.ReactNode
   busy?: boolean
   closeOnBackdrop?: boolean
+  className?: string
 }
 
 const FOCUSABLE_SELECTOR = [
@@ -104,7 +105,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
     <div className="settings-dialog-overlay" role="presentation" onClick={props.closeOnBackdrop === false ? undefined : onClose}>
       <section
         ref={dialogRef}
-        className={`settings-dialog ${scrollable ? 'settings-dialog-scroll' : ''}`}
+        className={['settings-dialog', scrollable && 'settings-dialog-scroll', props.className].filter(Boolean).join(' ')}
         role="dialog"
         aria-modal="true"
         aria-label={title}

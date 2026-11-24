@@ -39,9 +39,9 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
   sind sitzungsgebunden. Siehe [T-507](./specs/T-507-pause-stop-und-sitzungsgebundene-sprecherzuordnung.md).
 - Automatischer Start beobachtet lokale Core-Audio-Sessions erlaubter Prozesse,
   ohne Kalender. Seit v0.1.5 umfasst die Standardliste `teams` und `ms-teams`;
-  der Detektor beobachtet alle beim Start aktiven Audio-Endpunkte. Die
-  Live-Teams-Abnahme ist offen.
-  Auto-Stop betrifft nur die passend automatisch gestartete Aufnahme.
+  der Detektor beobachtet alle beim Start aktiven Audio-Endpunkte.
+  Auto-Start und Auto-Stop sind im Praxistest bestaetigt; die Podcast-Gegenprobe
+  ist offen. Auto-Stop betrifft nur die passend automatisch gestartete Aufnahme.
   `user.autoStart.enabled` und `user.autoStart.autoStop` sind standardmaessig aktiv;
   gespeichertes `false` bleibt erhalten. Die Erkennung ist eine Heuristik.
   Siehe [T-513](./specs/T-513-automatische-meeting-erkennung-und-auto-start.md).
