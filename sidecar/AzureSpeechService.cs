@@ -23,7 +23,13 @@ public sealed class AzureSpeechService : IDisposable
     public const string SourceMic = "mic";
     public const string SourceSpeaker = "speaker";
 
+    private const string StereoSource = "stereo";
     private readonly AzureSpeechConfig _config;
+    private readonly Action? _stopOnStereoFailure;
+    private StereoAudioWriter? _stereoWriter;
+    private readonly TaskCompletionSource<bool> _stereoReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int _stereoFailed;
+    private int _stereoSessionStarted;
     private readonly UserSettings _settings;
     // ConcurrentDictionary: die Capture-Threads lesen die Streams
     // waehrend eine vom Dienst beendete Sitzung neu verbunden wird (T-507).
@@ -52,10 +58,11 @@ public sealed class AzureSpeechService : IDisposable
     private volatile bool _stopping;
     private readonly SemaphoreSlim _streamLifecycle = new(1, 1);
 
-    public AzureSpeechService(AzureSpeechConfig config, UserSettings settings)
+    public AzureSpeechService(AzureSpeechConfig config, UserSettings settings, Action? stopOnStereoFailure = null)
     {
         _config = config;
         _settings = settings;
+        _stopOnStereoFailure = stopOnStereoFailure;
     }
 
     /// <summary>Laufzeit-Kennung dieses Sidecar-Prozesses.</summary>
@@ -72,6 +79,8 @@ public sealed class AzureSpeechService : IDisposable
     public void SetPaused(bool paused)
     {
         if (_stopping || _paused == paused) return;
+        _stereoWriter?.SetPaused(paused);
+        if (_stopping) return;
         _paused = paused;
         Logger.Info(
             "azure",
@@ -88,7 +97,7 @@ public sealed class AzureSpeechService : IDisposable
 
         // Die SDK-Eigenschaft gilt global. Wirksam ist sie nur, wenn
         // mindestens eine transkribierte Quelle die Sprechererkennung nutzt.
-        _speechConfig = SpeechConfiguration.Create(_config, _settings.Language, EffectiveDiarization);
+        _speechConfig = SpeechConfiguration.Create(_config, _settings.Language, EffectiveDiarization && !IsStereo, IsStereo);
 
         if (_config.Proxy is not null)
             Logger.Info("azure", "proxy", "Azure Speech proxy configured; credentials are not logged.");
@@ -98,7 +107,7 @@ public sealed class AzureSpeechService : IDisposable
             "azure",
             "config",
             $"AzureSpeechService.init: region={_config.Region}, language={_settings.Language}, " +
-            $"interimResults={_config.InterimResults}, lidMode=Continuous.");
+            $"interimResults={_config.InterimResults && !IsStereo}, stereo={IsStereo}.");
     }
 
     /// <summary>
@@ -122,12 +131,21 @@ public sealed class AzureSpeechService : IDisposable
         if (sources.Count == 0)
             throw new InvalidOperationException("No audio source selected for transcription.");
 
-        var states = sources.Select(source => EnsureStreamForFormat(source, format)).ToArray();
+        StreamState[] states;
         try
         {
+            states = IsStereo
+                ? [EnsureStreamForFormat(StereoSource, format with { Channels = 2 })]
+                : sources.Select(source => EnsureStreamForFormat(source, format)).ToArray();
             foreach (var state in states)
             {
                 await StartStreamAsync(state);
+                if (IsStereo)
+                    _stereoWriter = new StereoAudioWriter(pcm =>
+                    {
+                        if (state.SessionDead) return;
+                        if (state.TryWrite(pcm)) state.LastPushTicks = Stopwatch.GetTimestamp();
+                    }, ex => FailStereo(state, $"Stereo audio input failed ({ex.GetType().Name})."));
             }
         }
         catch
@@ -152,9 +170,19 @@ public sealed class AzureSpeechService : IDisposable
     /// Sprechererkennung ist nur wirksam, wenn mindestens eine transkribierte
     /// Quelle sie nutzt.
     /// </summary>
+    internal bool IsStereo => _settings.Stereo && _settings.Transcription.Mic && _settings.Transcription.Speaker;
+
+    internal async Task WaitForStereoReadyAsync(CancellationToken stopping)
+    {
+        if (IsStereo && (!await _stereoReady.Task.WaitAsync(stopping) || Volatile.Read(ref _stereoFailed) != 0))
+            throw new InvalidOperationException("The stereo Azure session did not start.");
+    }
+
     internal bool EffectiveDiarization =>
-        (_settings.Transcription.Mic && _settings.Diarization.Mic)
-        || (_settings.Transcription.Speaker && _settings.Diarization.Speaker);
+        TranscriptionSources.Any(UsesDiarization);
+
+    private bool UsesDiarization(string source) =>
+        _config.Model == AzureSpeechModel.Standard && _settings.Diarization.IsEnabled(source);
 
     public void PushFrame(AudioFrame frame)
     {
@@ -163,6 +191,11 @@ public sealed class AzureSpeechService : IDisposable
         // keine Audioframes mehr zugespeist. Der pausierte Abschnitt
         // erscheint deshalb nicht im Transkript.
         if (_paused || _stopping) return;
+        if (IsStereo)
+        {
+            _stereoWriter?.Add(frame);
+            return;
+        }
         try
         {
             if (_firstFrameLogged.Add(frame.Source))
@@ -224,7 +257,7 @@ public sealed class AzureSpeechService : IDisposable
         await _streamLifecycle.WaitAsync(stopping);
         try
         {
-            if (_stopping || _format is null) return Array.Empty<string>();
+            if (IsStereo || _stopping || _format is null) return Array.Empty<string>();
             var restarted = new List<string>();
             foreach (var source in _streams.Where(pair => pair.Value.SessionDead).Select(pair => pair.Key).ToArray())
             {
@@ -270,6 +303,7 @@ public sealed class AzureSpeechService : IDisposable
             Logger.Info("azure", "stopping", $"{_streams.Count} active stream(s) are being stopped.");
             try
             {
+                if (_stereoWriter is { } writer) await writer.CompleteAsync();
                 await Task.WhenAll(_streams.Values.Select(state => Task.Run(
                     () => FinalizeStreamAsync(state, requireCleanStop, deadline))));
             }
@@ -291,27 +325,39 @@ public sealed class AzureSpeechService : IDisposable
         if (_speechConfig is null) throw new InvalidOperationException();
         if (_streams.TryGetValue(source, out var existing)) return existing;
 
-        var audioFormat = AudioStreamFormat.GetWaveFormatPCM(
+        using var audioFormat = AudioStreamFormat.GetWaveFormatPCM(
             (uint)format.SampleRate,
             (byte)format.BitsPerSample,
             (byte)format.Channels);
+        var mode = GetRecognitionMode(source);
         var pushStream = AudioInputStream.CreatePushStream(audioFormat);
-        var audioConfig = AudioConfig.FromStreamInput(pushStream);
-        var autoDetect = AutoDetectSourceLanguageConfig.FromLanguages(GetLidCandidates());
-        var useConversation = GetRecognitionMode(source) == "conversationTranscriber";
+        Recognizer native;
+        try
+        {
+            using var audioConfig = AudioConfig.FromStreamInput(pushStream);
+            var autoDetect = IsStereo ? null : SpeechConfiguration.CreateLanguageDetection(_config.Model, _settings.Language);
+            native = mode == "conversationTranscriber"
+                ? autoDetect is null ? new ConversationTranscriber(_speechConfig, audioConfig)
+                    : new ConversationTranscriber(_speechConfig, autoDetect, audioConfig)
+                : SpeechConfiguration.CreateRecognizer(_speechConfig, audioConfig, autoDetect);
+        }
+        catch
+        {
+            pushStream.Dispose();
+            throw;
+        }
 
         Logger.Info(
             "azure",
             "stream_create",
-            $"{useConversation} created for {source} (sampleRate={format.SampleRate}, " +
+            $"{mode} created for {source} (sampleRate={format.SampleRate}, " +
             $"bits={format.BitsPerSample}, channels={format.Channels}).");
 
-        if (useConversation)
+        var state = new StreamState(native, pushStream, mode, source);
+        AttachCommonDiagnostics(native, state);
+        if (native is ConversationTranscriber recognizer)
         {
-            var recognizer = new ConversationTranscriber(_speechConfig, autoDetect, audioConfig);
-            var state = new StreamState(recognizer, pushStream, "conversationTranscriber", source);
-            AttachCommonDiagnostics(recognizer, state);
-            recognizer.Transcribing += (_, e) => state.Drain.Emit(() =>
+            if (!IsStereo) recognizer.Transcribing += (_, e) => state.Drain.Emit(() =>
             {
                 var text = e.Result?.Text?.Trim();
                 if (!string.IsNullOrEmpty(text))
@@ -320,38 +366,33 @@ public sealed class AzureSpeechService : IDisposable
             });
             recognizer.Transcribed += (_, e) => state.Drain.Emit(() =>
             {
-                var text = e.Result?.Text?.Trim();
-                if (!string.IsNullOrEmpty(text))
+                if (IsStereo) EmitStereoFinal(state, e.Result, e.Result?.SpeakerId);
+                else if (e.Result?.Text?.Trim() is { Length: > 0 } text)
                     EmitTranscript(source, text, "final", 0.9, e.Result?.SpeakerId,
                         ExtractConversationLanguage(e.Result), state.ResolveSessionId());
             });
             recognizer.Canceled += (_, e) => HandleCanceled(state, e.Reason, e.ErrorCode, e.ErrorDetails);
-            _streams[source] = state;
-            return state;
         }
-        else
+        else if (native is SpeechRecognizer speechRecognizer)
         {
-            var recognizer = new SpeechRecognizer(_speechConfig, autoDetect, audioConfig);
-            var state = new StreamState(recognizer, pushStream, "speechRecognizer", source);
-            AttachCommonDiagnostics(recognizer, state);
-            recognizer.Recognizing += (_, e) => state.Drain.Emit(() =>
+            if (!IsStereo) speechRecognizer.Recognizing += (_, e) => state.Drain.Emit(() =>
             {
                 var text = e.Result?.Text?.Trim();
                 if (!string.IsNullOrEmpty(text))
                     EmitTranscript(source, text, "interim", 0.8, source == SourceMic ? "self" : "guest",
                         ExtractSpeechLanguage(e.Result), state.ResolveSessionId());
             });
-            recognizer.Recognized += (_, e) => state.Drain.Emit(() =>
+            speechRecognizer.Recognized += (_, e) => state.Drain.Emit(() =>
             {
-                var text = e.Result?.Text?.Trim();
-                if (!string.IsNullOrEmpty(text))
+                if (IsStereo) EmitStereoFinal(state, e.Result, null);
+                else if (e.Result?.Text?.Trim() is { Length: > 0 } text)
                     EmitTranscript(source, text, "final", 0.9, source == SourceMic ? "self" : "guest",
                         ExtractSpeechLanguage(e.Result), state.ResolveSessionId());
             });
-            recognizer.Canceled += (_, e) => HandleCanceled(state, e.Reason, e.ErrorCode, e.ErrorDetails);
-            _streams[source] = state;
-            return state;
+            speechRecognizer.Canceled += (_, e) => HandleCanceled(state, e.Reason, e.ErrorCode, e.ErrorDetails);
         }
+        _streams[source] = state;
+        return state;
     }
 
     private async Task StartStreamAsync(StreamState state)
@@ -397,7 +438,7 @@ public sealed class AzureSpeechService : IDisposable
                 }
             }
         }
-        finally { state.RecognizerBase.Dispose(); }
+        finally { state.Dispose(); }
         if (requireDrain && (state.Drain.Failed || (state.StartAttempted && !state.Started)))
             throw new InvalidOperationException($"Azure recognition did not end cleanly ({state.Mode}/{state.Source}).");
         Logger.Info("azure", "stream_closed", $"Recognizer closed (mode={state.Mode}, started={state.Started}).");
@@ -407,8 +448,14 @@ public sealed class AzureSpeechService : IDisposable
     {
         recognizer.SessionStarted += (_, e) =>
         {
+            if (IsStereo && Interlocked.Exchange(ref _stereoSessionStarted, 1) != 0)
+            {
+                FailStereo(state, "The stereo Azure session restarted unexpectedly. Start a new recording.");
+                return;
+            }
             state.Drain.OnSessionStarted();
             state.OnSessionStarted(e.SessionId);
+            if (IsStereo) _stereoReady.TrySetResult(true);
             Logger.Info("azure", "session_start",
                 $"Session started (source={state.Source}, mode={state.Mode}, session={e.SessionId}).");
         };
@@ -417,7 +464,11 @@ public sealed class AzureSpeechService : IDisposable
             state.Drain.OnSessionStopped();
             Logger.Info("azure", "session_stop",
                 $"Session stopped (source={state.Source}, mode={state.Mode}, session={e.SessionId}).");
-            if (!_stopping) state.MarkDead();
+            if (!_stopping)
+            {
+                if (IsStereo) FailStereo(state, "The stereo Azure session ended unexpectedly. Start a new recording.");
+                else state.MarkDead();
+            }
         };
         recognizer.SpeechStartDetected += (_, e) =>
             Logger.Info("azure", "speech_start",
@@ -442,18 +493,73 @@ public sealed class AzureSpeechService : IDisposable
             details, "auth|token|key|forbidden|unauthorized|401|403",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         var code = authRelated ? "AZURE_AUTH_FAILED" : "AZURE_RECOGNIZER_FAILED";
+        if (IsStereo)
+        {
+            FailStereo(state, $"Stereo recognition canceled ({reason}, {errorCode}). {details}", code);
+            return;
+        }
         Logger.Error("AZURE_CANCELED",
             $"Recognizer canceled (source={source}, mode={mode}, reason={reason}, " +
             $"errorCode={errorCode}): {details}");
         Logger.Event("transcript:error", new { code, message = $"[{source}/{mode}] {details}" });
     }
 
+    private void FailStereo(StreamState state, string message, string code = "AZURE_RECOGNIZER_FAILED")
+    {
+        state.Drain.Fail();
+        state.MarkDead();
+        _stereoReady.TrySetResult(false);
+        if (Interlocked.Exchange(ref _stereoFailed, 1) != 0) return;
+        Logger.Event("transcript:error", new { code, message });
+        if (!_stopping) _stopOnStereoFailure?.Invoke();
+    }
+
+    internal static string? ResolveStereoSource(int channel, string json)
+    {
+        // A numeric getter alone may default to zero for a result with no channel.
+        if (channel is < 0 or > 1 || string.IsNullOrEmpty(json)) return null;
+        try
+        {
+            using var response = System.Text.Json.JsonDocument.Parse(json);
+            if (response.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                !response.RootElement.TryGetProperty("Channel", out var value) ||
+                value.ValueKind != System.Text.Json.JsonValueKind.Number ||
+                !value.TryGetInt32(out var actual) || actual != channel) return null;
+            return channel == 0 ? SourceMic : SourceSpeaker;
+        }
+        catch (System.Text.Json.JsonException) { return null; }
+    }
+
+    private void EmitStereoFinal(StreamState state, SpeechRecognitionResult? result, string? speaker)
+    {
+        if (state.SessionDead || result?.Reason != ResultReason.RecognizedSpeech ||
+            result.Text?.Trim() is not { Length: > 0 } text) return;
+        string? source;
+        try
+        {
+            source = ResolveStereoSource(result.Channel, result.Properties.GetProperty(PropertyId.SpeechServiceResponse_JsonResult));
+        }
+        catch (Exception ex)
+        {
+            FailStereo(state, $"Could not read Azure stereo channel metadata ({ex.GetType().Name}).");
+            return;
+        }
+        if (source is null)
+        {
+            FailStereo(state, "Azure returned a stereo result without verifiable channel metadata. No source was guessed.");
+            return;
+        }
+        EmitTranscript(source, text, "final", 0.9, speaker,
+            _config.Model == AzureSpeechModel.Standard ? _settings.Language : ExtractSpeechLanguage(result),
+            state.ResolveSessionId());
+    }
+
     internal string GetRecognitionMode(string source) =>
-        _settings.Diarization.IsEnabled(source) ? "conversationTranscriber" : "speechRecognizer";
+        (source == StereoSource ? EffectiveDiarization : UsesDiarization(source)) ? "conversationTranscriber" : "speechRecognizer";
 
     internal void EmitTranscript(string source, string text, string state, double confidence, string? speaker, string? language, string? sessionId = null)
     {
-        var diarized = _settings.Diarization.IsEnabled(source);
+        var diarized = UsesDiarization(source);
         if (diarized && string.IsNullOrWhiteSpace(speaker))
         {
             lock (_missingSpeakerIdLogged)
@@ -477,7 +583,7 @@ public sealed class AzureSpeechService : IDisposable
         var captureLatencyMs = 0.0;
         var sidecarToPushMs = 0.0;
         var azureToEventMs = 0.0;
-        if (_streams.TryGetValue(source, out var streamState))
+        if (_streams.TryGetValue(IsStereo ? StereoSource : source, out var streamState))
         {
             captureLatencyMs = streamState.LastCaptureLatencyMs;
             sidecarToPushMs = streamState.LastSidecarToPushMs;
@@ -535,11 +641,6 @@ public sealed class AzureSpeechService : IDisposable
         }
         catch { return null; }
     }
-
-    private string[] GetLidCandidates()
-    {
-        return SpeechConfiguration.LidCandidates(_settings.Language?.Trim() ?? string.Empty);
-    }
 }
 
 // ---------------- supporting types ----------------
@@ -549,7 +650,8 @@ public sealed record AzureSpeechConfig(
     string Region,
     string SpeechKey,
     bool InterimResults,
-    AzureProxyConfig? Proxy);
+    AzureProxyConfig? Proxy,
+    AzureSpeechModel Model = AzureSpeechModel.Standard);
 
 public sealed record AzureProxyConfig(string Host, int Port, string? Username, string? Password);
 
@@ -557,6 +659,7 @@ public sealed record UserSettings(string Language, DeviceIds Devices)
 {
     public TranscriptionSettings Transcription { get; init; } = new();
     public DiarizationSettings Diarization { get; init; } = new();
+    public bool Stereo { get; init; }
 }
 
 /// <summary>
@@ -598,7 +701,8 @@ public sealed record AudioFrame(
     /// <summary>T-502: Stopwatch-Zeitpunkt, an dem der Frame im Sidecar ankam.</summary>
     long CapturedAtTicks = 0,
     /// <summary>T-502: Alter des WASAPI-Puffers beim Capture (ms, von NAudio).</summary>
-    int CaptureLatencyMs = 0);
+    int CaptureLatencyMs = 0,
+    long? PacketQpc100Ns = null);
 
 internal sealed class StreamState
 {
@@ -632,6 +736,12 @@ internal sealed class StreamState
             PushStream.Close();
             _inputClosed = true;
         }
+    }
+
+    public void Dispose()
+    {
+        try { RecognizerBase.Dispose(); }
+        finally { PushStream.Dispose(); }
     }
 
     /// <summary>T-502: Zeitpunkt des letzten Pushes in den Azure-Stream.</summary>

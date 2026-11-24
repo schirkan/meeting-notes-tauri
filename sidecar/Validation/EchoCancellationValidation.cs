@@ -165,9 +165,9 @@ internal static class EchoCancellationValidation
         check(ReferenceEquals(filter.ProcessMic(valid, At(220 * Frame)), valid) && filter.State != EchoCancellation.Phase.Active,
             "Unflagged reference gap must not bridge old and new samples");
         Feed(filter, 225, 250);
-        valid = Mic(258 * Frame);
-        for (var n = 250; n < 258; n++) _ = filter.ProcessMic(Mic(n * Frame), At(n * Frame));
-        check(ReferenceEquals(filter.ProcessMic(valid, At(258 * Frame)), valid) && filter.State == EchoCancellation.Phase.Bypass,
+        valid = Mic(260 * Frame);
+        for (var n = 250; n < 260; n++) _ = filter.ProcessMic(Mic(n * Frame), At(n * Frame));
+        check(ReferenceEquals(filter.ProcessMic(valid, At(260 * Frame)), valid) && filter.State == EchoCancellation.Phase.Bypass,
             "Stale reference cannot stay active after the loopback stops producing packets");
         Feed(filter, 259, 280);
         var oversized = new byte[Rate / 5 + 2];
@@ -196,6 +196,35 @@ internal static class EchoCancellationValidation
         valid = Mic(355 * Frame);
         check(filter.State == EchoCancellation.Phase.Off && ReferenceEquals(filter.ProcessMic(valid, At(355 * Frame)), valid),
             "Stop is terminal and ignores later capture callbacks and Resume");
+
+        var distantFilter = new EchoCancellation(Rate);
+        const int DistantDelay = Rate * 225 / 1000 + 1;
+        before = after = 0;
+        for (var n = 0; n < 100; n++)
+        {
+            var sample = n * Frame;
+            var mic = Mic(sample, echo: 1.5, shift: DistantDelay);
+            distantFilter.AddReference(Far(sample), At(sample));
+            var output = distantFilter.ProcessMic(mic, At(sample));
+            if (n < 40) continue;
+            before += Energy(mic);
+            after += Energy(output);
+        }
+        check(after < 0.06 * before, "AEC attenuates echoes beyond 200 ms with gain above 1.25");
+
+        var reflectionFilter = new EchoCancellation(Rate);
+        before = after = 0;
+        for (var n = 0; n < 200; n++)
+        {
+            var sample = n * Frame;
+            var mic = Pcm(Build(sample, Frame, p => p < 823 ? 0 : 0.55 * far[p - Delay] + 0.50 * far[p - 823]));
+            reflectionFilter.AddReference(Far(sample), At(sample));
+            var output = reflectionFilter.ProcessMic(mic, At(sample));
+            if (n < 20) continue;
+            before += Energy(mic);
+            after += Energy(output);
+        }
+        check(after > 0.20 * before && after < 0.75 * before, "AEC attenuates a near-equal two-path echo without muting Mic");
 
         // Independent packet sizes and phase, an origin offset, timestamp jitter,
         // gradual sample shift (about 333 ppm), and independent clock drift.

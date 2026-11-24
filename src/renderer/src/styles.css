@@ -183,7 +183,8 @@ summary::-webkit-details-marker { display: none; }
 .meta-path { margin: 0; color: var(--muted); font-size: 10px; user-select: text; overflow-wrap: anywhere; }
 .settings-block { display: grid; gap: 17px; margin: 0 0 18px; }
 .settings-dialog .settings-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.settings-dialog .language-field { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 17px; align-items: center; }
+.speech-model-field, .speech-model-hint { grid-column: 1 / -1; }
+.settings-dialog :is(.language-field, .audio-mode-field) { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 17px; align-items: center; }
 .about-dialog { max-width: 450px; }
 .about-content { display: flex; align-items: center; gap: 28px; }
 .about-content img { width: 128px; height: 128px; flex-shrink: 0; }

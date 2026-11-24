@@ -30,7 +30,7 @@ import { buildTranscriptMarkdown } from '@shared/transcript-markdown'
 export type ConnectivityResult = {
   probeUrl: string
   reachable: boolean
-  httpsReachable: boolean
+  httpsReachable?: boolean
   speechReachable: boolean
   httpStatus?: number
   httpStatusText?: string

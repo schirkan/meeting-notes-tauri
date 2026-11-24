@@ -23,8 +23,10 @@ Konfigurationsmodell aus `../meeting-notes` übernehmen und in der Windows-Varia
 - Pfade: `MeetingNotes.config.json` direkt neben der EXE (Release/Portable), im Repository-Root (Dev). Keine Migration nach AppData und kein AppData-Fallback.
 - Die Abschnitte werden getrennt gelesen und geschrieben: Das Speichern der Azure-Konfiguration verwirft die User-Settings nicht und umgekehrt; ein fehlerhafter Abschnitt verfällt nicht über den anderen.
 - Azure-Key bleibt direkt im `speechKey`-Feld (wie in `meeting-notes`). Automatischer Startup-Dialog basiert auf lokaler Pflichtfeld-/Proxy-Validierung, nicht auf einer Live-Prüfung des Keys.
+- `azure.model` ist optional (`standard` bei fehlendem Feld oder `mai-transcribe-2-streaming`); unbekannte Werte machen den Azure-Abschnitt ungueltig. MAI verwendet Region und Key ohne Standard-Endpunkt. Ein vorhandener Endpunkt bleibt beim Modellwechsel gespeichert. Details siehe [T-520](./T-520-mai-transcribe-streaming-feature.md).
 - Legacy-Pfad `azure.fixed.json` ist obsolet und wird in Doku explizit nicht erwähnt.
-- Sidecar-CLI: `--diarization-mic true|false` und `--diarization-speaker true|false`. Die Optionen steuern je Quelle Transcriber versus Recognizer; Details siehe [T-205](./T-205-continuous-lid-und-diarization-in-c-sharp.md).
+- `user.transcription.audioMode` ist optional (`dual-mono` als Standard, `stereo` als Opt-in). Fehlende und ungueltige Werte fallen auf `dual-mono` zurueck; andere Optionen bleiben erhalten. Bei einer Quelle bleibt der gespeicherte Wert erhalten, verwendet wird aber Mono. Details siehe [T-521](./T-521-mai-transcribe-mehrkanal-sidecar.md).
+- Sidecar-CLI: `--diarization-mic true|false` und `--diarization-speaker true|false`. In Standard-Mono steuern sie Transcriber versus Recognizer je Quelle; in Standard-Stereo aktiviert mindestens eine Option den gemeinsamen Transcriber. Ausgabe von Sprecher-IDs bleibt je Quelle waehlbar. MAI ignoriert beide Optionen.
 - Konfigurationsnormalisierung und alle vier Boolean-Kombinationen sind in [Unit-Tests](../tests/config-utils.test.mjs) und drei Rust-Tests abgedeckt.
 
 ## Log

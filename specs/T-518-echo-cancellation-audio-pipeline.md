@@ -51,7 +51,7 @@ Cloud-Verarbeitung und kein Roh-Audio in IPC, Logs oder Dateien.
 
 ## Fehleranalyse (24.11.2026)
 
-Der Ein-Tap-Filter in `EchoCancellation.cs` verlangt zum Einrasten eine
+Der damalige Ein-Tap-Filter in `EchoCancellation.cs` verlangte zum Einrasten eine
 Korrelation von mindestens 0,84 zu **einer** verzoegerten Kopie. Ein direkter
 Schallpfad plus eine aehnlich starke Reflexion koennen jeweils darunter liegen.
 Dann bleibt die Phase `WarmingUp`, und die App schickt das Mikrofon unveraendert
@@ -68,6 +68,26 @@ Speaker-Endpunkt und `recorder_mode` abgleichen und bei reiner Gegenstelle
 `echo_cancellation` im **Debug log** pruefen. Dauerhaft `Bypass` deutet auf
 Referenz-/Timingprobleme; dauerhaft `WarmingUp` auf fehlende stabile Korrelation.
 Ein Hardware-Nachweis und die A/B-Abnahme bleiben in [T-519](./T-519-echo-cancellation-alpha-abnahme.md) offen.
+
+## Gelockerte Alpha-Schwellen (24.11.2026)
+
+| Parameter | Vorher | Neu |
+|---|---:|---:|
+| Mindestkorrelation (Einrasten / aktiv / Gain-Update) | 0,84 / 0,65 / 0,92 | 0,70 / 0,55 / 0,87 |
+| Absoluter Gain / Verhaeltnis zum Modell | 0,03–1,25 / 0,70–1,35 | 0,015–1,75 / 0,55–1,60 |
+| Delay-Suche / Trackingradius | −20 bis +200 ms / ±3 ms | −30 bis +250 ms / ±5 ms |
+| Zeitstempelabstand Mic minus Referenz | −100 bis +75 ms | −125 bis +100 ms |
+| Suchpause / Einrastdauer / Tracking-Verlust | 40 / 30 / 80 ms | 20 / 20 / 150 ms |
+| Mindest-RMS Mic und Referenz (PCM-Einheiten) | 32 | 24 |
+
+Die Alpha bleibt optional und bearbeitet nur Mic. Schutz fuer Clipping,
+fehlende Referenz, Paketluecken und ungueltige Zeitmarken bleibt erhalten.
+Die Subtraktion ist auf 80 % des kleineren absoluten Gains aus Modell und
+aktuellem Block begrenzt, damit der gelockerte Gain-Abgleich nicht mehr als
+den im Block geschaetzten Echoanteil entfernt. Haertere Suche kann CPU-Last
+und Fehlzuordnungen erhoehen. Synthetische Regressionen pruefen einen
+225-ms-Pfad mit Gain 1,5 und zwei fast gleich starke Pfade; reale
+Sprachqualitaet bleibt in [T-519](./T-519-echo-cancellation-alpha-abnahme.md) offen.
 
 ## Done When
 - [x] Managed-Engine ohne zusaetzliche native Abhaengigkeit integriert. Beleg: `sidecar/EchoCancellation.cs`; die Integration erfordert keine neuen Pakete.

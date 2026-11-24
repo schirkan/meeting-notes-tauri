@@ -48,6 +48,8 @@ pub struct SidecarOptions {
     pub speech_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub speech_region: Option<String>,
+    #[serde(default)]
+    pub speech_model: crate::settings::AzureSpeechModel,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub speech_endpoint: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -77,6 +79,9 @@ fn transcription_arguments(settings: &crate::settings::TranscriptionSettings) ->
         "--transcription-speaker".into(), settings.speaker.to_string()];
     if settings.echo_cancellation && settings.mic && settings.speaker {
         args.extend(["--echo-cancellation".to_string(), "true".to_string()]);
+    }
+    if settings.audio_mode == crate::settings::AudioMode::Stereo && settings.mic && settings.speaker {
+        args.extend(["--audio-mode".into(), "stereo".into()]);
     }
     args
 }
@@ -116,12 +121,21 @@ pub async fn diagnose_speech<R: Runtime>(
     app: &AppHandle<R>,
     config: &crate::settings::AzureConfig,
     language: &str,
+    audio: &crate::settings::TranscriptionSettings,
+    diarization: &crate::settings::DiarizationSettings,
 ) -> Result<SpeechConnectivityResult, String> {
     let exe_path = resolve_sidecar_path(app).map_err(|e| e.to_string())?;
     let command = app.shell().command(exe_path.to_string_lossy().as_ref())
         .args(["--test-connectivity", "--speech-region", &config.region,
-            "--speech-endpoint", &config.endpoint, "--language", language])
+            "--speech-model", config.model.as_str(), "--language", language])
+        .args(transcription_arguments(audio))
+        .args(diarization_arguments(diarization))
         .env("MEETING_NOTES_SPEECH_KEY", &config.speech_key);
+    let command = if config.model == crate::settings::AzureSpeechModel::Standard {
+        command.args(["--speech-endpoint", &config.endpoint])
+    } else {
+        command
+    };
     let command = apply_proxy(command, config.proxy.as_ref()).map_err(|e| e.to_string())?;
     let (mut rx, child) = command.spawn().map_err(|e| e.to_string())?;
     let result = tokio::time::timeout(Duration::from_secs(45), async {
@@ -181,7 +195,7 @@ mod connectivity_tests {
         for mic in [true, false] {
             for speaker in [true, false] {
                 for echo_cancellation in [true, false] {
-                    let settings = crate::settings::TranscriptionSettings { mic, speaker, echo_cancellation };
+                    let settings = crate::settings::TranscriptionSettings { mic, speaker, echo_cancellation, ..Default::default() };
                     let args = transcription_arguments(&settings);
                     assert_eq!(&args[..4],
                         ["--transcription-mic".to_string(), mic.to_string(),
@@ -197,6 +211,16 @@ mod connectivity_tests {
         let options: SidecarOptions = serde_json::from_str(r#"{"sampleRate":16000}"#).unwrap();
         assert_eq!(transcription_arguments(&options.transcription),
             ["--transcription-mic", "true", "--transcription-speaker", "true"]);
+    }
+
+    #[test]
+    fn stereo_requires_both_sources_without_changing_the_saved_preference() {
+        for (mic, speaker) in [(true, true), (true, false), (false, true)] {
+            let settings = crate::settings::TranscriptionSettings {
+                mic, speaker, audio_mode: crate::settings::AudioMode::Stereo, ..Default::default()
+            };
+            assert_eq!(transcription_arguments(&settings).ends_with(&["--audio-mode".into(), "stereo".into()]), mic && speaker);
+        }
     }
 
     #[test]
@@ -259,7 +283,8 @@ pub async fn start<R: Runtime>(
     let sample_rate = options.sample_rate.clamp(8000, 48000);
     command = command.args(["--sample-rate".to_string(), sample_rate.to_string()])
         .args(transcription_arguments(&options.transcription))
-        .args(diarization_arguments(&options.diarization));
+        .args(diarization_arguments(&options.diarization))
+        .args(["--speech-model", options.speech_model.as_str()]);
 
     if let Some(language) = options.language.as_deref() {
         command = command.args(["--language".to_string(), language.into()]);

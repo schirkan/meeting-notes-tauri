@@ -30,6 +30,14 @@ public static class ArgsParser
         return new TranscriptionSettings(Enabled("--transcription-mic"), Enabled("--transcription-speaker"));
     }
 
+    public static bool ParseStereo(IReadOnlyDictionary<string, string?> args, TranscriptionSettings sources) =>
+        args.GetValueOrDefault("--audio-mode") switch
+        {
+            null or "dual-mono" => false,
+            "stereo" => sources.Mic && sources.Speaker,
+            _ => throw new ArgumentException("--audio-mode must be dual-mono or stereo.")
+        };
+
     public static bool ParseEchoCancellation(IReadOnlyDictionary<string, string?> args, TranscriptionSettings sources)
     {
         const string key = "--echo-cancellation";

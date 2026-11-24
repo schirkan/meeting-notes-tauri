@@ -22,6 +22,7 @@ type SettingsPanelProps = {
   devices: AudioDeviceSnapshot
   setSettings: React.Dispatch<React.SetStateAction<UserSettings>>
   audioOnly?: boolean
+  useMaiModel?: boolean
   onChooseDirectory: () => Promise<void>
   choosingDirectory?: boolean
 }
@@ -33,6 +34,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     devices,
     setSettings,
     audioOnly = false,
+    useMaiModel = false,
     onChooseDirectory,
     choosingDirectory = false
   } = props
@@ -50,6 +52,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
       <div className={audioOnly ? 'settings-block audio-settings-grid' : 'settings-block'}>
         {audioOnly && <AudioSources
           statusRunning={statusRunning}
+          sourceLabelsOnly={useMaiModel}
           settings={settings}
           devices={devices}
           setSettings={setSettings}
@@ -114,9 +117,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
     {!audioOnly && <section className="panel settings">
       <div className="panel-header"><h2>Transcription</h2></div>
       <div className="settings-block">
-          <label className="language-field" title="Choose the language Azure Speech should recognize">
+          <label className="language-field" title={useMaiModel ? 'MAI Transcribe detects the language automatically' : 'Choose the language Azure Speech should recognize'}>
             <span className="field-caption"><Icon name="flag" />Primary language</span>
-            <select value={settings.language} disabled={statusRunning}
+            <select value={settings.language} disabled={statusRunning || useMaiModel}
               onChange={(event) => {
                 const language = event.currentTarget.value
                 setSettings((prev) => ({ ...prev, language }))
@@ -170,6 +173,23 @@ export function SettingsPanel(props: SettingsPanelProps) {
               disabled={statusRunning || !settings.transcript.markdownExport.enabled || choosingDirectory}
               aria-label="Choose save folder" title="Choose folder"><Icon name="folder" /></button>
           </div>
+          <label className="audio-mode-field full-field" title="Choose one stereo session or separate mono sessions for the next transcription.">
+            <span className="field-caption">Audio stream mode</span>
+            <select value={settings.transcription.audioMode} disabled={statusRunning}
+              aria-describedby="audio-stream-mode-hint"
+              onChange={(event) => {
+                const audioMode = event.currentTarget.value === 'stereo' ? 'stereo' : 'dual-mono'
+                setSettings((prev) => ({ ...prev, transcription: { ...prev.transcription, audioMode } }))
+              }}>
+              <option value="dual-mono">Dual mono (separate sessions)</option>
+              <option value="stereo">Stereo mix (one session{useMaiModel ? ', experimental' : ''})</option>
+            </select>
+          </label>
+          <p className="meta full-field" id="audio-stream-mode-hint">
+            Stereo keeps microphone and speaker loopback on separate channels and shows final results only.
+            With one source enabled, audio stays mono. Applies to the next transcription.
+            {useMaiModel && ' MAI stereo is experimental and does not automatically fall back to dual mono.'}
+          </p>
           <label className="checkbox-field full-field" title="Reduces speaker audio picked up by your microphone. Requires both microphone and speaker loopback. Applies to the next transcription.">
             <input
               type="checkbox"

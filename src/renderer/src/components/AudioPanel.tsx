@@ -4,6 +4,7 @@ import { Icon } from './Icon'
 
 type AudioSourcesProps = {
   statusRunning: boolean
+  sourceLabelsOnly?: boolean
   settings: UserSettings
   devices: AudioDeviceSnapshot
   setSettings: React.Dispatch<React.SetStateAction<UserSettings>>
@@ -16,7 +17,7 @@ type AudioSourcesProps = {
  * settings dialog, so both places always show the same controls.
  */
 export function AudioSources(props: AudioSourcesProps) {
-  const { statusRunning, settings, devices, setSettings } = props
+  const { statusRunning, sourceLabelsOnly = false, settings, devices, setSettings } = props
 
   return (
     <>
@@ -54,16 +55,16 @@ export function AudioSources(props: AudioSourcesProps) {
           </div>
         </div>
 
-        <label className="checkbox-field source-diarization" title="Distinguish speakers in the microphone transcript">
+        <label className="checkbox-field source-diarization" title={sourceLabelsOnly ? 'Not available with MAI Transcribe' : 'Distinguish speakers in the microphone transcript'}>
           <input
             type="checkbox"
             aria-label="Speaker recognition for microphone"
-            checked={settings.diarization.mic}
+            checked={!sourceLabelsOnly && settings.diarization.mic}
             onChange={(event) => {
               const mic = event.currentTarget.checked
               setSettings((prev) => ({ ...prev, diarization: { ...prev.diarization, mic } }))
             }}
-            disabled={statusRunning || !settings.transcription.mic}
+            disabled={statusRunning || sourceLabelsOnly || !settings.transcription.mic}
           />
           <span>Speaker recognition</span>
         </label>
@@ -103,16 +104,16 @@ export function AudioSources(props: AudioSourcesProps) {
           </div>
         </div>
 
-        <label className="checkbox-field source-diarization" title="Distinguish speakers in the speaker loopback transcript">
+        <label className="checkbox-field source-diarization" title={sourceLabelsOnly ? 'Not available with MAI Transcribe' : 'Distinguish speakers in the speaker loopback transcript'}>
           <input
             type="checkbox"
             aria-label="Speaker recognition for speaker loopback"
-            checked={settings.diarization.speaker}
+            checked={!sourceLabelsOnly && settings.diarization.speaker}
             onChange={(event) => {
               const speaker = event.currentTarget.checked
               setSettings((prev) => ({ ...prev, diarization: { ...prev.diarization, speaker } }))
             }}
-            disabled={statusRunning || !settings.transcription.speaker}
+            disabled={statusRunning || sourceLabelsOnly || !settings.transcription.speaker}
           />
           <span>Speaker recognition</span>
         </label>

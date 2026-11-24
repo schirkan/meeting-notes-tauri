@@ -264,7 +264,7 @@ test('echo cancellation can be saved with one source and is locked while running
     await dialog.getByRole('button', { name: 'Save', exact: true }).click()
     await dialog.waitFor({ state: 'hidden' })
     assert.deepEqual(await page.evaluate(() => window.lastSavedSettings.transcription), {
-      mic: true, speaker: false, echoCancellation: true
+      mic: true, speaker: false, echoCancellation: true, audioMode: 'dual-mono'
     })
 
     const speaker = page.getByRole('checkbox', { name: 'Transcribe speaker loopback', exact: true })
@@ -579,7 +579,11 @@ test('settings shows all sections without navigation and preserves two-column la
     }
     await footer.getByRole('button', { name: 'Test connection', exact: true }).click()
     await page.getByRole('dialog', { name: 'Connection test', exact: true }).locator('tbody tr').waitFor()
-    assert.deepEqual(await page.evaluate(() => window.lastConnectivityPayload), { ...validConfig, proxy: proxyConfig, language: 'de-DE' })
+    assert.deepEqual(await page.evaluate(() => window.lastConnectivityPayload), {
+      ...validConfig, proxy: proxyConfig, language: 'de-DE',
+      transcription: { mic: true, speaker: true, echoCancellation: false, audioMode: 'dual-mono' },
+      diarization: { mic: true, speaker: true }
+    })
     await page.getByRole('dialog', { name: 'Connection test', exact: true }).getByRole('button', { name: 'Close dialog', exact: true }).click()
     await proxy.getByLabel('Proxy Host', { exact: true }).fill('')
     await dialog.getByRole('button', { name: 'Save', exact: true }).click()
@@ -644,6 +648,62 @@ test('settings offers a single save button in the footer that persists config an
     assert.equal(await page.evaluate(() => window.lastSavedSettings.language), 'en-US')
     assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), validConfig)
     await dialog.waitFor({ state: 'hidden' })
+  } finally {
+    await page.close()
+  }
+})
+
+test('MAI selection tests the unsaved draft and preserves Standard controls when switching back', async () => {
+  const model = 'mai-transcribe-2-streaming'
+  const page = await openApp({
+    configState: { exists: true, path: 'test-config', config: validConfig },
+    connectivityResult: {
+      reachable: true, speechReachable: true, latencyMs: 10,
+      steps: [{ step: 'mai_transcribe_wss_stereo', status: 'ok', detail: 'Speech connection ready' }]
+    }
+  })
+  try {
+    await page.getByRole('button', { name: 'Open settings dialog' }).click()
+    const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+    const modelSelect = settings.getByLabel('Transcription model')
+    const audioMode = settings.getByLabel('Audio stream mode')
+    const endpoint = settings.getByRole('textbox', { name: 'Endpoint', exact: true })
+    const language = settings.locator('.language-field').getByRole('combobox')
+    const speakerRecognition = page.getByRole('checkbox', { name: 'Speaker recognition for microphone', exact: true })
+    assert.equal(await modelSelect.inputValue(), 'standard')
+    assert.equal(await audioMode.inputValue(), 'dual-mono')
+    await modelSelect.selectOption(model)
+    await audioMode.selectOption('stereo')
+    assert.match(await settings.locator('#audio-stream-mode-hint').innerText(), /MAI stereo is experimental/)
+    assert.equal(await endpoint.isDisabled(), true)
+    assert.equal(await language.isDisabled(), true)
+    await settings.getByRole('button', { name: 'Test connection', exact: true }).click()
+
+    const connection = page.getByRole('dialog', { name: 'Connection test', exact: true })
+    await connection.getByText('Speech connection ready', { exact: true }).waitFor()
+    assert.match(await connection.innerText(), /HTTPS: not checked · Speech\/WSS: reachable/)
+    assert.equal(await page.evaluate(() => window.lastConnectivityPayload.model), model)
+    assert.equal(await page.evaluate(() => window.lastConnectivityPayload.transcription.audioMode), 'stereo')
+    assert.equal(await page.evaluate(() => window.lastSavedSettings), undefined)
+    assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
+    await connection.getByRole('button', { name: 'Close dialog', exact: true }).click()
+    await settings.getByRole('button', { name: 'Save', exact: true }).click()
+    await settings.waitFor({ state: 'hidden' })
+    assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), { ...validConfig, model })
+    assert.equal(await speakerRecognition.isDisabled(), true)
+
+    await reopenSettings(page)
+    assert.equal(await modelSelect.inputValue(), model)
+    assert.equal(await audioMode.inputValue(), 'stereo')
+    await modelSelect.selectOption('standard')
+    assert.equal(await endpoint.inputValue(), validConfig.endpoint)
+    assert.equal(await endpoint.isEnabled(), true)
+    assert.equal(await language.isEnabled(), true)
+    await settings.getByRole('button', { name: 'Save', exact: true }).click()
+    await settings.waitFor({ state: 'hidden' })
+    assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), validConfig)
+    assert.equal(await speakerRecognition.isEnabled(), true)
+    assert.equal(await speakerRecognition.isChecked(), true)
   } finally {
     await page.close()
   }

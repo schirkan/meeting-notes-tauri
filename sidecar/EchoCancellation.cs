@@ -279,7 +279,7 @@ internal sealed class EchoCancellation
             var revision = Volatile.Read(ref _historyRevision);
             var relativeTime = time - _referenceTime;
             if (_referenceTime == 0 || _writtenRevision != revision) return Outcome.ReferenceUnavailable;
-            if (relativeTime is > TimeSpan.TicksPerMillisecond * 75 or < -TimeSpan.TicksPerMillisecond * 100)
+            if (relativeTime is > TimeSpan.TicksPerMillisecond * 100 or < -TimeSpan.TicksPerMillisecond * 125)
                 return Outcome.ReferenceTimestampOffset;
             if (_readRevision != revision)
             {
@@ -304,11 +304,11 @@ internal sealed class EchoCancellation
         var active = _state == Phase.Active;
         if (_state == Phase.Bypass) _state = Phase.WarmingUp;
 
-        // Search 20 ms ahead (clock/driver offsets) to 200 ms behind. Once
-        // aligned, follow small changes rather than fitting to unrelated speech.
-        var radius = _rate * 3 / 1000;
-        var low = _matches == 0 ? -_rate / 50 : _delay - radius;
-        var high = _matches == 0 ? _rate / 5 : _delay + radius;
+        // Search 30 ms ahead (clock/driver offsets) to 250 ms behind. Once
+        // aligned, track locally rather than fitting to unrelated speech.
+        var radius = _rate * 5 / 1000;
+        var low = _matches == 0 ? -_rate * 30 / 1000 : _delay - radius;
+        var high = _matches == 0 ? _rate / 4 : _delay + radius;
         var from = Math.Max(nominal - high, _snapshotStart);
         var to = Math.Min(nominal - low, _snapshotStart + _snapshotLength - _block);
         double micPower = 0;
@@ -317,13 +317,14 @@ internal sealed class EchoCancellation
             if (sample is >= 32700 or <= -32700) return Outcome.MicClipped;
             micPower += (double)sample * sample;
         }
-        if (micPower < mic.Length * 32 * 32) return Outcome.MicQuiet;
+        const int minimumRms = 24;
+        if (micPower < mic.Length * minimumRms * minimumRms) return Outcome.MicQuiet;
         if (from > to) return Outcome.ReferenceWindowUnavailable;
         _searchCooldown -= newSamples;
         if (_matches == 0)
         {
             if (_searchCooldown > 0) return Outcome.SearchCooldown;
-            _searchCooldown = 4 * _block;
+            _searchCooldown = 2 * _block;
         }
 
         // Scan every possible lag with subsampled dot products; confirm the
@@ -334,7 +335,7 @@ internal sealed class EchoCancellation
         {
             var candidate = ReferenceAt(start);
             var (cross, power) = Compare(mic, candidate, 4);
-            if (power < mic.Length / 4 * 32 * 32) continue;
+            if (power < ((mic.Length + 3) / 4) * minimumRms * minimumRms) continue;
             var score = cross * cross / power;
             if (score > bestScore)
             {
@@ -351,9 +352,9 @@ internal sealed class EchoCancellation
             var estimate = cross / power;
             var delay = (int)(nominal - best);
             _diagnostics.Candidate(delay, Math.Sqrt(confidence));
-            if (!(confidence >= (active ? 0.65 * 0.65 : 0.84 * 0.84))) rejection = Outcome.LowCorrelation;
-            else if (Math.Abs(estimate) is not (>= 0.03 and <= 1.25)) rejection = Outcome.GainOutOfRange;
-            else if (_matches != 0 && estimate / _gain is not (>= 0.70 and <= 1.35)) rejection = Outcome.GainUnstable;
+            if (!(confidence >= (active ? 0.55 * 0.55 : 0.70 * 0.70))) rejection = Outcome.LowCorrelation;
+            else if (Math.Abs(estimate) is not (>= 0.015 and <= 1.75)) rejection = Outcome.GainOutOfRange;
+            else if (_matches != 0 && estimate / _gain is not (>= 0.55 and <= 1.60)) rejection = Outcome.GainUnstable;
             else
             {
                 _delay = delay;
@@ -361,15 +362,15 @@ internal sealed class EchoCancellation
                 // Freeze the gain on likely double talk; only subtract the
                 // independently learned echo estimate, never duck the Mic mix.
                 if (_matches == 0) _gain = estimate;
-                else if (confidence >= 0.92 * 0.92) _gain += 0.10 * (estimate - _gain);
+                else if (confidence >= 0.87 * 0.87) _gain += 0.10 * (estimate - _gain);
                 if (!active)
                 {
                     _matches += newSamples;
-                    if (_matches >= 3 * _block) _state = Phase.Active;
+                    if (_matches >= 2 * _block) _state = Phase.Active;
                     return Outcome.WarmingUp;
                 }
                 reference = candidate;
-                gain = 0.8 * _gain;
+                gain = Math.CopySign(0.8 * Math.Min(Math.Abs(_gain), Math.Abs(estimate)), _gain);
                 return Outcome.Filtered;
             }
         }
@@ -377,7 +378,7 @@ internal sealed class EchoCancellation
         // Silence/near-only audio is not a missing reference. After enough
         // unmatched blocks reassess delay, but always pass these blocks intact.
         _misses += newSamples;
-        if (!active || _misses >= 8 * _block) ResetMatch(Phase.WarmingUp);
+        if (!active || _misses >= 15 * _block) ResetMatch(Phase.WarmingUp);
         return rejection;
     }
 

@@ -63,7 +63,7 @@ test('window preferences preserve explicit values independently without changing
       autoStart: { enabled: true, processes: ['teams'] }
     })
     assert.deepEqual(result.window, { minimizeToTrayOnClose: enabled, hideFromTaskbar: !enabled })
-    assert.deepEqual(result.transcription, { mic: false, speaker: true, echoCancellation: false })
+    assert.deepEqual(result.transcription, { mic: false, speaker: true, echoCancellation: false, audioMode: 'dual-mono' })
     assert.equal(result.autoStart.enabled, true)
   }
 })
@@ -115,6 +115,15 @@ test('normalizeUserSettings accepts valid BCP-47', () => {
   assert.equal(result.language, 'en-GB')
 })
 
+test('stereo preference survives a single enabled source and invalid modes fall back to dual mono', () => {
+  for (const [input, expected] of [['stereo', 'stereo'], ['unsupported', 'dual-mono'], [null, 'dual-mono']]) {
+    const settings = contract.normalizeUserSettings({ transcription: { mic: false, speaker: true, echoCancellation: true, audioMode: input } })
+    assert.deepEqual(contract.normalizeUserSettings(JSON.parse(JSON.stringify(settings))).transcription, {
+      mic: false, speaker: true, echoCancellation: true, audioMode: expected
+    })
+  }
+})
+
 test('normalizeUserSettings handles null/undefined input', () => {
   assert.equal(contract.normalizeUserSettings(null).language, contract.DEFAULT_USER_SETTINGS.language)
   assert.equal(contract.normalizeUserSettings(undefined).language, contract.DEFAULT_USER_SETTINGS.language)
@@ -140,24 +149,24 @@ test('diarization normalization preserves every independent boolean combination'
 
   test('transcription defaults enable both sources for legacy and partial settings', () => {
     for (const input of [null, undefined, {}, { language: 'en-US' }, { transcription: null }, { transcription: {} }]) {
-      assert.deepEqual(contract.normalizeUserSettings(input).transcription, { mic: true, speaker: true, echoCancellation: false })
+      assert.deepEqual(contract.normalizeUserSettings(input).transcription, { mic: true, speaker: true, echoCancellation: false, audioMode: 'dual-mono' })
     }
-    assert.deepEqual(contract.normalizeUserSettings({ transcription: { mic: false } }).transcription, { mic: false, speaker: true, echoCancellation: false })
-    assert.deepEqual(contract.normalizeUserSettings({ transcription: { speaker: false } }).transcription, { mic: true, speaker: false, echoCancellation: false })
+    assert.deepEqual(contract.normalizeUserSettings({ transcription: { mic: false } }).transcription, { mic: false, speaker: true, echoCancellation: false, audioMode: 'dual-mono' })
+    assert.deepEqual(contract.normalizeUserSettings({ transcription: { speaker: false } }).transcription, { mic: true, speaker: false, echoCancellation: false, audioMode: 'dual-mono' })
   })
 
   test('transcription normalization preserves every independent boolean combination', () => {
     for (const mic of [true, false]) {
       for (const speaker of [true, false]) {
         const settings = contract.normalizeUserSettings({ transcription: { mic, speaker } })
-        assert.deepEqual(settings.transcription, { mic, speaker, echoCancellation: false })
-        assert.deepEqual(contract.normalizeUserSettings(JSON.parse(JSON.stringify(settings))).transcription, { mic, speaker, echoCancellation: false })
+        assert.deepEqual(settings.transcription, { mic, speaker, echoCancellation: false, audioMode: 'dual-mono' })
+        assert.deepEqual(contract.normalizeUserSettings(JSON.parse(JSON.stringify(settings))).transcription, { mic, speaker, echoCancellation: false, audioMode: 'dual-mono' })
       }
     }
   })
 
   test('malformed transcription values do not become truthy checkbox settings', () => {
-    assert.deepEqual(contract.normalizeUserSettings({ transcription: { mic: 'false', speaker: 0 } }).transcription, { mic: true, speaker: true, echoCancellation: false })
+    assert.deepEqual(contract.normalizeUserSettings({ transcription: { mic: 'false', speaker: 0 } }).transcription, { mic: true, speaker: true, echoCancellation: false, audioMode: 'dual-mono' })
   })
 
   test('transcription and diarization stay independent axes', () => {
@@ -165,7 +174,7 @@ test('diarization normalization preserves every independent boolean combination'
       transcription: { mic: false, speaker: true },
       diarization: { mic: true, speaker: false }
     })
-    assert.deepEqual(settings.transcription, { mic: false, speaker: true, echoCancellation: false })
+    assert.deepEqual(settings.transcription, { mic: false, speaker: true, echoCancellation: false, audioMode: 'dual-mono' })
     assert.deepEqual(settings.diarization, { mic: true, speaker: false })
   })
 
@@ -177,7 +186,7 @@ test('echo cancellation defaults off, requires a boolean opt-in, and is independ
     const settings = contract.normalizeUserSettings({
       language: 'en-US', transcription: { mic: false, speaker: true, echoCancellation }
     })
-    assert.deepEqual(settings.transcription, { mic: false, speaker: true, echoCancellation: echoCancellation === true })
+    assert.deepEqual(settings.transcription, { mic: false, speaker: true, echoCancellation: echoCancellation === true, audioMode: 'dual-mono' })
     assert.equal(settings.language, 'en-US')
     assert.deepEqual(contract.normalizeUserSettings(JSON.parse(JSON.stringify(settings))), settings)
   }
@@ -357,22 +366,22 @@ test('toConfigDraft maps existing config to draft', () => {
 
 test('draftToConfig throws on missing required fields', () => {
   assert.throws(() => utils.draftToConfig({
-    endpoint: '', region: 'r', speechKey: 'k', interimResults: true,
+    model: 'standard', endpoint: '', region: 'r', speechKey: 'k', interimResults: true,
     proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
   }), /endpoint/i)
   assert.throws(() => utils.draftToConfig({
-    endpoint: 'e', region: '', speechKey: 'k', interimResults: true,
+    model: 'standard', endpoint: 'e', region: '', speechKey: 'k', interimResults: true,
     proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
   }), /region/i)
   assert.throws(() => utils.draftToConfig({
-    endpoint: 'e', region: 'r', speechKey: '', interimResults: true,
+    model: 'standard', endpoint: 'e', region: 'r', speechKey: '', interimResults: true,
     proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
   }), /speech key/i)
 })
 
 test('draftToConfig produces config without proxy when the proxy host is blank', () => {
   const c = utils.draftToConfig({
-    endpoint: 'wss://e', region: 'r', speechKey: 'k', interimResults: false,
+    model: 'standard', endpoint: 'wss://e', region: 'r', speechKey: 'k', interimResults: false,
     proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
   })
   assert.equal(c.endpoint, 'wss://e')
@@ -380,17 +389,33 @@ test('draftToConfig produces config without proxy when the proxy host is blank',
   assert.equal(c.proxy, undefined)
 })
 
+test('MAI requires region and key but not the Standard endpoint', () => {
+  const legacy = { endpoint: 'wss://legacy.test', region: 'swedencentral', speechKey: 'k', interimResults: true }
+  const draft = utils.toConfigDraft(legacy)
+  const model = 'mai-transcribe-2-streaming'
+  assert.equal(draft.model, 'standard')
+  assert.deepEqual(utils.draftToConfig({ ...draft, model }), { ...legacy, model })
+  const mai = utils.draftToConfig({ ...draft, endpoint: '', model })
+  assert.equal(contract.validateAzureConfig(mai), true)
+  assert.equal(utils.isConfigComplete(mai), true)
+  assert.throws(() => utils.draftToConfig({ ...utils.toConfigDraft(mai), model: 'standard' }), /endpoint/i)
+  assert.throws(() => utils.draftToConfig({ ...utils.toConfigDraft(mai), region: '' }), /region/i)
+  assert.equal(utils.isConfigComplete({ ...legacy, model: 'unknown' }), false)
+  assert.equal(contract.validateAzureConfig({ ...legacy, model: null }), false)
+  assert.throws(() => utils.draftToConfig({ ...draft, model: 'unknown' }), /model/i)
+})
+
 test('draftToConfig requires a valid port when a proxy host is set', () => {
   assert.throws(() => utils.draftToConfig({
-    endpoint: 'e', region: 'r', speechKey: 'k', interimResults: true,
+    model: 'standard', endpoint: 'e', region: 'r', speechKey: 'k', interimResults: true,
     proxyHost: 'h', proxyPort: '', proxyUsername: '', proxyPassword: ''
   }), /port/i)
   assert.throws(() => utils.draftToConfig({
-    endpoint: 'e', region: 'r', speechKey: 'k', interimResults: true,
+    model: 'standard', endpoint: 'e', region: 'r', speechKey: 'k', interimResults: true,
     proxyHost: 'h', proxyPort: '0', proxyUsername: '', proxyPassword: ''
   }), /port/i)
   assert.throws(() => utils.draftToConfig({
-    endpoint: 'e', region: 'r', speechKey: 'k', interimResults: true,
+    model: 'standard', endpoint: 'e', region: 'r', speechKey: 'k', interimResults: true,
     proxyHost: 'h', proxyPort: 'abc', proxyUsername: '', proxyPassword: ''
   }), /port/i)
 })

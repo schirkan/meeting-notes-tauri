@@ -4,7 +4,7 @@
 //! (portable/release), or in the repository root in development:
 //!
 //!   MeetingNotes.config.json
-//!     azure: { endpoint, region, speechKey, interimResults, proxy? }
+//!     azure: { model?, endpoint, region, speechKey, interimResults, proxy? }
 //!     user:  { language, devices, transcription, diarization, transcript }
 //!
 //! Both sections live in the same file. Every write re-reads the file
@@ -21,9 +21,30 @@ use serde::{Deserialize, Serialize};
 /// Name of the single configuration file next to the EXE.
 pub const CONFIG_FILE_NAME: &str = "MeetingNotes.config.json";
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AzureSpeechModel {
+    #[default]
+    Standard,
+    #[serde(rename = "mai-transcribe-2-streaming")]
+    MaiTranscribe2Streaming,
+}
+
+impl AzureSpeechModel {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Standard => "standard",
+            Self::MaiTranscribe2Streaming => "mai-transcribe-2-streaming",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AzureConfig {
+    #[serde(default)]
+    pub model: AzureSpeechModel,
+    #[serde(default)]
     pub endpoint: String,
     pub region: String,
     pub speech_key: String,
@@ -31,6 +52,18 @@ pub struct AzureConfig {
     pub interim_results: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub proxy: Option<AzureProxyConfig>,
+}
+
+impl AzureConfig {
+    pub fn check_connection_fields(&self) -> Result<(), String> {
+        if self.region.trim().is_empty() || self.speech_key.trim().is_empty() {
+            return Err("Enter the Azure region and speech key.".into());
+        }
+        if self.model == AzureSpeechModel::Standard && self.endpoint.trim().is_empty() {
+            return Err("Enter the Azure endpoint for the standard model.".into());
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -118,6 +151,26 @@ pub struct TranscriptionSettings {
     pub speaker: bool,
     #[serde(default, deserialize_with = "deserialize_echo_cancellation")]
     pub echo_cancellation: bool,
+    #[serde(default, deserialize_with = "deserialize_audio_mode")]
+    pub audio_mode: AudioMode,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AudioMode {
+    #[default]
+    DualMono,
+    Stereo,
+}
+
+fn deserialize_audio_mode<'de, D>(deserializer: D) -> Result<AudioMode, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(match serde_json::Value::deserialize(deserializer)?.as_str() {
+        Some("stereo") => AudioMode::Stereo,
+        _ => AudioMode::DualMono,
+    })
 }
 
 fn deserialize_echo_cancellation<'de, D>(deserializer: D) -> Result<bool, D::Error>
@@ -134,6 +187,7 @@ impl Default for TranscriptionSettings {
             mic: true,
             speaker: true,
             echo_cancellation: false,
+            audio_mode: AudioMode::DualMono,
         }
     }
 }
@@ -431,6 +485,33 @@ mod config_tests {
     use super::*;
 
     #[test]
+    fn azure_models_validate_their_own_fields_without_unknown_fallback() {
+        let mut config = serde_json::json!({
+            "endpoint": "https://example.test",
+            "region": "swedencentral",
+            "speechKey": "test"
+        });
+        let standard: AzureConfig = serde_json::from_value(config.clone()).unwrap();
+        assert_eq!(standard.model, AzureSpeechModel::Standard);
+        assert!(standard.check_connection_fields().is_ok());
+
+        config.as_object_mut().unwrap().remove("endpoint");
+        let standard: AzureConfig = serde_json::from_value(config.clone()).unwrap();
+        assert!(standard.check_connection_fields().is_err());
+
+        config["model"] = serde_json::json!("mai-transcribe-2-streaming");
+        let mai: AzureConfig = serde_json::from_value(config.clone()).unwrap();
+        assert_eq!(mai.model, AzureSpeechModel::MaiTranscribe2Streaming);
+        assert!(mai.check_connection_fields().is_ok());
+        assert_eq!(serde_json::to_value(mai).unwrap()["model"], config["model"]);
+
+        for invalid in [serde_json::json!("unknown"), serde_json::Value::Null] {
+            config["model"] = invalid;
+            assert!(serde_json::from_value::<AzureConfig>(config.clone()).is_err());
+        }
+    }
+
+    #[test]
     fn transcription_defaults_and_persistence_preserve_each_source() {
         assert_eq!(default_user_settings().transcription, TranscriptionSettings::default());
         for (options, mic, speaker) in [
@@ -444,14 +525,27 @@ mod config_tests {
             let raw = format!(r#"{{"language":"invalid","devices":{{}}{options}}}"#);
             let settings = normalize_user_settings(serde_json::from_str(&raw).unwrap());
             assert_eq!(settings.language, DEFAULT_LANGUAGE);
-            assert_eq!(settings.transcription, TranscriptionSettings { mic, speaker, echo_cancellation: false });
+            assert_eq!(settings.transcription, TranscriptionSettings { mic, speaker, ..Default::default() });
             let persisted = serde_json::to_string_pretty(&settings).unwrap();
             let json: serde_json::Value = serde_json::from_str(&persisted).unwrap();
-            assert_eq!(json["transcription"], serde_json::json!({"mic": mic, "speaker": speaker, "echoCancellation": false}));
+            assert_eq!(json["transcription"], serde_json::json!({"mic": mic, "speaker": speaker, "echoCancellation": false, "audioMode": "dual-mono"}));
             assert_eq!(
                 serde_json::from_str::<UserSettings>(&persisted).unwrap().transcription,
                 settings.transcription
             );
+        }
+    }
+
+    #[test]
+    fn normalize_and_persist_audio_mode_without_resetting_source_preferences() {
+        for (value, expected) in [(serde_json::json!("stereo"), AudioMode::Stereo),
+            (serde_json::json!("invalid"), AudioMode::DualMono), (serde_json::Value::Null, AudioMode::DualMono)] {
+            let raw = serde_json::json!({"transcription": {"mic":false, "audioMode":value, "echoCancellation":true}});
+            let settings = normalize_user_settings(serde_json::from_value(raw).unwrap());
+            let saved: UserSettings = serde_json::from_value(serde_json::to_value(settings).unwrap()).unwrap();
+            assert_eq!(saved.transcription, TranscriptionSettings {
+                mic: false, speaker: true, echo_cancellation: true, audio_mode: expected,
+            });
         }
     }
 
@@ -524,6 +618,7 @@ mod config_tests {
     fn one_file_holds_azure_and_user_settings_together() {
         let config = AppConfig {
             azure: Some(AzureConfig {
+                model: AzureSpeechModel::Standard,
                 endpoint: "wss://example.test".into(),
                 region: "westeurope".into(),
                 speech_key: "key".into(),

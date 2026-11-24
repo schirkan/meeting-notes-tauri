@@ -86,6 +86,7 @@ DiarizationValidation.Run(Check);
 TranscriptionValidation.Run(Check);
 ResamplingValidation.Run(Check);
 await ShutdownValidation.RunAsync(Check);
+await StereoValidation.RunAsync(Check);
 if (args.Contains("--diarization-only"))
 {
     Console.WriteLine($"Diarization validation passed ({assertions} assertions).");

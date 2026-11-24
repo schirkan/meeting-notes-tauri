@@ -4,6 +4,7 @@
 Status: umgesetzt
 Priorität: high
 Abhängigkeiten: T-203
+Folgespecs: [T-520: Modellauswahl](./T-520-mai-transcribe-streaming-feature.md) und [T-521: optionaler Mehrkanalpfad fuer Standard und MAI](./T-521-mai-transcribe-mehrkanal-sidecar.md). Die folgenden Belege beschreiben die Integration des Standard-Dual-Mono-Pfads.
 
 ## Goal
 NuGet-Paket `Microsoft.CognitiveServices.Speech` (1.53.x) zum Sidecar-Projekt hinzufügen und beide Recognizer (Mic + Speaker) konfigurieren.

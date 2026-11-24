@@ -15,7 +15,7 @@ This README describes `main`. For the behavior of an installed release, use the 
 
 ## ✨ Features
 
-- **Live transcripts:** See interim text during the conversation and finalized results as recognition completes.
+- **Live transcripts:** See finalized results as recognition completes, plus interim text in Dual mono mode.
 - **Independent audio sources:** Choose a microphone, speaker playback (loopback), or both.
 - **Echo cancellation (Alpha, v0.1.7+):** Opt in under **Settings → Transcription**. With both sources enabled, Meeting Notes uses speaker loopback to reduce playback picked up by the microphone before sending mic audio to Azure. It is off by default and applies to the next transcription. It does not change system playback, calls in other apps, or speaker-loopback transcription. If the reference is unavailable or unreliable, the mic remains unfiltered. This is experimental; results can vary by device and room.
 - **Speaker mapping:** Enable speaker recognition separately for each source and replace speaker labels with names.
@@ -79,7 +79,7 @@ Use **Copy log** next to **Clear log** to copy the current entries as tab-separa
 
 - Windows 11, 64-bit (x64)
 - [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) — already installed on many Windows 11 systems
-- An internet connection and an **Azure Speech resource** with an endpoint, region, and key
+- An internet connection and an **Azure Speech resource** with a region and key. The Standard model also needs the resource endpoint.
 - A microphone and/or an audio output device, depending on which source you want to transcribe
 
 ### Run the portable version
@@ -105,7 +105,7 @@ Azure Speech: [Documentation](https://learn.microsoft.com/en-us/azure/ai-service
 
 Settings open automatically on first launch if the Azure configuration is missing.
 
-1. Under **Azure**, enter your Azure Speech endpoint, region, and Speech Key.
+1. Under **Azure**, select a **Transcription model** and enter your region and Speech Key. **Azure Speech (standard)** also requires your Azure Speech endpoint.
 2. To use an HTTP proxy, enter its hostname or IP address and port under **Proxy**. Do not include `http://` or a path. Leave **Proxy Host** blank for a direct connection.
 3. Use **Test connection** to check connectivity. This test does not capture microphone or system audio, but it does connect to Azure.
 4. Click **Save**. Successful saving closes the dialog; errors leave it open with an explanation.
@@ -115,6 +115,14 @@ height. Edits, including export-folder selection, remain in a temporary draft
 until **Save** is clicked. Closing with **x**, Escape or the backdrop asks
 to discard unsaved changes; cancelling keeps the draft. Connection tests use
 the draft without saving it and return to it when the test dialog closes.
+
+**MAI Transcribe (Preview)** uses the existing Azure Speech SDK and requires a Speech resource and key in a [supported region](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/mai-transcribe-2-streaming-speech-sdk). The Azure model is in public preview without an SLA. MAI detects the language automatically and labels transcript segments by audio source, not by individual speaker.
+
+Under **Settings → Transcription → Audio stream mode**, **Dual mono** is the default and uses a separate session for each enabled source. **Stereo mix** sends microphone and speaker loopback as separate channels in one Speech SDK session and shows final results only. If only one source is enabled, it still uses mono. Standard stereo uses the selected primary language; if speaker recognition is enabled for either source, the service diarizes the shared stream, but the app only shows speaker IDs on sources where it is enabled. MAI stereo is experimental, has no speaker recognition, and does not fall back automatically. One session does not establish billing savings.
+
+**Test connection** uses the current settings draft and sends silence in stereo when both sources and Stereo mix are selected. Stop recording before testing. A successful test verifies connection readiness, not channel routing or recognition quality.
+
+For MAI, **Test connection** checks the regional Speech/WSS connection, not the Standard HTTPS endpoint or transcription quality. The model change takes effect on the next recording. To switch back, select **Azure Speech (standard)** and save. The Standard endpoint, primary language, and speaker recognition preferences are retained; check that the region and key match the Standard resource before starting.
 
 ### Transcribe a conversation
 

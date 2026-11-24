@@ -2,6 +2,7 @@
   "_comment": "Example configuration. Copy this file to 'MeetingNotes.config.json' and adjust it. The real file sits next to the EXE (release) or in the repository root (dev) and is listed in .gitignore. Source: src/shared/config-contract.ts -> AppConfig.",
 
   "azure": {
+    "model": "standard",
     "endpoint": "wss://westeurope.stt.speech.microsoft.com/speech/universal/v2",
     "region": "westeurope",
     "speechKey": "<YOUR-AZURE-SPEECH-KEY-HERE>",
@@ -19,7 +20,8 @@
     "transcription": {
       "mic": true,
       "speaker": true,
-      "echoCancellation": false
+      "echoCancellation": false,
+      "audioMode": "dual-mono"
     },
     "diarization": {
       "mic": true,

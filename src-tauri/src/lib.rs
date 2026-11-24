@@ -231,7 +231,7 @@ async fn start_recording_on_detection(
             let entry = state.push_debug(
                 state::DebugLogEntrySource::Main,
                 state::DebugLogEntryLevel::Warn,
-                format!("Meeting detected, but the Azure configuration is missing: {description}"),
+                format!("Meeting detected, but the Azure configuration is missing or invalid: {description}"),
             );
             events::emit_debug(app, &entry);
             return;

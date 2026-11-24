@@ -57,7 +57,7 @@ export interface FixedConfigStatus {
 export interface ConnectivityResultEvent {
   probeUrl: string
   reachable: boolean
-  httpsReachable: boolean
+  httpsReachable?: boolean
   speechReachable: boolean
   httpStatus?: number
   httpStatusText?: string

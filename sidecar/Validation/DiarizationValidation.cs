@@ -46,6 +46,21 @@ internal static class DiarizationValidation
         check(SidecarCommands.ReadType("") == SidecarCommands.Unknown, "Empty line is rejected");
 
         var config = new AzureSpeechConfig("wss://localhost/speech/universal/v2", "westeurope", "validation-key", true, null);
+        var mai = config with
+        {
+            Endpoint = "not a URL",
+            Region = "swedencentral",
+            Model = SpeechConfiguration.ParseModel("mai-transcribe-2-streaming")
+        };
+        var maiSpeech = SpeechConfiguration.Create(mai, "de-DE");
+        using (var service = new AzureSpeechService(mai, new UserSettings("de-DE", new DeviceIds(null, null))))
+        {
+            check(maiSpeech.Model == "mai-transcribe-2-streaming" &&
+                SpeechConfiguration.CreateLanguageDetection(mai.Model, "de-DE") is null &&
+                !service.EffectiveDiarization && service.GetRecognitionMode(AzureSpeechService.SourceMic) == "speechRecognizer" &&
+                service.GetRecognitionMode(AzureSpeechService.SourceSpeaker) == "speechRecognizer",
+                "MAI uses the regional SDK model without Standard endpoint, LID candidates or speaker recognition");
+        }
         foreach (var mic in new[] { true, false })
         foreach (var speaker in new[] { true, false })
         {

@@ -5,7 +5,10 @@ export interface AzureProxyConfig {
   password?: string
 }
 
+export type AzureSpeechModel = 'standard' | 'mai-transcribe-2-streaming'
+
 export interface AzureConfig {
+  model?: AzureSpeechModel
   endpoint: string
   region: string
   speechKey: string
@@ -28,6 +31,7 @@ export interface TranscriptionSettings {
   speaker: boolean
   /** Alpha opt-in; only effective when both sources are active. */
   echoCancellation: boolean
+  audioMode: 'dual-mono' | 'stereo'
 }
 
 export interface MarkdownExportSettings {
@@ -87,7 +91,7 @@ export interface AppConfigState {
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   language: 'de-DE',
-  transcription: { mic: true, speaker: true, echoCancellation: false },
+  transcription: { mic: true, speaker: true, echoCancellation: false, audioMode: 'dual-mono' },
   diarization: { mic: true, speaker: true },
   devices: {
     micId: null,
@@ -132,7 +136,8 @@ export function normalizeUserSettings(input: UserSettingsInput | null | undefine
         typeof input?.transcription?.speaker === 'boolean'
           ? input.transcription.speaker
           : DEFAULT_USER_SETTINGS.transcription.speaker,
-      echoCancellation: input?.transcription?.echoCancellation === true
+      echoCancellation: input?.transcription?.echoCancellation === true,
+      audioMode: input?.transcription?.audioMode === 'stereo' ? 'stereo' : 'dual-mono'
     },
     diarization: {
       mic: typeof input?.diarization?.mic === 'boolean' ? input.diarization.mic : DEFAULT_USER_SETTINGS.diarization.mic,
@@ -199,14 +204,23 @@ export function validateUserSettings(settings: UserSettings): UserSettingsValida
   return { valid: warnings.length === 0, warnings }
 }
 
+export function isAzureSpeechModel(value: unknown): value is AzureSpeechModel {
+  return value === 'standard' || value === 'mai-transcribe-2-streaming'
+}
+
+export function hasAzureConnectionFields(config: Pick<AzureConfig, 'model' | 'endpoint' | 'region' | 'speechKey'>): boolean {
+  return (config.model === undefined || isAzureSpeechModel(config.model)) &&
+    (config.model === 'mai-transcribe-2-streaming' || config.endpoint.trim().length > 0) &&
+    config.region.trim().length > 0 && config.speechKey.trim().length > 0
+}
+
 export function validateAzureConfig(input: unknown): input is AzureConfig {
   if (!input || typeof input !== 'object') return false
   const candidate = input as Partial<AzureConfig>
 
   const hasRequiredStrings =
-    typeof candidate.endpoint === 'string' && candidate.endpoint.length > 0 &&
-    typeof candidate.region === 'string' && candidate.region.length > 0 &&
-    typeof candidate.speechKey === 'string' && candidate.speechKey.length > 0
+    typeof candidate.endpoint === 'string' && typeof candidate.region === 'string' &&
+    typeof candidate.speechKey === 'string' && hasAzureConnectionFields(candidate as AzureConfig)
 
   const hasValidProxy = (() => {
     if (candidate.proxy == null) return true

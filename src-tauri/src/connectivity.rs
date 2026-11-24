@@ -39,7 +39,8 @@ pub enum StepStatus {
 pub struct ConnectivityResult {
     pub probe_url: String,
     pub reachable: bool,
-    pub https_reachable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub https_reachable: Option<bool>,
     pub speech_reachable: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub http_status: Option<u16>,
@@ -177,7 +178,7 @@ pub async fn diagnose(
         Err(error) => return ConnectivityResult {
             probe_url: String::new(),
             reachable: false,
-            https_reachable: false,
+            https_reachable: Some(false),
             speech_reachable: false,
             http_status: None,
             http_status_text: None,
@@ -263,7 +264,7 @@ With TLS inspection the corporate root CA must be trusted there."
             ConnectivityResult {
                 probe_url,
                 reachable: status != 407,
-                https_reachable: status != 407,
+                https_reachable: Some(status != 407),
                 speech_reachable: false,
                 http_status: Some(status),
                 http_status_text: Some(text),
@@ -282,7 +283,7 @@ With TLS inspection the corporate root CA must be trusted there."
             ConnectivityResult {
                 probe_url,
                 reachable: false,
-                https_reachable: false,
+                https_reachable: Some(false),
                 speech_reachable: false,
                 http_status: None,
                 http_status_text: None,

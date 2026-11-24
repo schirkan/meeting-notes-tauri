@@ -12,25 +12,22 @@ type ConnectivityDialogProps = {
 
 export function ConnectivityDialog({ isOpen, isTesting, result, onClose }: ConnectivityDialogProps) {
   const requestFailed = result?.steps.some((step) => step.step === 'IPC / Start diagnostics' || step.step === 'Check configuration')
+  const httpsStatus = requestFailed || result?.httpsReachable === undefined ? 'not checked' : result.httpsReachable ? 'reachable' : 'failed'
   return (
     <SettingsDialog isOpen={isOpen} onClose={onClose} title="Connection test">
       <div className="connectivity-dialog-content">
         <p role="status">
-          {isTesting ? 'Connection test running … (up to 45 seconds for Speech/WSS)' : result?.reachable ? 'HTTPS and Speech/WSS reachable' : 'Connection test failed'}
+          {isTesting ? 'Connection test running … (up to 45 seconds for Speech/WSS)' : result?.reachable
+            ? result.httpsReachable ? 'HTTPS and Speech/WSS reachable' : 'Speech/WSS reachable'
+            : 'Connection test failed'}
         </p>
         <p className="connectivity-result-meta">
-          Checks TLS certificates for HTTPS and Speech/WSS against the system trust store. No audio is captured.
+          Validates TLS certificates on the tested connections. No audio is captured.
         </p>
-        {isTesting && (
-          <ul className="connectivity-result-step-list">
-            <li>HTTPS: DNS, TCP and HTTPS check running …</li>
-            <li>Speech/WSS: checking SpeechRecognizer and ConversationTranscriber …</li>
-          </ul>
-        )}
         {result && (
           <>
             <p>
-              HTTPS: {requestFailed ? 'not checked' : result.httpsReachable ? 'reachable' : 'failed'} · Speech/WSS: {requestFailed ? 'not checked' : result.speechReachable ? 'reachable' : 'failed'}
+              HTTPS: {httpsStatus} · Speech/WSS: {requestFailed ? 'not checked' : result.speechReachable ? 'reachable' : 'failed'}
             </p>
             {result.httpStatus && <p>HTTP {result.httpStatus} {result.httpStatusText}</p>}
             <p className="connectivity-result-meta">

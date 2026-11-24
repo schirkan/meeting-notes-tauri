@@ -108,19 +108,20 @@ pub async fn start_recording_with_origin(
     }
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "start_recording called.");
 
-    let speech_key = azure.as_ref().map(|a| a.speech_key.clone());
-    let speech_region = azure.as_ref().map(|a| a.region.clone());
-    let speech_endpoint = azure.as_ref().map(|a| a.endpoint.clone());
+    let azure = azure.ok_or("The Azure configuration is missing or invalid. Check the transcription model and connection settings.")?;
+    azure.check_connection_fields()?;
+    let speech_endpoint = (azure.model == settings::AzureSpeechModel::Standard).then_some(azure.endpoint);
 
     let options = SidecarOptions {
         sample_rate: 16_000,
         transcription: user.transcription.clone(),
         diarization: user.diarization.clone(),
         language: Some(user.language.clone()),
-        speech_key,
-        speech_region,
+        speech_key: Some(azure.speech_key),
+        speech_region: Some(azure.region),
+        speech_model: azure.model,
         speech_endpoint,
-        proxy: azure.as_ref().and_then(|a| a.proxy.clone()),
+        proxy: azure.proxy,
         mic_device_id: user.devices.mic_id.clone(),
         speaker_device_id: user.devices.speaker_loopback_id.clone(),
     };
@@ -848,14 +849,19 @@ pub async fn test_azure_connectivity(
     state: State<'_, AppState>,
     payload: Option<serde_json::Value>,
 ) -> Result<connectivity::ConnectivityResult, String> {
+    // Hold the same lifecycle lock as recording start so a probe cannot overlap capture.
+    let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
+    let _lifecycle = lifecycle.lock().await;
+    if state.snapshot_status().running {
+        return Err("Stop transcription before testing the connection.".into());
+    }
     let value = payload.unwrap_or(serde_json::Value::Null);
     let config: AzureConfig = serde_json::from_value(value.clone())
-        .map_err(|error| format!("Invalid Azure configuration: {error}. Check the endpoint, region, speech key and proxy."))?;
+        .map_err(|_| "Invalid Azure configuration. Check the model, region, speech key, endpoint and proxy.")?;
+    config.check_connection_fields()?;
     if let Some(proxy) = config.proxy.as_ref() {
         connectivity::configured_proxy(proxy)?;
     }
-    let endpoint = &config.endpoint;
-    let speech_key = &config.speech_key;
     let language = value
         .get("language")
         .and_then(|v| v.as_str())
@@ -867,13 +873,39 @@ pub async fn test_azure_connectivity(
         &state,
         DebugLogEntrySource::Ipc,
         DebugLogEntryLevel::Info,
-        format!("test_azure_connectivity(endpoint={endpoint}) called."),
+        format!("test_azure_connectivity(model={}) called.", config.model.as_str()),
     );
 
+    let audio = value.get("transcription").cloned()
+        .map(serde_json::from_value::<settings::TranscriptionSettings>)
+        .transpose().map_err(|_| "Invalid transcription settings.")?.unwrap_or_default();
+    let diarization = value.get("diarization").cloned()
+        .map(serde_json::from_value::<settings::DiarizationSettings>)
+        .transpose().map_err(|_| "Invalid speaker recognition settings.")?.unwrap_or_default();
     let start = std::time::Instant::now();
     let (mut result, speech) = tokio::join!(
-        connectivity::diagnose(endpoint, speech_key, &language, config.proxy.as_ref()),
-        sidecar::diagnose_speech(&app, &config, &language),
+        async {
+            if config.model == settings::AzureSpeechModel::Standard {
+                connectivity::diagnose(&config.endpoint, &config.speech_key, &language, config.proxy.as_ref()).await
+            } else {
+                connectivity::ConnectivityResult {
+                    probe_url: String::new(),
+                    reachable: false,
+                    https_reachable: None,
+                    speech_reachable: false,
+                    http_status: None,
+                    http_status_text: None,
+                    latency_ms: 0,
+                    error: None,
+                    steps: vec![connectivity::Step {
+                        step: "speech-model".into(),
+                        status: connectivity::StepStatus::Ok,
+                        detail: "MAI Transcribe uses the regional Speech SDK connection. The Standard HTTPS endpoint is not tested.".into(),
+                    }],
+                }
+            }
+        },
+        sidecar::diagnose_speech(&app, &config, &language, &audio, &diarization),
     );
     match speech {
         Ok(speech) => {
@@ -886,12 +918,15 @@ pub async fn test_azure_connectivity(
             detail: error,
         }),
     }
-    result.reachable = result.https_reachable && result.speech_reachable;
+    result.reachable = result.https_reachable.unwrap_or(true) && result.speech_reachable;
     result.latency_ms = start.elapsed().as_millis() as u64;
     if !result.reachable {
-        result.error = Some(format!("HTTPS: {}; Speech/WSS: {}. See the separate diagnostic steps.",
-            if result.https_reachable { "reachable" } else { "failed" },
-            if result.speech_reachable { "reachable" } else { "failed" }));
+        result.error = Some(match result.https_reachable {
+            Some(https) => format!("HTTPS: {}; Speech/WSS: {}. See the separate diagnostic steps.",
+                if https { "reachable" } else { "failed" },
+                if result.speech_reachable { "reachable" } else { "failed" }),
+            None => "MAI Transcribe Speech/WSS failed. See the diagnostic steps.".into(),
+        });
     }
 
     // Bridge-Event: Renderer kann zuhören statt zu pollen

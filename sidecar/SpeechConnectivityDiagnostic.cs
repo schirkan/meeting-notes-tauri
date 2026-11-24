@@ -22,28 +22,40 @@ public static class SpeechConnectivityDiagnostic
         {
             var key = SpeechConfiguration.GetSpeechKey(args);
             var region = args.GetValueOrDefault("--speech-region");
-            var endpoint = args.GetValueOrDefault("--speech-endpoint");
+            var endpoint = args.GetValueOrDefault("--speech-endpoint") ?? string.Empty;
+            var model = SpeechConfiguration.ParseModel(args.GetValueOrDefault("--speech-model"));
             var language = args.GetValueOrDefault("--language") ?? "de-DE";
-            if (string.IsNullOrWhiteSpace(key) || key == "true" || string.IsNullOrWhiteSpace(region) || region == "true" ||
-                !Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) ||
-                (uri.Scheme != "https" && uri.Scheme != "wss") || !string.IsNullOrEmpty(uri.UserInfo) ||
-                !string.IsNullOrEmpty(uri.Fragment) || string.IsNullOrWhiteSpace(language) || language == "true")
+            if (string.IsNullOrWhiteSpace(key) || key == "true" || string.IsNullOrWhiteSpace(region) || region == "true")
             {
-                steps.Add(new("speech_config", "error", "Speech key, region, valid HTTPS/WSS endpoint (without userinfo/fragment), and language are required."));
+                steps.Add(new("speech_config", "error", "Speech key and region are required."));
                 return new(false, steps);
             }
+            if (model == AzureSpeechModel.Standard &&
+                (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) ||
+                 (uri.Scheme != "https" && uri.Scheme != "wss") || !string.IsNullOrEmpty(uri.UserInfo) ||
+                 !string.IsNullOrEmpty(uri.Fragment) || string.IsNullOrWhiteSpace(language) || language == "true"))
+            {
+                steps.Add(new("speech_config", "error", "Standard requires a valid HTTPS/WSS endpoint (without userinfo/fragment) and language."));
+                return new(false, steps);
+            }
+            var sources = ArgsParser.ParseTranscription(args);
+            var stereo = ArgsParser.ParseStereo(args, sources);
+            var diarization = ArgsParser.ParseDiarization(args);
             var proxy = ProxyOptions.Parse(args);
             steps.Add(new("speech_proxy", "ok", proxy is null ? "Native Speech SDK uses direct transport." : "Native Speech SDK SetProxy configured; credentials are not logged."));
-            var config = new AzureSpeechConfig(endpoint!, region, key, true, proxy);
-            var probes = await Task.WhenAll(
-                ProbeAsync(config, language, false, TimeSpan.FromSeconds(12)),
-                ProbeAsync(config, language, true, TimeSpan.FromSeconds(12)));
+            var config = new AzureSpeechConfig(endpoint, region, key, true, proxy, model);
+            var timeout = TimeSpan.FromSeconds(12);
+            var probes = stereo
+                ? new[] { await ProbeAsync(config, language, model == AzureSpeechModel.Standard && (diarization.Mic || diarization.Speaker), timeout, stereo: true) }
+                : model == AzureSpeechModel.Standard
+                ? await Task.WhenAll(ProbeAsync(config, language, false, timeout), ProbeAsync(config, language, true, timeout))
+                : new[] { await ProbeAsync(config, language, false, timeout) };
             foreach (var probe in probes) steps.AddRange(probe);
             return new(probes.All(p => p[0].status == "ok"), steps);
         }
         catch (ArgumentException)
         {
-            steps.Add(new("speech_config", "error", "Invalid Speech or proxy configuration. Proxy requires a hostname/IP and port 1-65535."));
+            steps.Add(new("speech_config", "error", "Invalid Speech or proxy configuration. Check the model, region and key. Proxy requires a hostname/IP and port 1-65535."));
             return new(false, steps);
         }
         catch (Exception ex)
@@ -54,9 +66,14 @@ public static class SpeechConnectivityDiagnostic
     }
 
     public static async Task<IReadOnlyList<SpeechConnectivityStep>> ProbeAsync(
-        AzureSpeechConfig config, string language, bool conversation, TimeSpan timeout)
+        AzureSpeechConfig config, string language, bool conversation, TimeSpan timeout, bool stereo = false)
     {
-        var name = conversation ? "conversation_transcriber_wss" : "speech_recognizer_wss";
+        var name = conversation ? "conversation_transcriber_wss" : config.Model == AzureSpeechModel.MaiTranscribe2Streaming
+            ? "mai_transcribe_wss" : "speech_recognizer_wss";
+        if (stereo) name += "_stereo";
+        var connectionHint = config.Model == AzureSpeechModel.Standard
+            ? "Check credentials, endpoint, proxy and TLS trust"
+            : "Check credentials, MAI region availability, proxy and TLS trust";
         var steps = new List<SpeechConnectivityStep>();
         SpeechConfig? speech = null;
         AudioStreamFormat? format = null;
@@ -82,24 +99,25 @@ public static class SpeechConnectivityDiagnostic
         }
         try
         {
-            speech = SpeechConfiguration.Create(config, language);
-            format = AudioStreamFormat.GetWaveFormatPCM(16000, 16, 1);
+            speech = SpeechConfiguration.Create(config, language, diarizeIntermediateResults: !stereo, stereo: stereo);
+            var channels = (byte)(stereo ? 2 : 1);
+            format = AudioStreamFormat.GetWaveFormatPCM(16000, 16, channels);
             push = AudioInputStream.CreatePushStream(format);
             audio = AudioConfig.FromStreamInput(push);
-            lid = AutoDetectSourceLanguageConfig.FromLanguages(SpeechConfiguration.LidCandidates(language));
+            lid = stereo ? null : SpeechConfiguration.CreateLanguageDetection(config.Model, language);
             Func<Task> start;
             if (conversation)
             {
-                var transcriber = new ConversationTranscriber(speech, lid, audio);
-                transcriber.Canceled += (_, e) => Fail($"Native SDK canceled: reason={e.Reason}, code={e.ErrorCode}. Check credentials, endpoint, proxy and TLS trust; sensitive SDK details omitted.");
+                var transcriber = lid is null ? new ConversationTranscriber(speech, audio) : new ConversationTranscriber(speech, lid, audio);
+                transcriber.Canceled += (_, e) => Fail($"Native SDK canceled: reason={e.Reason}, code={e.ErrorCode}. {connectionHint}; sensitive SDK details omitted.");
                 recognizer = transcriber;
                 start = transcriber.StartTranscribingAsync;
                 stop = transcriber.StopTranscribingAsync;
             }
             else
             {
-                var speechRecognizer = new SpeechRecognizer(speech, lid, audio);
-                speechRecognizer.Canceled += (_, e) => Fail($"Native SDK canceled: reason={e.Reason}, code={e.ErrorCode}. Check credentials, endpoint, proxy and TLS trust; sensitive SDK details omitted.");
+                var speechRecognizer = SpeechConfiguration.CreateRecognizer(speech, audio, lid);
+                speechRecognizer.Canceled += (_, e) => Fail($"Native SDK canceled: reason={e.Reason}, code={e.ErrorCode}. {connectionHint}; sensitive SDK details omitted.");
                 recognizer = speechRecognizer;
                 start = speechRecognizer.StartContinuousRecognitionAsync;
                 stop = speechRecognizer.StopContinuousRecognitionAsync;
@@ -107,12 +125,12 @@ public static class SpeechConnectivityDiagnostic
             connection = Connection.FromRecognizer(recognizer);
             connection.Connected += (_, _) => connected.TrySetResult(true);
             connection.Disconnected += (_, _) => Fail("Native SDK WSS connection disconnected before readiness verification completed.");
-            recognizer.SessionStarted += (_, _) => session.TrySetResult(new(name, "ok", "Native SDK WSS Connected and SessionStarted received with silent 16 kHz PCM; no capture devices opened."));
+            recognizer.SessionStarted += (_, _) => session.TrySetResult(new(name, "ok", $"Native SDK WSS Connected and SessionStarted received with silent 16 kHz { (stereo ? "stereo" : "mono") } PCM; recognition and channel routing were not tested."));
             recognizer.SessionStopped += (_, _) => Fail("Native SDK session stopped before readiness verification completed.");
             var stream = push;
             feeding = Task.Run(async () =>
             {
-                var silence = new byte[640];
+                var silence = new byte[640 * channels];
                 try
                 {
                     while (!feedCancellation.IsCancellationRequested)

@@ -22,5 +22,7 @@ export const NEEDS_TARGET_MACHINE = new Set([
   'T-509-audio-capture-auf-wasapirecorderbuilder-umstellen.md',
   'T-510-clean-machine-deployment-windows-11.md',
   'T-514-systray-und-schliessen-verhalten.md',
-  'T-519-echo-cancellation-alpha-abnahme.md'
+  'T-519-echo-cancellation-alpha-abnahme.md',
+  'T-521-mai-transcribe-mehrkanal-sidecar.md',
+  'T-522-mai-transcribe-machbarkeit-kosten-abnahme.md'
 ])

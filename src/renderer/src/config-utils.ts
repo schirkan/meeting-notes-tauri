@@ -1,6 +1,7 @@
-import type { AzureConfig } from '@shared/config-contract'
+import { hasAzureConnectionFields, isAzureSpeechModel, type AzureConfig, type AzureSpeechModel } from '../../shared/config-contract.js'
 
 export type ConfigDraft = {
+  model: AzureSpeechModel
   endpoint: string
   region: string
   speechKey: string
@@ -13,6 +14,7 @@ export type ConfigDraft = {
 
 export function toConfigDraft(config: AzureConfig | null): ConfigDraft {
   return {
+    model: config?.model ?? 'standard',
     endpoint: config?.endpoint ?? '',
     region: config?.region ?? '',
     speechKey: config?.speechKey ?? '',
@@ -29,20 +31,20 @@ export function draftToConfig(draft: ConfigDraft): AzureConfig {
   const region = draft.region.trim()
   const speechKey = draft.speechKey.trim()
 
-  if (!endpoint || !region || !speechKey) {
-    throw new Error('Please fill in endpoint, region and speech key.')
+  const model = draft.model
+  if (!isAzureSpeechModel(model)) {
+    throw new Error('Please select a supported transcription model.')
+  }
+  const config: AzureConfig = { endpoint, region, speechKey, interimResults: draft.interimResults }
+  if (model !== 'standard') config.model = model
+  if (!hasAzureConnectionFields(config)) {
+    throw new Error(model === 'standard'
+      ? 'Please fill in endpoint, region and speech key.'
+      : 'Please fill in region and speech key.')
   }
 
   const proxyHost = draft.proxyHost.trim()
-
-  if (!proxyHost) {
-    return {
-      endpoint,
-      region,
-      speechKey,
-      interimResults: draft.interimResults
-    }
-  }
+  if (!proxyHost) return config
 
   const proxyPort = draft.proxyPort.trim()
   if (!proxyPort) {
@@ -55,10 +57,7 @@ export function draftToConfig(draft: ConfigDraft): AzureConfig {
   }
 
   return {
-    endpoint,
-    region,
-    speechKey,
-    interimResults: draft.interimResults,
+    ...config,
     proxy: {
       host: proxyHost,
       port: parsedPort,
@@ -69,13 +68,7 @@ export function draftToConfig(draft: ConfigDraft): AzureConfig {
 }
 
 export function isConfigComplete(config: AzureConfig | null): boolean {
-  if (!config) {
-    return false
-  }
-
-  if (!config.endpoint.trim() || !config.region.trim() || !config.speechKey.trim()) {
-    return false
-  }
+  if (!config || !hasAzureConnectionFields(config)) return false
 
   if (!config.proxy) {
     return true

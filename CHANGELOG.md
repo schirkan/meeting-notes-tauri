@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Choose **Azure Speech (standard)** or **MAI Transcribe (Preview)** under **Settings → Azure**. Azure Speech remains the default.
+- **Stereo mix** under **Settings → Transcription** sends microphone and speaker loopback as separate channels in one Speech SDK session and shows final results only. **Dual mono** remains the default; a single enabled source still uses mono.
+
+### Known limitations
+- Standard stereo uses the selected primary language. MAI stereo is experimental, does not identify individual speakers, and does not fall back automatically. Live channel separation and billing savings are not yet verified.
+
 ## v0.1.7 - 2026-11-23
 
 ### Added

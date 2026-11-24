@@ -33,7 +33,7 @@ internal sealed class AudioRecorderSource : IDisposable
     private readonly WaveFormat _targetFormat;
     private readonly Action<byte[], long, int, long?> _onFrame;
     private readonly string _label;
-    private readonly bool _timestampForEcho;
+    private readonly bool _includePacketTimestamp;
 
     private WasapiRecorder _recorder;
     private BufferedWaveProvider? _mixBuffer;
@@ -47,7 +47,7 @@ internal sealed class AudioRecorderSource : IDisposable
         bool loopback,
         WaveFormat targetFormat,
         string label,
-        bool timestampForEcho,
+        bool includePacketTimestamp,
         Action<byte[], long, int, long?> onFrame,
         WasapiRecorder recorder)
     {
@@ -56,7 +56,7 @@ internal sealed class AudioRecorderSource : IDisposable
         _targetFormat = targetFormat;
         _label = label;
         _onFrame = onFrame;
-        _timestampForEcho = timestampForEcho;
+        _includePacketTimestamp = includePacketTimestamp;
         _recorder = recorder;
         _engineMode = true;
     }
@@ -86,11 +86,11 @@ internal sealed class AudioRecorderSource : IDisposable
         bool loopback,
         WaveFormat targetFormat,
         string label,
-        bool timestampForEcho,
+        bool includePacketTimestamp,
         Action<byte[], long, int, long?> onFrame)
     {
         var recorder = BuildRecorder(device, loopback, targetFormat);
-        var source = new AudioRecorderSource(device, loopback, targetFormat, label, timestampForEcho, onFrame, recorder);
+        var source = new AudioRecorderSource(device, loopback, targetFormat, label, includePacketTimestamp, onFrame, recorder);
         source.Attach(recorder);
         return source;
     }
@@ -213,18 +213,18 @@ internal sealed class AudioRecorderSource : IDisposable
             var captureLatencyMs = _recorder.LatencyMilliseconds;
 
             // WASAPI packet start in the shared QPC clock (100 ns units), not
-            // callback arrival time. A missing/invalid timestamp resets AEC only.
+            // callback arrival time. Invalid timestamps are not passed to audio processing as QPC anchors.
             const AudioClientBufferFlags badTiming = AudioClientBufferFlags.DataDiscontinuity | AudioClientBufferFlags.TimestampError;
-            long? echoTimestamp = _timestampForEcho && qpcPosition > 0 && (flags & badTiming) == 0 ? qpcPosition : null;
+            long? packetTimestamp = _includePacketTimestamp && qpcPosition > 0 && (flags & badTiming) == 0 ? qpcPosition : null;
 
             if (_mixBuffer is not null && _resampler is not null)
             {
                 // Resampler-Modus: Geraete-Mixformat -> Zielformat.
-                if (_timestampForEcho) _resamplerDiscontinuity |= echoTimestamp is null;
+                if (_includePacketTimestamp) _resamplerDiscontinuity |= packetTimestamp is null;
                 _mixBuffer.AddSamples(buffer);
                 var pcm = _resampler.DrainToBuffer();
                 if (pcm.Length == 0) return;
-                if (_timestampForEcho)
+                if (_includePacketTimestamp)
                 {
                     var mixFormat = _mixBuffer.WaveFormat;
                     var inputSeconds = (double)(buffer.Length / mixFormat.BlockAlign) / mixFormat.SampleRate;
@@ -232,16 +232,16 @@ internal sealed class AudioRecorderSource : IDisposable
                     // A steady conversion delay can be found by correlation. When
                     // the resampler batches audio, do not assign an unreliable clock.
                     if (_resamplerDiscontinuity || Math.Abs(inputSeconds - outputSeconds) > 0.005)
-                        echoTimestamp = null;
+                        packetTimestamp = null;
                     _resamplerDiscontinuity = false;
                 }
-                _onFrame(pcm, capturedAtTicks, captureLatencyMs, echoTimestamp);
+                _onFrame(pcm, capturedAtTicks, captureLatencyMs, packetTimestamp);
                 return;
             }
 
             // Engine-Modus: das Zielformat soll direkt aus der Engine kommen.
             // Der Span gilt nur fuer die Dauer des Callbacks, deshalb kopieren.
-            _onFrame(buffer.ToArray(), capturedAtTicks, captureLatencyMs, echoTimestamp);
+            _onFrame(buffer.ToArray(), capturedAtTicks, captureLatencyMs, packetTimestamp);
         }
         catch (Exception ex)
         {

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { hasAzureConnectionFields } from '@shared/config-contract'
 import { AboutDialog } from './components/AboutDialog'
 import { ConfigPanel } from './components/ConfigPanel'
 import { ConnectivityDialog } from './components/ConnectivityDialog'
@@ -125,7 +126,7 @@ export function App() {
             following={autoScrollEnabled}
             onFollow={onFollowTranscript}
             emptyContent={!isLoadingInitialData && !status.running && !isStarting && <div className="idle-audio-panel">
-              <SettingsPanel audioOnly statusRunning={false} settings={settings} devices={devices} setSettings={setIdleSettings} onChooseDirectory={onChooseTranscriptDirectory} />
+              <SettingsPanel audioOnly statusRunning={false} useMaiModel={configState?.config?.model === 'mai-transcribe-2-streaming'} settings={settings} devices={devices} setSettings={setIdleSettings} onChooseDirectory={onChooseTranscriptDirectory} />
             </div>}
           />
           <aside className="console-inspector" id="console-speakers" hidden={!speakersOpen} aria-labelledby="console-speakers-title">
@@ -164,7 +165,7 @@ export function App() {
                 className="secondary-button"
                 type="button"
                 onClick={() => void onTestConnectivity()}
-                disabled={isTestingConnectivity || isSavingSettings || isChoosingDirectory || !configDraft.endpoint || !configDraft.speechKey || !configDraft.region}
+                disabled={status.running || isTestingConnectivity || isSavingSettings || isChoosingDirectory || !hasAzureConnectionFields(configDraft)}
               >
                 {isTestingConnectivity ? 'Testing …' : 'Test connection'}
               </button>
@@ -188,6 +189,7 @@ export function App() {
       >
         <SettingsPanel
           statusRunning={status.running}
+          useMaiModel={configDraft.model === 'mai-transcribe-2-streaming'}
           settings={dialogSettings}
           devices={devices}
           setSettings={setDialogSettings}

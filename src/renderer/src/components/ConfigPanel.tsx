@@ -1,4 +1,4 @@
-import type { AppConfigState } from '@shared/config-contract'
+import { isAzureSpeechModel, type AppConfigState } from '@shared/config-contract'
 import type { ConfigDraft } from '../config-utils'
 
 type ConfigPanelProps = {
@@ -16,19 +16,43 @@ export function ConfigPanel(props: ConfigPanelProps) {
     setConfigDraft
   } = props
 
+  const isMai = configDraft.model === 'mai-transcribe-2-streaming'
+
   return (
     <section className="panel settings">
       <div className="panel-header">
         <h2>Azure</h2>
       </div>
 
-      {!configState?.exists && (
+      {!configState?.config && (
         <div className="settings-inline-hint">
           No valid Azure configuration found. Please enter and save one now.
         </div>
       )}
 
       <div className="settings-block">
+        <label className="speech-model-field" title="Choose the Azure Speech model for the next transcription">
+          Transcription model
+          <select
+            value={configDraft.model}
+            onChange={(event) => {
+              const model = event.currentTarget.value
+              if (isAzureSpeechModel(model)) setConfigDraft((prev) => ({ ...prev, model }))
+            }}
+            disabled={statusRunning}
+          >
+            <option value="standard">Azure Speech (standard)</option>
+            <option value="mai-transcribe-2-streaming">MAI Transcribe (Preview)</option>
+          </select>
+        </label>
+        {isMai && (
+          <p className="settings-inline-hint speech-model-hint">
+            Requires a supported Azure region and speech key. The endpoint below is only used by Standard.
+            MAI detects the language automatically and labels audio by source, not by speaker.
+            Each enabled source still uses a separate Azure session.
+          </p>
+        )}
+
         <label title="Enter the HTTPS endpoint of your Azure Speech resource">
           Endpoint
           <input
@@ -36,7 +60,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
             value={configDraft.endpoint}
             onChange={(event) => setConfigDraft((prev) => ({ ...prev, endpoint: event.target.value }))}
             placeholder="https://..."
-            disabled={statusRunning}
+            disabled={statusRunning || isMai}
           />
         </label>
 

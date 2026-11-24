@@ -16,15 +16,15 @@ Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1
 
 Die Checkboxen wurden gegen den **Code** geprueft, nicht gegen den Spec-Status:
 jeder abgehakte Punkt traegt den Beleg im Klartext (`Beleg: …`), jeder offene
-Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **43 Specs** als
-`umgesetzt` bzw. `teils umgesetzt` markiert, **28 offene Punkte in 20 Specs**.
+Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **45 Specs** als
+`umgesetzt` bzw. `teils umgesetzt` markiert, **36 offene Punkte in 23 Specs**.
 Vorher waren ueber 70 Checkboxen offen, obwohl die Funktion ueberwiegend fertig
 und verifiziert war - die Specs sind jetzt mit dem Stand der Implementierung
 deckungsgleich.
 
 _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 
-### Offen und braucht deinen Rechner (14 Punkte)
+### Offen und braucht deinen Rechner (20 Punkte)
 
 | Spec | Punkt |
 |---|---|
@@ -42,8 +42,14 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-514 | Native Windows-Abnahme der Taskleistenoption. |
 | T-519 | A/B mit Laptop-Lautsprechern und zweitem Geraetepaar belegt Nutzen gegen Doppeleintraege und E… |
 | T-519 | Portable misst Verhalten bei Luecken, Resume und Last; Latenz, CPU, Queue und Drop-Zaehler sin… |
+| T-521 | Hardwarelauf belegt Zeitanker, Resampling-Fallback, Drift und gleichzeitige Sprache. |
+| T-521 | Live-Azure belegt je eine Sitzung, korrekte Finals und Standard-Sprecher-IDs fuer beide Standa… |
+| T-521 | Live-Lifecycle und Diagnose decken Pause/Resume, Sitzungsende, Stop/Quit und letzte Finals bei… |
+| T-522 | Spike belegt Modell, Stereo in einer Sitzung, Kanalresultate und Ziel-Proxy. |
+| T-522 | Meter und Kostenvorteil ausserhalb der Promo sind fuer die Zielnutzung belegt. |
+| T-522 | Live-Qualitaet, Lifecycle und Portable-Abnahme sind dokumentiert. |
 
-### Offen als bewusste Entscheidung (14 Punkte)
+### Offen als bewusste Entscheidung (16 Punkte)
 
 | Spec | Punkt | Warum offen |
 |---|---|---|
@@ -61,6 +67,8 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-513 | Ein normales Podcast-Playback loest **keinen** Auto-Start aus. | Fuer die Gegenprobe am Zielrechner liegt kein Ergebnis vor. |
 | T-513 | Der Fenster-/Applikations-Fallback (Stufe 2) ist gebaut, falls Stufe… | laut Entscheidung vom 2026-11-18 erst umsetzen, **wenn** die Session-Erkennung in der Praxis nicht trägt. |
 | T-518 | Echte Windows-Capture-Queues, Rueckkehr nach Geraetestoerungen und A/… | Native Zielgeraete-/Azure-Abnahme folgt in T-519. |
+| T-520 | UI, IPC und Export bewahren getrennte Quellen; Sprach- und Sprechergr… | Die Mehrkanal-Ausgabe sowie Sprache und Quellenlabels bei einer Live-Aufnahme mit MAI muessen noch abgenommen werden. |
+| T-520 | Preview ist nur nach Kosten-, Qualitaets-, Proxy- und Portable-Freiga… | Freigabekriterien und Messung siehe T-522. |
 
 ### Nächste Schritte auf deinem Rechner (die 11 offenen Punkte)
 
@@ -192,10 +200,11 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - User-Settings enthalten `diarization: { "mic": true, "speaker": true }` sowie `transcript.markdownExport` mit `enabled` (Default `true`) und optionalem `path` (Default `null`). Fehlende Felder werden je Quelle als `true` normalisiert. Rust reicht die gespeicherten Optionen beim Start über `--diarization-mic true|false` und `--diarization-speaker true|false` an den Sidecar weiter.
 - Optionaler HTTP-CONNECT-Proxy über `proxy.host`, `proxy.port` (1–65535), optional `username`/`password`. Host ohne Schema/Pfad. Rust lädt die Dateien und reicht Einstellungen an HTTPS-Diagnose und Sidecar weiter; der Sidecar lädt sie nicht selbst.
 - Sidecar erhält Speech-Key/Proxy-Zugangsdaten über prozesslokale Umgebungsvariablen, nicht Credential-CLI-Argumente. Host/Port/Endpoint/Region/Sprache sind nicht geheime CLI-Args.
-- **Verbindung testen** nutzt aktuelle, auch ungespeicherte Werte und Sitzungssprache. `test_azure_connectivity` führt parallel System-DNS/TCP/HTTPS in Rust und native Speech/WSS-Diagnose in einem separaten Sidecar ohne Audio-Capture aus.
+- `azure.model` waehlt das Speech-SDK-Modell (Standard oder MAI Preview); `user.transcription.audioMode` waehlt Dual Mono (Default) oder einen gemeinsamen Stereo-Stream bei zwei Quellen. Details: [T-520](./specs/T-520-mai-transcribe-streaming-feature.md) und [T-521](./specs/T-521-mai-transcribe-mehrkanal-sidecar.md).
+- **Test connection** nutzt den ungespeicherten Entwurf und ist bei laufender oder pausierter Aufnahme gesperrt. Standard prüft HTTPS in Rust und native Speech/WSS im separaten Sidecar. MAI prüft nur native Speech/WSS mit dem regionalen Modell. Beide SDK-Diagnosen verwenden Stille statt Audio-Capture.
 - HTTPS nutzt expliziten Proxy mit optionaler Basic-Authentifizierung, ansonsten `.no_proxy()`; kein öffentlicher DNS-Fallback. DNS/TCP prüfen den Proxy, sonst den Endpoint mit dessen Port oder 443. HTTPS-HEAD folgt keinen Redirects.
 - **HTTPS-Diagnose und native Windows-Speech-SDK-Prüfung validieren TLS-Zertifikate beide gegen den System-Vertrauensspeicher.** Kein offiziell dokumentierter .NET-Bypass für Speech SDK 1.53 gefunden; für die HTTPS-Probe gibt es keinen Bypass. Bei TLS-Inspection muss das Firmen-Root-CA im Vertrauensspeicher hinterlegt sein.
-- `httpsReachable` bedeutet HTTP-Antwort auch bei 401/403; `speechReachable` verlangt `Connected` und `SessionStarted` für Recognizer **und** Transcriber. `reachable` verlangt beide Transporte. Die Step-Einstufung der HTTPS-Probe: `2xx` = Erfolg, `401`/`403` = Warnung, `407` = Fehler, sonst Warnung.
+- `httpsReachable` bedeutet HTTP-Antwort auch bei 401/403 (für MAI nicht geprüft). `speechReachable` verlangt `Connected` und `SessionStarted` für die vorgesehenen SDK-Proben: bei Standard-Dual-Mono für Recognizer und Transcriber, bei Stereo für den ausgewählten Typ und bei MAI-Mono für den Recognizer. `reachable` verlangt alle für das gewählte Modell vorgesehenen Transporte. HTTPS-Schritte: `2xx` = Erfolg, `401`/`403` = Warnung, `407` = Fehler, sonst Warnung.
 - Diagnoseprozess: 45 s Grenze; DNS/TCP/HTTPS jeweils 5 s Timeout, keine garantierte 45-s-Obergrenze des vollständigen UI-Aufrufs. Native Proben können Azure-Kosten verursachen.
 - Ergebnis wird zurückgegeben und als `transcript:connectivity-result` emittiert; UI nutzt Return-Wert. Separater Dialog zeigt alle Status/Details erst nach Abschluss, einschließlich Validierungs-/IPC-Fehlern, nicht live gestreamte Einzelsteps. Siehe [T-304](./specs/T-304-connectivity-diagnose-in-rust.md).
 
@@ -330,6 +339,9 @@ generierte Uebersicht im Abschnitt **Stand der Specs** fasst offene Punkte zusam
 - [T-512: Target-Framework und Single-File-Sidecar](./specs/T-512-sidecar-targetframeworks-und-single-file.md)
 - [T-517: Echo cancellation (Alpha) – Opt-in und Einstellungen](./specs/T-517-echo-cancellation-alpha.md)
 - [T-518: Echo cancellation – lokale Audio-Pipeline](./specs/T-518-echo-cancellation-audio-pipeline.md)
+- [T-520: MAI-Transcribe-2-Streaming – optionales Feature](./specs/T-520-mai-transcribe-streaming-feature.md)
+- [T-521: MAI-Transcribe-2-Streaming – Mehrkanal im Sidecar](./specs/T-521-mai-transcribe-mehrkanal-sidecar.md)
+- [T-522: MAI-Transcribe-2-Streaming – Machbarkeit, Kosten und Abnahme](./specs/T-522-mai-transcribe-machbarkeit-kosten-abnahme.md)
 
 ### Orchestrierung und Persistenz
 - [T-300: Tauri-Main](./specs/T-300-tauri-main-als-orchestrator.md)

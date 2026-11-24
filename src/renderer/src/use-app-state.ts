@@ -722,7 +722,12 @@ export function useAppState() {
     let requestSubmitted = false
     try {
       // Aktuelle Draft-Werte (auch ungespeicherte Änderungen) testen.
-      const payload = { ...draftToConfig(configDraft), language: dialogSettings.language }
+      const payload = {
+        ...draftToConfig(configDraft),
+        language: dialogSettings.language,
+        transcription: dialogSettings.transcription,
+        diarization: dialogSettings.diarization
+      }
       requestSubmitted = true
       const result = await window.transcriptApi.testAzureConnectivity(payload)
       setConnectivityResult({

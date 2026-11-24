@@ -185,13 +185,15 @@ if (!transcription.Mic && !transcription.Speaker)
 Logger.Info("config", "transcription", $"Transcribed sources: mic={transcription.Mic}, speaker={transcription.Speaker}.");
 
 bool echoEnabled;
+bool stereo;
 try
 {
     echoEnabled = ArgsParser.ParseEchoCancellation(argsMap, transcription);
+    stereo = ArgsParser.ParseStereo(argsMap, transcription);
 }
-catch (ArgumentException)
+catch (ArgumentException ex)
 {
-    Logger.Error("SIDECAR_START_FAILED", "Invalid echo cancellation option: --echo-cancellation must be true or false.");
+    Logger.Error("SIDECAR_START_FAILED", ex.Message);
     return 11;
 }
 
@@ -217,15 +219,38 @@ if (!int.TryParse(srRaw, out var sampleRate) || sampleRate < 8000 || sampleRate 
     return 11;
 }
 
+if (stereo && sampleRate != StereoAudioMux.SampleRate)
+{
+    Logger.Error("SIDECAR_START_FAILED", "Stereo requires 16 kHz PCM audio.");
+    return 11;
+}
+
 var micId = argsMap.GetValueOrDefault("--mic-device-id");
 var speakerId = argsMap.GetValueOrDefault("--speaker-device-id");
 var language = argsMap.GetValueOrDefault("--language") ?? "de-DE";
 var speechKey = SpeechConfiguration.GetSpeechKey(argsMap);
 var speechRegion = argsMap.GetValueOrDefault("--speech-region");
 var speechEndpoint = argsMap.GetValueOrDefault("--speech-endpoint");
+AzureSpeechModel speechModel;
+try
+{
+    speechModel = SpeechConfiguration.ParseModel(argsMap.GetValueOrDefault("--speech-model"));
+}
+catch (ArgumentException ex)
+{
+    Logger.Error("SIDECAR_START_FAILED", ex.Message);
+    return 11;
+}
 var azureEnabled = !string.IsNullOrWhiteSpace(speechKey)
                    && !string.IsNullOrWhiteSpace(speechRegion)
-                   && !string.IsNullOrWhiteSpace(speechEndpoint);
+                   && (speechModel == AzureSpeechModel.MaiTranscribe2Streaming || !string.IsNullOrWhiteSpace(speechEndpoint));
+if (!azureEnabled && (stereo || speechModel == AzureSpeechModel.MaiTranscribe2Streaming))
+{
+    Logger.Error("SIDECAR_START_FAILED", speechModel == AzureSpeechModel.MaiTranscribe2Streaming
+        ? "MAI Transcribe requires an Azure region and speech key."
+        : "Azure Speech stereo requires an endpoint, region and speech key.");
+    return 11;
+}
 
 if (!azureEnabled)
 {
@@ -249,6 +274,8 @@ AzureSpeechService? azure = null;
 AudioRecorderSource? micSource = null;
 AudioRecorderSource? speakerSource = null;
 var captureCleanupAssigned = false;
+Task? stereoStart = null;
+using var stereoStartup = stereo ? CancellationTokenSource.CreateLinkedTokenSource(stopping) : null;
 EchoCancellation? echo = null;
 Task echoDiagnostics = Task.CompletedTask;
 if (echoEnabled)
@@ -314,19 +341,32 @@ try
     if (azureEnabled)
     {
         var azureConfig = new AzureSpeechConfig(
-            Endpoint: speechEndpoint!,
+            Endpoint: speechEndpoint ?? string.Empty,
             Region: speechRegion!,
             SpeechKey: speechKey!,
             InterimResults: true,
-            Proxy: proxy);
+            Proxy: proxy,
+            Model: speechModel);
         var userSettings = new UserSettings(language, new DeviceIds(micId, speakerId))
         {
             Transcription = transcription,
-            Diarization = diarization
+            Diarization = diarization,
+            Stereo = stereo
         };
-        azure = new AzureSpeechService(azureConfig, userSettings);
-        await azure.InitAsync();
-        await azure.StartAsync(new AzureAudioFormat(sampleRate, 16, 1));
+        azure = new AzureSpeechService(azureConfig, userSettings, RequestStop);
+        async Task StartAzureAsync(AzureSpeechService service)
+        {
+            await service.InitAsync();
+            await service.StartAsync(new AzureAudioFormat(sampleRate, 16, 1));
+        }
+        if (stereoStartup is not null)
+        {
+            stereoStartup.CancelAfter(TimeSpan.FromSeconds(12));
+            stereoStart = Task.Run(() => StartAzureAsync(azure));
+            _ = stereoStart.ContinueWith(task => { _ = task.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
+            await stereoStart.WaitAsync(stereoStartup.Token);
+        }
+        else await StartAzureAsync(azure);
     }
 
     var azurePushLock = new object();
@@ -341,15 +381,15 @@ try
         loopback: false,
         targetWaveFormat,
         "Mic",
-        timestampForEcho: echo is not null,
-        (pcm, capturedAtTicks, captureLatencyMs, echoTimestamp) =>
+        includePacketTimestamp: echo is not null || stereo,
+        (pcm, capturedAtTicks, captureLatencyMs, packetTimestamp) =>
         {
             try
             {
                 if (pcm.Length == 0) return;
                 if (echo is not null)
                 {
-                    pcm = echo.ProcessMic(pcm, echoTimestamp);
+                    pcm = echo.ProcessMic(pcm, packetTimestamp);
                     var phase = echo.State;
                     if (lastEchoPhase != phase)
                     {
@@ -357,15 +397,14 @@ try
                         Logger.Debug("audio", "echo_cancellation", $"Echo cancellation (Alpha): {phase}.");
                     }
                 }
-                lock (azurePushLock)
-                {
-                    azure?.PushFrame(new AudioFrame(
+                var frame = new AudioFrame(
                         AzureSpeechService.SourceMic,
                         sampleRate, 16, 1,
                         pcm,
                         capturedAtTicks,
-                        captureLatencyMs));
-                }
+                        captureLatencyMs, packetTimestamp);
+                if (stereo) azure?.PushFrame(frame);
+                else lock (azurePushLock) azure?.PushFrame(frame);
             }
             catch (Exception ex)
             {
@@ -380,22 +419,21 @@ try
         loopback: true,
         targetWaveFormat,
         "Speaker-Loopback",
-        timestampForEcho: echo is not null,
-        (pcm, capturedAtTicks, captureLatencyMs, echoTimestamp) =>
+        includePacketTimestamp: echo is not null || stereo,
+        (pcm, capturedAtTicks, captureLatencyMs, packetTimestamp) =>
         {
             try
             {
                 if (pcm.Length == 0) return;
-                echo?.AddReference(pcm, echoTimestamp);
-                lock (azurePushLock)
-                {
-                    azure?.PushFrame(new AudioFrame(
+                echo?.AddReference(pcm, packetTimestamp);
+                var frame = new AudioFrame(
                         AzureSpeechService.SourceSpeaker,
                         sampleRate, 16, 1,
                         pcm,
                         capturedAtTicks,
-                        captureLatencyMs));
-                }
+                        captureLatencyMs, packetTimestamp);
+                if (stereo) azure?.PushFrame(frame);
+                else lock (azurePushLock) azure?.PushFrame(frame);
             }
             catch (Exception ex)
             {
@@ -429,7 +467,14 @@ try
     Logger.Info("format", "speaker_format", speakerSource is null
         ? "Speaker loopback: not transcribed."
         : $"Speaker capture format: {speakerSource.Format} (mode: {speakerSource.ModeLabel})");
-    Logger.Info("format", "azure_target", $"Azure Target Format: {targetWaveFormat}");
+    var azureTarget = stereo ? new WaveFormat(sampleRate, 16, 2) : targetWaveFormat;
+    Logger.Info("format", "azure_target", $"Azure Target Format: {azureTarget}");
+    if (stereoStartup is not null && azure is not null)
+    {
+        await azure.WaitForStereoReadyAsync(stereoStartup.Token);
+        stereoStartup.Token.ThrowIfCancellationRequested();
+        stereoStartup.CancelAfter(Timeout.InfiniteTimeSpan);
+    }
     Logger.Info("status", "capturing", $"Active: {string.Join(" + ", activeSources)}.");
     Logger.Event("status", new { phase = "started", running = true });
 
@@ -550,6 +595,11 @@ try
     }, shutdownToken);
     return 0;
 }
+catch (OperationCanceledException) when (stereoStartup?.IsCancellationRequested == true && !stopping.IsCancellationRequested)
+{
+    Logger.Error("SIDECAR_START_FAILED", "Timed out waiting for the stereo Azure session to start.");
+    return 50;
+}
 catch (Exception ex)
 {
     Logger.Error("SIDECAR_UNAVAILABLE", ex.Message);
@@ -564,7 +614,21 @@ finally
     if (!captureCleanupAssigned)
     {
         try { micSource?.Dispose(); }
-        finally { speakerSource?.Dispose(); }
+        finally
+        {
+            try { speakerSource?.Dispose(); }
+            finally
+            {
+                // Do not dispose SDK handles concurrently with native startup on timeout.
+                if (stereoStart?.IsCompleted == true && azure is not null)
+                {
+                    var cleanup = Task.Run(() => azure.StopAsync());
+                    _ = cleanup.ContinueWith(task => { _ = task.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
+                    try { await cleanup.WaitAsync(RecordingControl.ShutdownBudget); }
+                    catch (TimeoutException) { Logger.Warn("azure", "stop_timeout", "Stereo startup cleanup timed out."); }
+                }
+            }
+        }
     }
 }
 
