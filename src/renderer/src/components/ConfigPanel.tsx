@@ -49,7 +49,8 @@ export function ConfigPanel(props: ConfigPanelProps) {
           <p className="settings-inline-hint speech-model-hint">
             Requires a supported Azure region and speech key. The endpoint below is only used by Standard.
             MAI detects the language automatically and labels audio by source, not by speaker.
-            Each enabled source still uses a separate Azure session.
+            Dual mono uses one Azure session per enabled source. Stereo mix uses one session for both sources.
+            Stereo is experimental; billing savings have not been verified.
           </p>
         )}
 

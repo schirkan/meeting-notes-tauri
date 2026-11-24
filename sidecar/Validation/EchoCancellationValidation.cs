@@ -197,6 +197,27 @@ internal static class EchoCancellationValidation
         check(filter.State == EchoCancellation.Phase.Off && ReferenceEquals(filter.ProcessMic(valid, At(355 * Frame)), valid),
             "Stop is terminal and ignores later capture callbacks and Resume");
 
+        var contended = new EchoCancellation(Rate);
+        Feed(contended, 0, 40);
+        _ = contended.TakeDiagnosticSummary();
+        // Hold the collector's swap lock on this thread while a Mic packet is processed on another.
+        var diagnosticsGate = typeof(EchoCancellation).GetField("_diagnosticsGate",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.GetValue(contended)
+            ?? throw new InvalidOperationException("AEC diagnostics must not share the processing gate.");
+        var echoPacket = Mic(40 * Frame);
+        contended.AddReference(Far(40 * Frame), At(40 * Frame));
+        byte[] corrected;
+        lock (diagnosticsGate)
+        {
+            // A dedicated thread prevents task inlining from making the Monitor reentrant.
+            corrected = Task.Factory.StartNew(() => contended.ProcessMic(echoPacket, At(40 * Frame)),
+                CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)
+                .WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+        }
+        check(contended.State == EchoCancellation.Phase.Active && Energy(corrected) < 0.06 * Energy(echoPacket) &&
+            contended.TakeDiagnosticSummary() is null,
+            "A contended AEC diagnostics snapshot can skip telemetry, but never disables echo filtering");
+
         var distantFilter = new EchoCancellation(Rate);
         const int DistantDelay = Rate * 225 / 1000 + 1;
         before = after = 0;

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore, SemaphorePermit};
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
 
 use crate::connectivity;
@@ -79,21 +79,69 @@ fn push_and_emit_debug(
 
 // ---------- start / stop recording ----------
 
+/// Excludes capture startup and connectivity probes, without making meeting
+/// end events wait for a probe on the recording lifecycle lock.
+pub(crate) struct CaptureStartGate(Semaphore);
+
+impl Default for CaptureStartGate {
+    fn default() -> Self {
+        Self(Semaphore::new(1))
+    }
+}
+
+impl CaptureStartGate {
+    pub(crate) async fn lock(&self) -> SemaphorePermit<'_> {
+        self.0
+            .acquire()
+            .await
+            .expect("the capture start gate is never closed")
+    }
+
+    pub(crate) fn try_start(&self) -> Option<SemaphorePermit<'_>> {
+        self.0.try_acquire().ok()
+    }
+
+    pub(crate) fn is_busy(&self) -> bool {
+        self.0.available_permits() == 0
+    }
+}
+
 #[tauri::command]
 pub async fn start_recording(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<events::TranscriptStatus, String> {
-    start_recording_with_origin(app, state, None).await
-}
-
-pub async fn start_recording_with_origin(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    origin: Option<crate::autostart::MeetingDetectedPayload>,
-) -> Result<events::TranscriptStatus, String> {
+    let gate = app.state::<CaptureStartGate>();
+    let _capture = gate.lock().await;
     let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
     let mut lifecycle = lifecycle.lock().await;
+    start_recording_with_origin(&app, &state, &mut lifecycle, None).await
+}
+
+pub(crate) async fn start_recording_for_meeting(
+    app: &AppHandle,
+    origin: crate::autostart::MeetingDetectedPayload,
+) -> Result<bool, String> {
+    // Never queue an automatic start behind either gate: its meeting could
+    // end while the ordered detector consumer is waiting here.
+    let gate = app.state::<CaptureStartGate>();
+    let Some(_capture) = gate.try_start() else {
+        return Ok(false);
+    };
+    let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
+    let Ok(mut lifecycle) = lifecycle.try_lock() else {
+        return Ok(false);
+    };
+    start_recording_with_origin(app, &app.state::<AppState>(), &mut lifecycle, Some(origin)).await?;
+    Ok(true)
+}
+
+async fn start_recording_with_origin(
+    app: &AppHandle,
+    state: &AppState,
+    lifecycle: &mut crate::autostart::RecordingLifecycle,
+    origin: Option<crate::autostart::MeetingDetectedPayload>,
+) -> Result<events::TranscriptStatus, String> {
     if app.state::<crate::tray::WindowBehavior>().protects_transcript() {
         return Err("Finish quitting before starting a new transcription.".into());
     }
@@ -106,7 +154,7 @@ pub async fn start_recording_with_origin(
     if origin.is_some() && !user.auto_start.enabled {
         return Err("Automatic transcription start is disabled.".into());
     }
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "start_recording called.");
+    push_and_emit_debug(app, state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "start_recording called.");
 
     let azure = azure.ok_or("The Azure configuration is missing or invalid. Check the transcription model and connection settings.")?;
     azure.check_connection_fields()?;
@@ -126,7 +174,7 @@ pub async fn start_recording_with_origin(
         speaker_device_id: user.devices.speaker_loopback_id.clone(),
     };
 
-    let handle = sidecar::start(&app, options).await.map_err(|e| e.to_string())?;
+    let handle = sidecar::start(app, options).await.map_err(|e| e.to_string())?;
 
     // Cache the live handle so stop_recording can reach it. Das passiert vor
     // dem Start des Forwarders: der Handshake (T-201) wird ueber den Cache
@@ -148,14 +196,17 @@ pub async fn start_recording_with_origin(
 
     lifecycle.auto_origin = origin;
     let status = state.mark_started();
-    events::emit_status(&app, &status);
+    events::emit_status(app, &status);
+    if let Some(origin) = lifecycle.auto_origin.as_ref() {
+        events::emit_meeting_detected(app, origin);
+    }
     spawn_event_forwarder(app.clone(), handle.events_rx, Arc::clone(&handle.child));
 
     // T-201: Ohne gueltiges Handshake wird der Sidecar beendet - ein
     // Sidecar, der nicht antwortet, wuerde sonst stumm bleiben.
     spawn_handshake_timeout(app.clone(), handle.child);
 
-    push_and_emit_debug(&app, &state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status changed: running.");
+    push_and_emit_debug(app, state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status changed: running.");
     Ok(status)
 }
 
@@ -849,11 +900,16 @@ pub async fn test_azure_connectivity(
     state: State<'_, AppState>,
     payload: Option<serde_json::Value>,
 ) -> Result<connectivity::ConnectivityResult, String> {
-    // Hold the same lifecycle lock as recording start so a probe cannot overlap capture.
-    let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
-    let _lifecycle = lifecycle.lock().await;
-    if state.snapshot_status().running {
-        return Err("Stop transcription before testing the connection.".into());
+    let gate = app.state::<CaptureStartGate>();
+    let _probe = gate.lock().await;
+    {
+        // Let any capture shutdown finish, then release its lifecycle lock
+        // before starting the probe. No new capture can start while _probe lives.
+        let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
+        let _lifecycle = lifecycle.lock().await;
+        if state.snapshot_status().running {
+            return Err("Stop transcription before testing the connection.".into());
+        }
     }
     let value = payload.unwrap_or(serde_json::Value::Null);
     let config: AzureConfig = serde_json::from_value(value.clone())

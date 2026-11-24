@@ -272,7 +272,11 @@ Der Tauri-Main stoppt nur die vom passenden Prozess automatisch gestartete
 Aufnahme. Manuelle Aufnahmen, fremde Prozesse und deaktivierter Auto-Start
 sind geschuetzt. Start/Stop/Pause/Resume sind serialisiert; der normale Stop-Pfad bleibt
 fuer Status und Export erhalten. Detektor-Start/Ende-Ereignisse werden in
-Eingangsreihenfolge verarbeitet, nicht als unabhaengige Async-Tasks.
+Eingangsreihenfolge verarbeitet, nicht als unabhaengige Async-Tasks. Ein
+Auto-Start, der bei laufendem Verbindungstest bzw. belegter Startsperre
+ankommt oder verarbeitet wird, wird uebersprungen, nicht nachgeholt. Ein
+passendes Meeting-Ende wartet nicht auf den Netzwerktest. Wenn das Meeting
+noch laeuft, kann nach dem Test manuell gestartet werden.
 
 **Grenze:** Audio-Sitzungsende ist kein definitives Meeting-Ende. Teams/Zoom
 koennen Streams laenger als 3 Sekunden schliessen oder nach Call-Ende offen

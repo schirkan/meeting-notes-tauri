@@ -44,19 +44,33 @@ internal static class StereoValidation
 
         var writes = new List<byte[]>();
         var failed = false;
-        var writer = new StereoAudioWriter(writes.Add, _ => failed = true);
+        var frequency = System.Diagnostics.Stopwatch.Frequency;
+        var now = frequency;
+        var writer = new StereoAudioWriter(writes.Add, _ => failed = true, () => Volatile.Read(ref now));
         writer.SetPaused(true);
         writer.Add(new AudioFrame("mic", 16000, 16, 1, Pcm(1, 640)));
         writer.SetPaused(false);
+        Volatile.Write(ref now, 2 * frequency);
         writer.Add(new AudioFrame("mic", 16000, 16, 1, Pcm(13, 5), PacketQpc100Ns: 1));
-        var start = (long)Math.Ceiling(System.Diagnostics.Stopwatch.GetTimestamp() *
-            (50.0 / System.Diagnostics.Stopwatch.Frequency)) * 200_000;
-        writer.Add(new AudioFrame("speaker", 16000, 16, 1, Pcm(2, 10), PacketQpc100Ns: start));
+        // Callback arrives long after Resume: the fallback estimate places the whole packet after Resume,
+        // but the packet could contain audio buffered while paused (with or without a callback timestamp).
+        writer.Add(new AudioFrame("mic", 16000, 16, 1, Pcm(11, 10), CapturedAtTicks: now));
+        writer.Add(new AudioFrame("speaker", 16000, 16, 1, Pcm(12, 10)));
+        writer.Add(new AudioFrame("mic", 16000, 16, 1, [.. Pcm(23, 5), .. Pcm(3, 5)],
+            PacketQpc100Ns: TimeSpan.TicksPerSecond - 5 * 625));
+        writer.Add(new AudioFrame("speaker", 16000, 16, 1, Pcm(2, 10), PacketQpc100Ns: TimeSpan.TicksPerSecond));
         await writer.CompleteAsync().WaitAsync(TimeSpan.FromSeconds(5));
-        check(!failed && writes.Count > 0 && writes.SelectMany(bytes => bytes).Chunk(4)
-            .All(sample => sample[0] == 0 && sample[1] == 0) &&
-            writes.SelectMany(bytes => bytes).Chunk(4).Count(sample => sample[2] == 2) == 10,
-            "Pause and the resume boundary suppress old data; accepted post-resume audio is drained");
+        var samples = writes.SelectMany(bytes => bytes).Chunk(4).ToArray();
+        check(!failed && samples.All(sample => (sample[0] is 0 or 3) && (sample[2] is 0 or 2)) &&
+            samples.Count(sample => sample[0] == 3) == 5 && samples.Count(sample => sample[2] == 2) == 10,
+            "Stereo Resume rejects delayed packets without QPC and clips trusted packets at the capture-time boundary");
+
+        writes.Clear();
+        var uninterrupted = new StereoAudioWriter(writes.Add, _ => failed = true, () => Volatile.Read(ref now));
+        uninterrupted.Add(new AudioFrame("mic", 16000, 16, 1, Pcm(11, 10), CapturedAtTicks: now));
+        await uninterrupted.CompleteAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        check(!failed && writes.SelectMany(bytes => bytes).Chunk(4).Count(sample => sample[0] == 11) == 10,
+            "Before any pause, Stereo can still use estimated timing for audio without QPC");
 
         foreach (var (index, json, source) in new (int, string, string?)[]
         {

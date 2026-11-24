@@ -82,12 +82,14 @@ internal sealed class StereoAudioWriter
     private readonly object _queueGate = new();
     private readonly object _writeGate = new();
     private readonly Task _worker;
+    private readonly Func<long> _getTimestamp;
     private bool _paused;
     private bool _completed;
     private long _resumeTicks;
 
-    internal StereoAudioWriter(Action<byte[]> write, Action<Exception> failed)
+    internal StereoAudioWriter(Action<byte[]> write, Action<Exception> failed, Func<long>? getTimestamp = null)
     {
+        _getTimestamp = getTimestamp ?? Stopwatch.GetTimestamp;
         _worker = Task.Run(async () =>
         {
             try
@@ -100,7 +102,7 @@ internal sealed class StereoAudioWriter
                         byte[]? pcm;
                         lock (_queueGate)
                         {
-                            pcm = _mux.Take(Stopwatch.GetTimestamp(), _completed);
+                            pcm = _mux.Take(_getTimestamp(), _completed);
                             done = _completed && pcm is null;
                         }
                         if (pcm is not null) write(pcm);
@@ -124,21 +126,25 @@ internal sealed class StereoAudioWriter
             frame.SampleRate != StereoAudioMux.SampleRate || frame.BitsPerSample != 16 || frame.Channels != 1) return;
         var channel = frame.Source switch { "mic" => 0, "speaker" => 1, _ => -1 };
         if (channel < 0) return;
-        var received = Stopwatch.GetTimestamp();
-        // A degraded estimate is only used when WASAPI or resampling cannot supply a reliable packet start.
-        var estimated = frame.PacketQpc100Ns is null;
-        var start = frame.PacketQpc100Ns is { } qpc
-            ? (long)Math.Round(qpc * (StereoAudioMux.SampleRate / 10_000_000.0))
-            : (long)Math.Round((frame.CapturedAtTicks > 0 ? frame.CapturedAtTicks : received) *
-                (StereoAudioMux.SampleRate / (double)Stopwatch.Frequency)) - frame.Payload.Length / 2;
+        var received = _getTimestamp();
+        var qpc = frame.PacketQpc100Ns.GetValueOrDefault();
+        var estimated = qpc <= 0;
+        var sampleCount = frame.Payload.Length / 2;
+        var clockToSamples = StereoAudioMux.SampleRate / (double)Stopwatch.Frequency;
+        var packetStart = qpc * (StereoAudioMux.SampleRate / (double)TimeSpan.TicksPerSecond);
+        var start = estimated
+            ? (long)Math.Round((frame.CapturedAtTicks > 0 ? frame.CapturedAtTicks : received) * clockToSamples) - sampleCount
+            : (long)Math.Round(packetStart);
         lock (_queueGate)
         {
-            if (_paused || _completed || (frame.CapturedAtTicks > 0 && frame.CapturedAtTicks < _resumeTicks)) return;
-            // Clip packets captured across the resume boundary using the common QPC clock.
-            var first = _resumeTicks == 0 ? start : Math.Max(start,
-                (long)Math.Ceiling(_resumeTicks * (StereoAudioMux.SampleRate / (double)Stopwatch.Frequency)));
-            if (first - start >= frame.Payload.Length / 2) return;
-            _mux.Add(channel, frame.Payload.AsSpan((int)(first - start) * 2), first, received, estimated);
+            if (_paused || _completed) return;
+            // Callback time cannot prove when the device captured delayed or resampled audio.
+            // After Resume only a reliable packet clock can keep paused audio out of the stream.
+            if (_resumeTicks != 0 && (estimated ||
+                (frame.CapturedAtTicks > 0 && frame.CapturedAtTicks < _resumeTicks))) return;
+            var skip = _resumeTicks == 0 ? 0 : Math.Max(0, (long)Math.Ceiling(_resumeTicks * clockToSamples - packetStart));
+            if (skip >= sampleCount) return;
+            _mux.Add(channel, frame.Payload.AsSpan((int)skip * 2), start + skip, received, estimated);
         }
     }
 
@@ -150,7 +156,7 @@ internal sealed class StereoAudioWriter
             if (_completed || _paused == paused) return;
             _paused = paused;
             _mux.Reset();
-            if (!paused) _resumeTicks = Stopwatch.GetTimestamp();
+            if (!paused) _resumeTicks = _getTimestamp();
         }
     }
 

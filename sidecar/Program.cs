@@ -271,11 +271,15 @@ var targetWaveFormat = new WaveFormat(sampleRate, 16, 1);
 var cts = new CancellationTokenSource();
 var stopping = cts.Token;
 AzureSpeechService? azure = null;
+MMDeviceEnumerator? deviceEnumerator = null;
 AudioRecorderSource? micSource = null;
 AudioRecorderSource? speakerSource = null;
 var captureCleanupAssigned = false;
-Task? stereoStart = null;
+Task<int>? stereoStart = null;
 using var stereoStartup = stereo ? CancellationTokenSource.CreateLinkedTokenSource(stopping) : null;
+var startupStatusGate = new object();
+var userStopRequested = false;
+var commandsReady = stereo ? new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously) : null;
 EchoCancellation? echo = null;
 Task echoDiagnostics = Task.CompletedTask;
 if (echoEnabled)
@@ -292,21 +296,23 @@ void LogEchoDiagnostics(EchoCancellation filter)
 
 void RequestStop()
 {
-    azure?.RequestStop();
+    Volatile.Read(ref azure)?.RequestStop();
     cts.Cancel();
-    echo?.Stop();
 }
 
-ConsoleCancelEventHandler onCancel = (_, e) =>
+void RequestUserStop()
 {
-    e.Cancel = true;
-    RequestStop();
-};
-Console.CancelKeyPress += onCancel;
+    lock (startupStatusGate)
+    {
+        Volatile.Write(ref userStopRequested, true);
+        RequestStop();
+    }
+}
 
-try
+async Task<int> StartCaptureAsync(CancellationToken startup)
 {
-    using var mm = new MMDeviceEnumerator();
+    startup.ThrowIfCancellationRequested();
+    var mm = deviceEnumerator = new MMDeviceEnumerator();
 
     // T-511: Nur transkribierte Quellen brauchen ein Geraet. Ohne
     // Speaker-Transkription wird kein Ausgabegeraet vorausgesetzt - sonst
@@ -338,6 +344,7 @@ try
     // Float-Mic, fuer das die Engine nicht auf 16-Bit-PCM konvertieren kann -
     // faellt AudioRecorderSource automatisch auf den MediaFoundation-Resampler
     // zurueck. Beide Wege liefern exakt 16 kHz / 16-bit / mono.
+    startup.ThrowIfCancellationRequested();
     if (azureEnabled)
     {
         var azureConfig = new AzureSpeechConfig(
@@ -353,22 +360,14 @@ try
             Diarization = diarization,
             Stereo = stereo
         };
-        azure = new AzureSpeechService(azureConfig, userSettings, RequestStop);
-        async Task StartAzureAsync(AzureSpeechService service)
-        {
-            await service.InitAsync();
-            await service.StartAsync(new AzureAudioFormat(sampleRate, 16, 1));
-        }
-        if (stereoStartup is not null)
-        {
-            stereoStartup.CancelAfter(TimeSpan.FromSeconds(12));
-            stereoStart = Task.Run(() => StartAzureAsync(azure));
-            _ = stereoStart.ContinueWith(task => { _ = task.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
-            await stereoStart.WaitAsync(stereoStartup.Token);
-        }
-        else await StartAzureAsync(azure);
+        var service = new AzureSpeechService(azureConfig, userSettings, RequestStop);
+        Volatile.Write(ref azure, service);
+        startup.ThrowIfCancellationRequested();
+        await service.InitAsync();
+        await service.StartAsync(new AzureAudioFormat(sampleRate, 16, 1), startup);
     }
 
+    startup.ThrowIfCancellationRequested();
     var azurePushLock = new object();
     EchoCancellation.Phase? lastEchoPhase = null;
 
@@ -412,6 +411,7 @@ try
             }
         });
 
+    startup.ThrowIfCancellationRequested();
     speakerSource = speakerDevice is null
         ? null
         : AudioRecorderSource.Create(
@@ -441,8 +441,11 @@ try
             }
         });
 
+    startup.ThrowIfCancellationRequested();
     micSource?.Start();
+    startup.ThrowIfCancellationRequested();
     speakerSource?.Start();
+    startup.ThrowIfCancellationRequested();
 
     if (echo is { } filter)
     {
@@ -457,10 +460,6 @@ try
         });
     }
 
-    var activeSources = new List<string>();
-    if (micSource is not null) activeSources.Add("Mic");
-    if (speakerSource is not null) activeSources.Add("Speaker-Loopback");
-
     Logger.Info("format", "mic_format", micSource is null
         ? "Mic: not transcribed."
         : $"Mic capture format: {micSource.Format} (mode: {micSource.ModeLabel})");
@@ -469,80 +468,159 @@ try
         : $"Speaker capture format: {speakerSource.Format} (mode: {speakerSource.ModeLabel})");
     var azureTarget = stereo ? new WaveFormat(sampleRate, 16, 2) : targetWaveFormat;
     Logger.Info("format", "azure_target", $"Azure Target Format: {azureTarget}");
-    if (stereoStartup is not null && azure is not null)
-    {
-        await azure.WaitForStereoReadyAsync(stereoStartup.Token);
-        stereoStartup.Token.ThrowIfCancellationRequested();
-        stereoStartup.CancelAfter(Timeout.InfiniteTimeSpan);
-    }
-    Logger.Info("status", "capturing", $"Active: {string.Join(" + ", activeSources)}.");
-    Logger.Event("status", new { phase = "started", running = true });
+    if (stereo && azure is not null) await azure.WaitForStereoReadyAsync(startup);
+    return 0;
+}
 
-    // ---- stdin-Kommandoschale (T-507) ---------------------------------
-    //
-    // Der Tauri-Main steuert den laufenden Sidecar ueber JSON-Lines auf
-    // stdin:
-    //   {"type":"pause"}    -> Audio-Zufuhr stoppt, Azure-Session bleibt offen
-    //   {"type":"resume"}   -> Audio-Zufuhr laeuft weiter, gleiche Session
-    //   {"type":"reset"}    -> Zuruecksetzen der internen Zaehler
-    //   {"type":"shutdown"} -> geordneter Abbruch
-    //
-    // "pause" beendet die Azure-Session NICHT: nur die Audioframes werden
-    // nicht mehr zugespeist. Die vom Azure-Dienst vergebenen Sprecher-IDs
-    // bleiben dadurch gueltig.
-    async Task ReconnectAsync(bool resuming)
+// ---- stdin-Kommandoschale (T-507) ---------------------------------
+//
+// Der Tauri-Main steuert den laufenden Sidecar ueber JSON-Lines auf
+// stdin:
+//   {"type":"pause"}    -> Audio-Zufuhr stoppt, Azure-Session bleibt offen
+//   {"type":"resume"}   -> Audio-Zufuhr laeuft weiter, gleiche Session
+//   {"type":"reset"}    -> Zuruecksetzen der internen Zaehler
+//   {"type":"shutdown"} -> geordneter Abbruch
+//
+// "pause" beendet die Azure-Session NICHT: nur die Audioframes werden
+// nicht mehr zugespeist. Die vom Azure-Dienst vergebenen Sprecher-IDs
+// bleiben dadurch gueltig.
+async Task ReconnectAsync(bool resuming)
+{
+    if (azure is null) return;
+    try
     {
-        if (azure is null) return;
-        try
-        {
-            var restarted = await azure.ReconnectDeadStreamsAsync(stopping);
+        var restarted = await azure.ReconnectDeadStreamsAsync(stopping);
+        stopping.ThrowIfCancellationRequested();
+        foreach (var source in restarted)
+            Logger.Warn("azure", "speaker_ids_reset",
+                $"The Azure session for {source} had ended and was reconnected. The speaker IDs were reassigned.");
+    }
+    catch (OperationCanceledException) when (stopping.IsCancellationRequested) { throw; }
+    catch (Exception ex)
+    {
+        Logger.Error("AZURE_RECOGNIZER_FAILED", $"Azure reconnect failed ({(resuming ? "resume" : "health check")}): {ex.Message}");
+    }
+}
+
+async Task HandleCommandAsync(string command)
+{
+    switch (command)
+    {
+        case SidecarCommands.HandshakeAck:
+            Logger.Info("sidecar", "handshake_ack", "Protocol handshake confirmed.");
+            break;
+        case SidecarCommands.Pause:
+            azure?.SetPaused(true);
+            echo?.SetPaused(true);
+            Logger.Info("sidecar", "pause", "Transcription paused; the Azure session stays connected.");
+            Logger.Event("status", new { phase = "paused", running = true });
+            break;
+        case SidecarCommands.Resume:
+            await ReconnectAsync(resuming: true);
             stopping.ThrowIfCancellationRequested();
-            foreach (var source in restarted)
-                Logger.Warn("azure", "speaker_ids_reset",
-                    $"The Azure session for {source} had ended and was reconnected. The speaker IDs were reassigned.");
-        }
-        catch (OperationCanceledException) when (stopping.IsCancellationRequested) { throw; }
-        catch (Exception ex)
-        {
-            Logger.Error("AZURE_RECOGNIZER_FAILED", $"Azure reconnect failed ({(resuming ? "resume" : "health check")}): {ex.Message}");
-        }
+            echo?.SetPaused(false);
+            azure?.SetPaused(false);
+            Logger.Info("sidecar", "resume", "Transcription resumed.");
+            Logger.Event("status", new { phase = "resumed", running = true });
+            break;
+        case SidecarCommands.Reset:
+            Logger.Info("sidecar", "reset", "Reset command received.");
+            break;
+        default:
+            Logger.Warn("sidecar", "unknown_command", $"Unknown command: {command}");
+            break;
     }
+}
 
-    async Task HandleCommandAsync(string command)
+void StartCommandReader() => _ = Task.Run(async () =>
+{
+    try { await RecordingControl.ReadCommandsAsync(Console.In, HandleCommandAsync, RequestStop, stopping, commandsReady?.Task, RequestUserStop); }
+    catch (Exception ex) { Logger.Error("SIDECAR_UNAVAILABLE", $"The stdin reader stopped: {ex.Message}"); }
+});
+
+async Task<int> StopRecordingAsync(bool wasStarted, bool acknowledge = true)
+{
+    captureCleanupAssigned = true;
+    using var deadline = new CancellationTokenSource(RecordingControl.ShutdownBudget);
+    var shutdownToken = deadline.Token;
+    try
     {
-        switch (command)
+        await RecordingControl.CompleteShutdownAsync(async () =>
         {
-            case SidecarCommands.HandshakeAck:
-                Logger.Info("sidecar", "handshake_ack", "Protocol handshake confirmed.");
-                break;
-            case SidecarCommands.Pause:
-                azure?.SetPaused(true);
-                echo?.SetPaused(true);
-                Logger.Info("sidecar", "pause", "Transcription paused; the Azure session stays connected.");
-                Logger.Event("status", new { phase = "paused", running = true });
-                break;
-            case SidecarCommands.Resume:
-                await ReconnectAsync(resuming: true);
-                stopping.ThrowIfCancellationRequested();
-                echo?.SetPaused(false);
-                azure?.SetPaused(false);
-                Logger.Info("sidecar", "resume", "Transcription resumed.");
-                Logger.Event("status", new { phase = "resumed", running = true });
-                break;
-            case SidecarCommands.Reset:
-                Logger.Info("sidecar", "reset", "Reset command received.");
-                break;
-            default:
-                Logger.Warn("sidecar", "unknown_command", $"Unknown command: {command}");
-                break;
-        }
+            try
+            {
+                try
+                {
+                    micSource?.Stop();
+                    speakerSource?.Stop();
+                }
+                finally
+                {
+                    try { micSource?.Dispose(); }
+                    finally { speakerSource?.Dispose(); }
+                }
+            }
+            finally
+            {
+                try
+                {
+                    deviceEnumerator?.Dispose();
+                    if (echo is { } filter)
+                    {
+                        filter.Stop();
+                        await echoDiagnostics.WaitAsync(shutdownToken);
+                        LogEchoDiagnostics(filter);
+                    }
+                }
+                finally
+                {
+                    if (azure is not null)
+                        await azure.StopAsync(requireCleanStop: true, wasStarted ? shutdownToken : CancellationToken.None,
+                            requireTerminal: wasStarted);
+                }
+            }
+        }, shutdownToken, stereoStart, acknowledge);
+        return 0;
     }
-
-    _ = Task.Run(async () =>
+    catch (Exception ex)
     {
-        try { await RecordingControl.ReadCommandsAsync(Console.In, HandleCommandAsync, RequestStop, stopping); }
-        catch (Exception ex) { Logger.Error("SIDECAR_UNAVAILABLE", $"The stdin reader stopped: {ex.Message}"); }
-    });
+        Logger.Error("SIDECAR_UNAVAILABLE", ex.Message);
+        return 50;
+    }
+}
+
+ConsoleCancelEventHandler onCancel = (_, e) =>
+{
+    e.Cancel = true;
+    RequestUserStop();
+};
+Console.CancelKeyPress += onCancel;
+
+try
+{
+    int startResult;
+    if (stereoStartup is not null)
+    {
+        stereoStartup.CancelAfter(TimeSpan.FromSeconds(12));
+        var (owner, untilReady) = RecordingControl.BeginStereoStartup(StartCaptureAsync, StartCommandReader, stereoStartup.Token);
+        stereoStart = owner;
+        startResult = await untilReady;
+    }
+    else startResult = await StartCaptureAsync(CancellationToken.None);
+
+    lock (startupStatusGate)
+    {
+        stereoStartup?.Token.ThrowIfCancellationRequested();
+        if (startResult != 0) return startResult;
+        stereoStartup?.CancelAfter(Timeout.InfiniteTimeSpan);
+        var activeSources = new List<string>();
+        if (micSource is not null) activeSources.Add("Mic");
+        if (speakerSource is not null) activeSources.Add("Speaker-Loopback");
+        Logger.Info("status", "capturing", $"Active: {string.Join(" + ", activeSources)}.");
+        Logger.Event("status", new { phase = "started", running = true });
+        commandsReady?.TrySetResult();
+    }
+    if (!stereo) StartCommandReader();
 
     _ = Task.Run(async () =>
     {
@@ -570,30 +648,14 @@ try
     try { await Task.Delay(Timeout.InfiniteTimeSpan, stopping); }
     catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
 
-    using var deadline = new CancellationTokenSource(RecordingControl.ShutdownBudget);
-    var shutdownToken = deadline.Token;
-    captureCleanupAssigned = true;
-    await RecordingControl.CompleteShutdownAsync(async () =>
-    {
-        try
-        {
-            micSource?.Stop();
-            speakerSource?.Stop();
-        }
-        finally
-        {
-            try { micSource?.Dispose(); }
-            finally { speakerSource?.Dispose(); }
-        }
-
-        if (echo is { } filter)
-        {
-            await echoDiagnostics.WaitAsync(shutdownToken);
-            LogEchoDiagnostics(filter);
-        }
-        if (azure is not null) await azure.StopAsync(requireCleanStop: true, shutdownToken);
-    }, shutdownToken);
-    return 0;
+    return await StopRecordingAsync(wasStarted: true);
+}
+catch (OperationCanceledException) when (stereo && Volatile.Read(ref userStopRequested))
+{
+    // An explicit Stop/Quit before the started status is normal. A terminal
+    // SessionStopped event is not guaranteed for a session that never became ready.
+    RequestStop();
+    return await StopRecordingAsync(wasStarted: false);
 }
 catch (OperationCanceledException) when (stereoStartup?.IsCancellationRequested == true && !stopping.IsCancellationRequested)
 {
@@ -608,25 +670,19 @@ catch (Exception ex)
 finally
 {
     Console.CancelKeyPress -= onCancel;
-    echo?.Stop();
-    // Successful or timed-out shutdown already owns recorder disposal. Never
-    // retry it here; native code may still be working on the same handles.
+    // Never retry cleanup: a timed-out worker may still own native handles.
     if (!captureCleanupAssigned)
     {
-        try { micSource?.Dispose(); }
-        finally
+        RequestStop();
+        if (stereo) _ = await StopRecordingAsync(wasStarted: false, acknowledge: false);
+        else
         {
-            try { speakerSource?.Dispose(); }
+            echo?.Stop();
+            try { micSource?.Dispose(); }
             finally
             {
-                // Do not dispose SDK handles concurrently with native startup on timeout.
-                if (stereoStart?.IsCompleted == true && azure is not null)
-                {
-                    var cleanup = Task.Run(() => azure.StopAsync());
-                    _ = cleanup.ContinueWith(task => { _ = task.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
-                    try { await cleanup.WaitAsync(RecordingControl.ShutdownBudget); }
-                    catch (TimeoutException) { Logger.Warn("azure", "stop_timeout", "Stereo startup cleanup timed out."); }
-                }
+                try { speakerSource?.Dispose(); }
+                finally { deviceEnumerator?.Dispose(); }
             }
         }
     }

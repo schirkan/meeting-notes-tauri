@@ -113,10 +113,12 @@ public sealed class AzureSpeechService : IDisposable
     /// <summary>
     /// Starts the Recognizers of all transcribed sources for the given audio
     /// format. A source that is not transcribed gets no Recognizer at all.
-    /// Rolls back partially-started streams if any recognizer start fails.
+    /// On failure, rolls back separate streams here; the Stereo startup owner
+    /// serializes cleanup of the shared stream with its native startup task.
     /// </summary>
-    public async Task StartAsync(AzureAudioFormat format)
+    public async Task StartAsync(AzureAudioFormat format, CancellationToken startup = default)
     {
+        startup.ThrowIfCancellationRequested();
         if (_speechConfig is null)
             throw new InvalidOperationException("AzureSpeechService is not initialized.");
         if (_streams.Count > 0)
@@ -125,7 +127,8 @@ public sealed class AzureSpeechService : IDisposable
         lock (_missingSpeakerIdLogged) _missingSpeakerIdLogged.Clear();
         _firstFrameLogged.Clear();
         _pushCounters.Clear();
-        _stopping = false;
+        // A Stereo service never starts a second session. Do not undo an early Stop.
+        if (!IsStereo) _stopping = false;
 
         var sources = TranscriptionSources;
         if (sources.Count == 0)
@@ -139,7 +142,9 @@ public sealed class AzureSpeechService : IDisposable
                 : sources.Select(source => EnsureStreamForFormat(source, format)).ToArray();
             foreach (var state in states)
             {
+                startup.ThrowIfCancellationRequested();
                 await StartStreamAsync(state);
+                startup.ThrowIfCancellationRequested();
                 if (IsStereo)
                     _stereoWriter = new StereoAudioWriter(pcm =>
                     {
@@ -150,7 +155,8 @@ public sealed class AzureSpeechService : IDisposable
         }
         catch
         {
-            await StopAsync();
+            // The Stereo startup owner performs bounded cleanup after this task returns.
+            if (!IsStereo) await StopAsync();
             throw;
         }
         Logger.Info(
@@ -294,7 +300,10 @@ public sealed class AzureSpeechService : IDisposable
 
     internal void RequestStop() => _stopping = true;
 
-    public async Task StopAsync(bool requireCleanStop = false, CancellationToken deadline = default)
+    public Task StopAsync(bool requireCleanStop = false, CancellationToken deadline = default) =>
+        StopAsync(requireCleanStop, deadline, requireTerminal: true);
+
+    internal async Task StopAsync(bool requireCleanStop, CancellationToken deadline, bool requireTerminal)
     {
         RequestStop();
         await _streamLifecycle.WaitAsync(deadline);
@@ -305,7 +314,7 @@ public sealed class AzureSpeechService : IDisposable
             {
                 if (_stereoWriter is { } writer) await writer.CompleteAsync();
                 await Task.WhenAll(_streams.Values.Select(state => Task.Run(
-                    () => FinalizeStreamAsync(state, requireCleanStop, deadline))));
+                    () => FinalizeStreamAsync(state, requireCleanStop && requireTerminal, deadline))));
             }
             catch (Exception ex) when (!requireCleanStop)
             {

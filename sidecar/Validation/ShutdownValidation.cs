@@ -91,6 +91,43 @@ internal static class ShutdownValidation
                     "Shutdown requests cancellation while Resume is still blocked");
             }
             finally { resumeReleased.TrySetResult(); }
+
+            foreach (var waitForSession in new[] { false, true })
+            {
+                output.GetStringBuilder().Clear();
+                await CheckStereoStartupShutdownAsync(waitForSession, check, watchdog.Token);
+                var lines = output.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                check(lines.Length == 1, "Clean early Stereo Stop emits exactly one ACK");
+                using var stopped = JsonDocument.Parse(lines[0]);
+                var payload = stopped.RootElement.GetProperty("payload");
+                check(stopped.RootElement.GetProperty("type").GetString() == "status" &&
+                    payload.GetProperty("phase").GetString() == "stopped" && !payload.GetProperty("running").GetBoolean(),
+                    "Clean early Stereo Stop emits a structured stopped ACK");
+            }
+
+            output.GetStringBuilder().Clear();
+            var nativeStart = NewSignal();
+            var lateCleanup = NewSignal();
+            using var startupDeadline = new CancellationTokenSource();
+            var bounded = RecordingControl.CompleteShutdownAsync(() =>
+            {
+                lateCleanup.SetResult();
+                return Task.CompletedTask;
+            }, startupDeadline.Token, nativeStart.Task);
+            try
+            {
+                startupDeadline.Cancel();
+                await bounded.WaitAsync(watchdog.Token);
+                check(false, "A hung startup was reported as a clean stop");
+            }
+            catch (TimeoutException)
+            {
+                check(!lateCleanup.Task.IsCompleted && output.ToString().Length == 0,
+                    "A stuck native start times out without ACK or concurrent handle disposal");
+            }
+            finally { nativeStart.TrySetResult(); }
+            await lateCleanup.Task.WaitAsync(watchdog.Token);
+            check(output.ToString().Length == 0, "Late cleanup after a startup timeout cannot emit a stopped ACK");
         }
         finally
         {
@@ -99,7 +136,79 @@ internal static class ShutdownValidation
         }
     }
 
+    private static async Task CheckStereoStartupShutdownAsync(bool waitForSession, Action<bool, string> check,
+        CancellationToken watchdog)
+    {
+        using var stopping = new CancellationTokenSource();
+        var nativeRelease = NewSignal();
+        var stageEntered = NewSignal();
+        var handshake = NewSignal();
+        var readyForCommands = NewSignal();
+        var explicitStop = false;
+        var normalCommandRan = false;
+        Task? reader = null;
+        async Task<int> StartAsync(CancellationToken startupToken)
+        {
+            check(reader is not null, "Stereo launches the command reader before native startup");
+            stageEntered.SetResult();
+            if (waitForSession) await nativeRelease.Task.WaitAsync(startupToken); // SessionStarted never arrives.
+            else await nativeRelease.Task; // An in-flight SDK call cannot be canceled.
+            startupToken.ThrowIfCancellationRequested();
+            return 0;
+        }
+
+        using var input = new StartupShutdownReader(Task.WhenAll(stageEntered.Task, handshake.Task));
+        void StartReader() => reader = RecordingControl.ReadCommandsAsync(input, command =>
+        {
+            if (command == SidecarCommands.HandshakeAck) handshake.SetResult();
+            else normalCommandRan = true;
+            return Task.CompletedTask;
+        }, stopping.Cancel, stopping.Token, readyForCommands.Task, () =>
+        {
+            explicitStop = true;
+            stopping.Cancel();
+        });
+
+        var (startup, startupWait) = RecordingControl.BeginStereoStartup(StartAsync, StartReader, stopping.Token);
+        try
+        {
+            await (reader ?? throw new InvalidOperationException("Stereo command reader did not start.")).WaitAsync(watchdog);
+            try
+            {
+                await startupWait.WaitAsync(watchdog);
+                check(false, "Stereo unexpectedly completed startup before Stop");
+            }
+            catch (OperationCanceledException) when (stopping.IsCancellationRequested && !watchdog.IsCancellationRequested)
+            {
+                check(explicitStop && !normalCommandRan, waitForSession
+                    ? "Stop/Quit preempts the Stereo SessionStarted wait; early Resume stays deferred"
+                    : "Stop/Quit preempts the native Stereo startup wait; early Resume stays deferred");
+            }
+
+            var shutdown = RecordingControl.CompleteShutdownAsync(() =>
+            {
+                check(startup.IsCompleted, "Early Stereo Stop cleans up only after startup releases ownership");
+                return Task.CompletedTask;
+            }, watchdog, startup);
+            if (!waitForSession) nativeRelease.SetResult();
+            await shutdown.WaitAsync(watchdog);
+        }
+        finally { nativeRelease.TrySetResult(); }
+    }
+
     private static TaskCompletionSource NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private sealed class StartupShutdownReader(Task stageEntered) : TextReader
+    {
+        private int _reads;
+
+        public override async ValueTask<string?> ReadLineAsync(CancellationToken cancellationToken)
+        {
+            if (_reads++ == 0) return "{\"type\":\"handshake-ack\"}";
+            await stageEntered.WaitAsync(cancellationToken);
+            return _reads == 2 ? "{\"type\":\"resume\"}" : "{\"type\":\"shutdown\"}";
+        }
+    }
 
     private sealed class ResumeThenShutdownReader(Task resumeEntered) : TextReader
     {

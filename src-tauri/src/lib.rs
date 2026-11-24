@@ -35,6 +35,7 @@ pub fn run() {
     .manage(AppState::default())
     .manage(tray::WindowBehavior::default())
     .on_window_event(tray::on_window_event)
+    .manage(commands::CaptureStartGate::default())
     .manage(Mutex::new(autostart::RecordingLifecycle::default()))
     .manage(Arc::new(Mutex::new(None::<SidecarHandle>)) as SidecarCache)
     .setup(|app| {
@@ -155,10 +156,16 @@ async fn start_detector_if_enabled(app: &tauri::AppHandle) -> Result<(), String>
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let end_tx = tx.clone();
+    let detected_handle = app.clone();
     let detector = autostart::start_detector(
         app,
         &user.auto_start.processes,
-        move |payload| { let _ = tx.send(autostart::DetectionEvent::Started(payload)); },
+        move |payload| {
+            let gate = detected_handle.state::<commands::CaptureStartGate>();
+            if !enqueue_meeting_start(&gate, &tx, payload) {
+                log_skipped_meeting_start(&detected_handle);
+            }
+        },
         move |payload| { let _ = end_tx.send(autostart::DetectionEvent::Ended(payload)); },
     ).await?;
 
@@ -174,6 +181,29 @@ async fn start_detector_if_enabled(app: &tauri::AppHandle) -> Result<(), String>
     });
     app.manage(detector);
     Ok(())
+}
+
+fn enqueue_meeting_start(
+    gate: &commands::CaptureStartGate,
+    tx: &tokio::sync::mpsc::UnboundedSender<autostart::DetectionEvent>,
+    payload: autostart::MeetingDetectedPayload,
+) -> bool {
+    // Skip at ingestion, not just on dispatch: the ordered consumer may be
+    // finishing a preceding recording while the connection test runs.
+    if gate.is_busy() {
+        return false;
+    }
+    let _ = tx.send(autostart::DetectionEvent::Started(payload));
+    true
+}
+
+fn log_skipped_meeting_start(app: &tauri::AppHandle) {
+    let entry = app.state::<AppState>().push_debug(
+        state::DebugLogEntrySource::Main,
+        state::DebugLogEntryLevel::Info,
+        "Meeting detected, but a connection test or another recording operation is in progress. Automatic start skipped.",
+    );
+    events::emit_debug(app, &entry);
 }
 
 /// Beendet die automatisch gestartete Aufnahme, weil das Meeting
@@ -224,46 +254,64 @@ async fn start_recording_on_detection(
         return;
     }
 
-    // Ohne vollstaendige Azure-Konfiguration gibt es keinen Start.
-    match settings::load_azure_config().await {
-        Ok(Some(_)) => {}
-        Ok(None) => {
+    match commands::start_recording_for_meeting(app, payload).await {
+        Ok(true) => {
             let entry = state.push_debug(
                 state::DebugLogEntrySource::Main,
-                state::DebugLogEntryLevel::Warn,
-                format!("Meeting detected, but the Azure configuration is missing or invalid: {description}"),
+                state::DebugLogEntryLevel::Info,
+                format!("Meeting detected, transcription started automatically: {description}"),
             );
             events::emit_debug(app, &entry);
-            return;
         }
+        Ok(false) => log_skipped_meeting_start(app),
         Err(error) => {
             let entry = state.push_debug(
                 state::DebugLogEntrySource::Main,
                 state::DebugLogEntryLevel::Error,
-                format!("Meeting detected, the configuration could not be read: {error}"),
+                format!("Could not start the automatic transcription: {error}"),
             );
             events::emit_debug(app, &entry);
-            return;
         }
     }
+}
 
-    let entry = state.push_debug(
-        state::DebugLogEntrySource::Main,
-        state::DebugLogEntryLevel::Info,
-        format!("Meeting detected, transcription starts automatically: {description}"),
-    );
-    events::emit_debug(app, &entry);
+#[cfg(test)]
+mod detection_tests {
+    use super::*;
+    use crate::autostart::{DetectionEvent, MeetingDetectedPayload, MeetingEndedPayload};
 
-    // Der Renderer bekommt die Erkennung fuer die Anzeige.
-    events::emit_meeting_detected(app, &payload);
+    #[tokio::test]
+    async fn meeting_seen_during_probe_is_not_dispatched_after_probe_or_meeting_end() {
+        let gate = commands::CaptureStartGate::default();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let meeting = MeetingDetectedPayload {
+            process_name: "teams".into(),
+            process_id: 123,
+            signal: "mic".into(),
+        };
 
-    let state = app.state::<AppState>();
-    if let Err(error) = commands::start_recording_with_origin(app.clone(), state, Some(payload)).await {
-        let entry = app.state::<AppState>().push_debug(
-            state::DebugLogEntrySource::Main,
-            state::DebugLogEntryLevel::Error,
-            format!("Could not start the automatic transcription: {error}"),
+        let probe = gate.lock().await;
+        assert!(!enqueue_meeting_start(&gate, &tx, meeting.clone()));
+        assert!(
+            gate.try_start().is_none(),
+            "dispatch cannot start capture either"
         );
-        events::emit_debug(app, &entry);
+        assert!(tx
+            .send(DetectionEvent::Ended(MeetingEndedPayload {
+                process_name: meeting.process_name.clone(),
+                process_id: meeting.process_id,
+                signal: meeting.signal.clone(),
+            }))
+            .is_ok());
+        assert!(matches!(rx.try_recv().unwrap(), DetectionEvent::Ended(_)));
+        drop(probe);
+
+        assert!(matches!(
+            rx.try_recv(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+        ));
+        // A new detection (including for the same process) can start normally.
+        assert!(enqueue_meeting_start(&gate, &tx, meeting));
+        assert!(matches!(rx.try_recv().unwrap(), DetectionEvent::Started(_)));
     }
 }

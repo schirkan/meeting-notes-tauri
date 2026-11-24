@@ -1,10 +1,19 @@
 # Changelog
 
-## Unreleased
+## v0.1.8 - 2026-11-24
 
 ### Added
 - Choose **Azure Speech (standard)** or **MAI Transcribe (Preview)** under **Settings → Azure**. Azure Speech remains the default.
 - **Stereo mix** under **Settings → Transcription** sends microphone and speaker loopback as separate channels in one Speech SDK session and shows final results only. **Dual mono** remains the default; a single enabled source still uses mono.
+
+### Changed
+- Configure a proxy by entering a host and port; a blank host uses a direct connection. **Copy log** copies diagnostics as tab-separated text.
+- Starting the app again brings the existing window forward instead of opening a second instance.
+
+### Fixed
+- Stereo discards packets after Resume when their capture time cannot be verified, so delayed audio from the pause is not sent to Azure. Stop and Quit can interrupt stereo startup before Azure is ready.
+- Automatic transcription does not replay a meeting start skipped during **Test connection**. Start manually after the test if the meeting is still in progress.
+- Echo-diagnostic collection no longer causes the microphone filter to bypass audio.
 
 ### Known limitations
 - Standard stereo uses the selected primary language. MAI stereo is experimental, does not identify individual speakers, and does not fall back automatically. Live channel separation and billing savings are not yet verified.

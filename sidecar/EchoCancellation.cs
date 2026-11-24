@@ -35,7 +35,9 @@ internal sealed class EchoCancellation
         }
     }
 
+    private readonly object _diagnosticsGate = new(); // Telemetry, never a prerequisite for DSP
     private Diagnostics _diagnostics = new();
+    private Diagnostics? _packetDiagnostics; // Only accessed inside the mic processing gate
     private long _micBusyBlocks;
 
     private readonly object _gate = new(); // Mic processing and lifecycle
@@ -86,14 +88,14 @@ internal sealed class EchoCancellation
         var next = new Diagnostics();
         Diagnostics interval;
         Phase phase;
-        if (!Monitor.TryEnter(_gate)) return null;
+        if (!Monitor.TryEnter(_diagnosticsGate)) return null;
         try
         {
             interval = _diagnostics;
             _diagnostics = next;
             phase = _state;
         }
-        finally { Monitor.Exit(_gate); }
+        finally { Monitor.Exit(_diagnosticsGate); }
         interval.Blocks[(int)Outcome.MicProcessingBusy] = Interlocked.Exchange(ref _micBusyBlocks, 0);
         var total = interval.Blocks.Sum();
         if (total == 0) return null;
@@ -107,17 +109,21 @@ internal sealed class EchoCancellation
         return FormattableString.Invariant($"Echo cancellation (Alpha): phase={phase}; filtered={filtered}/{total} blocks ({100.0 * filtered / total:F1}%); skipped=[{skipped}]; candidates={interval.Candidates}; {candidates}; micReductionDb={reduction}.");
     }
 
-    private void Count(Outcome outcome, int blocks = 1) => _diagnostics.Blocks[(int)outcome] += blocks;
+    private void Count(Outcome outcome, int blocks = 1)
+    {
+        if (_packetDiagnostics is { } metrics) metrics.Blocks[(int)outcome] += blocks;
+    }
 
     private void MeasureMic(ReadOnlySpan<short> input, byte[]? corrected)
     {
+        if (_packetDiagnostics is not { } metrics) return;
         double inputEnergy = 0, outputEnergy = 0;
         foreach (var sample in input) inputEnergy += (double)sample * sample;
         if (corrected is null) outputEnergy = inputEnergy;
         else foreach (var sample in MemoryMarshal.Cast<byte, short>(corrected.AsSpan()))
             outputEnergy += (double)sample * sample;
-        _diagnostics.InputEnergy += inputEnergy;
-        _diagnostics.OutputEnergy += outputEnergy;
+        metrics.InputEnergy += inputEnergy;
+        metrics.OutputEnergy += outputEnergy;
     }
 
     // Neither capture callback waits. Mic takes a bounded snapshot, so it
@@ -169,8 +175,11 @@ internal sealed class EchoCancellation
             return pcm;
         }
         var skipped = 0;
+        // If the collector is swapping intervals, skip this packet's metrics, not the cancellation.
+        var measuring = Monitor.TryEnter(_diagnosticsGate);
         try
         {
+            if (measuring) _packetDiagnostics = _diagnostics;
             if (_paused || _stopped) return pcm;
             if (!IsValidPacket(pcm, qpc))
             {
@@ -242,7 +251,12 @@ internal sealed class EchoCancellation
             ResetMic();
             return pcm;
         }
-        finally { Monitor.Exit(_gate); }
+        finally
+        {
+            _packetDiagnostics = null;
+            if (measuring) Monitor.Exit(_diagnosticsGate);
+            Monitor.Exit(_gate);
+        }
     }
 
     internal void SetPaused(bool paused)
@@ -351,7 +365,7 @@ internal sealed class EchoCancellation
             var confidence = cross * cross / (power * micPower);
             var estimate = cross / power;
             var delay = (int)(nominal - best);
-            _diagnostics.Candidate(delay, Math.Sqrt(confidence));
+            _packetDiagnostics?.Candidate(delay, Math.Sqrt(confidence));
             if (!(confidence >= (active ? 0.55 * 0.55 : 0.70 * 0.70))) rejection = Outcome.LowCorrelation;
             else if (Math.Abs(estimate) is not (>= 0.015 and <= 1.75)) rejection = Outcome.GainOutOfRange;
             else if (_matches != 0 && estimate / _gain is not (>= 0.55 and <= 1.60)) rejection = Outcome.GainUnstable;

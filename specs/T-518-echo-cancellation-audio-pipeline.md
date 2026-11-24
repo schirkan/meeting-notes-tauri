@@ -41,7 +41,9 @@ Cloud-Verarbeitung und kein Roh-Audio in IPC, Logs oder Dateien.
    ausgelassen. `micReductionDb` ist die Energiedifferenz des Mic-Signals vor/nach
    dem Filter fuer das ganze gemessene Intervall (positiv = leiser, `n/a` bei
    fehlender Eingangsenergie); sie isoliert Echo nur im Gegenstellen-Test ohne
-   Nahstimme. Es werden keine Audiodaten gespeichert oder geloggt.
+   Nahstimme. Diagnose und Filter nutzen getrennte Sperren: Bei Konflikt
+   wird das Paket weiter gefiltert, kann aber in der Statistik fehlen.
+   Es werden keine Audiodaten gespeichert oder geloggt.
 4. **Lifecycle.** Referenzpuffer und Filterstatus gehoeren zur Sitzung und
    zum Geraetepaar. Pause leitet weiterhin kein Audio an Azure; bei Resume
    nach einer Luecke Warmup, ohne Azure-Session oder Sprecheraliase neu zu

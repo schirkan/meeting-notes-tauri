@@ -41,8 +41,13 @@ bestehenden Aufnahmezustand bereits ab Prozessstart. Ein Startfehler oder
 unerwartetes Sitzungsende stoppt Stereo sichtbar, ohne automatischen Wechsel
 zu Mono, einem anderen Modell oder einer neuen Sitzung. Pause verwirft noch
 ungesendete Bloecke; Resume richtet die Timeline neu aus, ohne die Sitzung
-zu wechseln. Stop drainiert angenommene Bloecke vor EOF und wartet begrenzt
-auf letzte Finals. **Test connection** verwendet den ungespeicherten Draft
+zu wechseln. Danach werden nur Pakete mit verlaesslichem WASAPI/QPC-Anker
+akzeptiert und an der Resume-Grenze beschnitten. Fehlt der Zeitanker, wird
+das Paket verworfen statt Aufnahmezeit aus der Callback-Zeit zu schaetzen.
+Stop/Quit wird schon waehrend des nativen Stereo-Starts und der Readiness-Wartezeit
+angenommen. Die Bereinigung wartet begrenzt auf native Handles; ein Timeout
+wird nicht als sauberer Stop quittiert. Bei laufender Sitzung drainiert Stop
+angenommene Bloecke vor EOF und wartet begrenzt auf letzte Finals. **Test connection** verwendet den ungespeicherten Draft
 mit passendem Modell, Format und Recognizer, sendet nur Stille und ist bei
 laufender oder pausierter Aufnahme gesperrt. Readiness ist kein Beleg fuer
 Erkennung oder Kanalzuordnung.
