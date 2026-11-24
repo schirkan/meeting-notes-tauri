@@ -22,7 +22,7 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
 
 ## Aktueller Produktstand
 
-- **Meeting Notes**, veroeffentlichte Version **0.1.6**, ist eine portable Windows-11-x64-Anwendung
+- **Meeting Notes**, veroeffentlichte Version **0.1.7**, ist eine portable Windows-11-x64-Anwendung
   fuer Live-Transkripte mit Azure Speech. Implementierung vorhanden; offene
   Live-/Hardware-/Zielsystem-Abnahmen sind in den Specs ausgewiesen.
 - Die gesamte Oberflaeche, alle Meldungen und die oeffentliche Doku sind
@@ -31,7 +31,7 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
 - Mikrofon, Speaker-Loopback oder beide Quellen sind waehlbar. Sprechererkennung
   ist je Quelle unabhaengig konfigurierbar; mindestens eine Transkriptionsquelle
   bleibt aktiv. Siehe [T-511](./specs/T-511-transkriptions-quellen-auswaehlen.md).
-- Im Release-Kandidaten v0.1.7: [Echo cancellation (Alpha)](./specs/T-517-echo-cancellation-alpha.md),
+- Seit v0.1.7: [Echo cancellation (Alpha)](./specs/T-517-echo-cancellation-alpha.md),
   standardmaessig aus; nur fuer Mic + Speaker-Loopback und nur im Mic-Transkript.
   Die [Hardware-Abnahme](./specs/T-519-echo-cancellation-alpha-abnahme.md) ist offen.
 - **Pause/Resume** erhaelt die Azure-Sitzung ohne Audiozufuhr. **Stop** beendet sie;
@@ -150,7 +150,7 @@ Offene Abnahmen und Messverfahren: [T-500](./specs/T-500-qualitaetssicherung-und
 - Board `meeting-notes-tauri`: Review-Fixes und lokaler Release-Kandidat v0.1.6
   (`a9c11271-1d10-4911-a382-3b79d3aa4c36`, done).
 - Echo cancellation (Alpha): Settings, lokale Audioverarbeitung und Abnahme
-  (`4f1a482b-afa7-42a3-a933-ef145302a856`, running).
+  (`4f1a482b-afa7-42a3-a933-ef145302a856`, done).
 - Separate Hardware-Abnahme der Echo-Alpha
   (`455a9e0c-15af-4470-af29-28513028af63`, backlog).
 
@@ -161,8 +161,8 @@ Offene Abnahmen und Messverfahren: [T-500](./specs/T-500-qualitaetssicherung-und
   Push-/PR-Builds.
 - **Build/Output:** Tauri-App mit self-contained C#-Sidecar, Portable-ZIP und
   `SHA256SUMS.txt` als GitHub-Release-Assets.
-- **Letzter Lauf:** 23.11.2026, Commit `33e02deb7d8010d4c8977ff22ac00d3a1794d5f4`,
-  [Run 45243730261](https://github.com/schirkan/meeting-notes-tauri/actions/runs/45243730261), **success**.
-- **Release:** [v0.1.6](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.6),
-  Download-/Hash-/Versions-/Deployment-Nachweis in [T-515](./specs/T-515-github-actions-pipeline-und-release.md#release-v016-23112026).
-  106 Node- und 52 Rust-Tests bestanden; native Quit- und Live-Azure-Abnahme offen.
+- **Letzter Lauf:** 24.11.2026, Commit `c00d50a832b58f6180b90a9cfcdcfa5e47569067`,
+  [Run 45337473666](https://github.com/schirkan/meeting-notes-tauri/actions/runs/45337473666), **success**.
+- **Release:** [v0.1.7](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.7),
+  Download-/Hash-/Versions-/Deployment-Nachweis in [T-515](./specs/T-515-github-actions-pipeline-und-release.md#release-v017-24112026).
+  108 Node- und 53 Rust-Tests bestanden; Hardware-/Live-Azure-Abnahme der Echo-Alpha offen.

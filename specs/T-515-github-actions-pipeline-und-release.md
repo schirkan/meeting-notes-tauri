@@ -44,6 +44,17 @@ veroeffentlicht werden soll.
   funktioniert auch ohne Geraete, weil `DeviceResolver.ListDevices` die Default-Endpunkte
   per `try/catch` abfaengt und eine leere Liste statt eines Fehlers liefert.
 
+## Release-Notes pflegen
+
+- Der Workflow erstellt allgemeine Release-Notes und uebernimmt den
+  [Changelog](../CHANGELOG.md) nicht automatisch. Nach der Veroeffentlichung
+  die GitHub-Release-Notes um einen englischen Abschnitt `### What's new`
+  direkt vor `### Included` ergaenzen.
+- Die wichtigsten Nutzeraenderungen aus dem Changelog zusammenfassen. Bei
+  experimentellen Funktionen Standardwert, Aktivierung und noch offene
+  Abnahmen nennen. Nur den Release-Text bearbeiten, nicht Tag oder Downloads;
+  danach den aktualisierten Text auf GitHub kontrollieren.
+
 ## Verifikation
 
 ### Release v0.1.3 (19.11.2026)
@@ -106,6 +117,22 @@ Lokal: 9 Verifikationsschritte, 106 Node- und 52 Rust-Tests, 553 C#-Assertions
 gegen Quellen und 566 gegen den publizierten Sidecar. MediaFoundation-Probe und
 Nicht-Standard-Mikrofontest uebersprungen. Native Quit-/Taskleisten-Abnahme und
 Live-Test des letzten Azure-Ergebnisses stehen aus.
+
+### Release v0.1.7 (24.11.2026)
+
+[Workflow-Run 45337473666](https://github.com/schirkan/meeting-notes-tauri/actions/runs/45337473666)
+veroeffentlichte [v0.1.7](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.7)
+aus Tag-Commit `c00d50a` in 5m20s. Download-ZIP: 16.553.513 Bytes.
+GitHub-Digest, `SHA256SUMS.txt` und berechneter ZIP-Hash stimmen ueberein:
+`5c5ef3667b3394a6ea1287f8dcb887706df17c419944b52bfb215ea3ba0ed08d`.
+Vier Dateien im ZIP; interne Dateihashes 3/3, Haupt-EXE ProductVersion 0.1.7,
+Sidecar FileVersion 0.1.7.0, Beispielkonfiguration `echoCancellation: false`,
+Download-Deployment PASS 9 / FAIL 0.
+
+Lokal: 9 Verifikationsschritte, 108 Node- und 53 Rust-Tests; 582 C#-Assertions
+gegen Quellen, 595 mit gebautem Sidecar. Die Echo-Wirksamkeit wurde mit
+synthetischem PCM geprueft; [T-519](./T-519-echo-cancellation-alpha-abnahme.md)
+bleibt als Hardware- und Live-Azure-Abnahme offen.
 
 ### Weitere Nachweise
 
