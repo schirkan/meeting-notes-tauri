@@ -46,9 +46,7 @@ Config-Datei `MeetingNotes.config.json`:
       ohne Speaker-Transkription wird kein Ausgabegerät gesucht.
 - [x] Beide Quellen ausgeschaltet ist ein Fehlerfall (Exit-Code 23), weil Beleg: sidecar/Program.cs (Exit-Code 23, wenn beide Quellen ausgeschaltet sind).
       dann nichts transkribiert würde.
-- [x] Zwei Checkboxen ausschliesslich unter **Audio Einstellungen** auf der Startseite, nicht im Settings-Dialog; die Geraeteauswahl und die Beleg: src/renderer/src/components/AudioPanel.tsx und SettingsPanel.tsx (Audio-only); Layout/Draft-Trennung siehe [T-403](./T-403-settings-dialog-mit-verbindung-testen-button.md).
-      Diarization-Checkboxen der jeweiligen Quelle werden deaktiviert, wenn
-      die Quelle nicht transkribiert wird.
+- [x] Zwei Quellenschalter stehen gemeinsam mit der Geraeteauswahl nur unter **Audio devices** auf der Startseite. Die Quellen bleiben unabhaengig von der gemeinsamen Sprechererkennung unter **Speech recognition**. Beleg: [AudioPanel.tsx](../src/renderer/src/components/AudioPanel.tsx) und [T-403](./T-403-settings-dialog-mit-verbindung-testen-button.md).
 - [x] Beim Abwaehlen der letzten aktiven Quelle wird die andere automatisch aktiviert; beide Checkboxen bleiben ausserhalb einer Aufnahme bedienbar. Beleg: src/renderer/src/components/SettingsPanel.tsx (atomare Quellenauswahl). Testnachweis: Node-UI-Test "transcription sources default on, persist independently and keep the last source enabled".
 - [x] Verifikation: Node-Tests, Rust-Tests und C#-Validierung grün. Beleg: npm run verify (75 Node-Tests, 31 Rust-Tests, 508 C#-Assertions) - gruen. Testnachweis: npm run verify - 75 Node-Tests, 31 Rust-Tests, 508 C#-Assertions, alle gruen.
 
@@ -77,7 +75,7 @@ Config-Datei `MeetingNotes.config.json`:
   Sprechererkennung nutzt.
 
 ### Oberfläche
-- `src/renderer/src/components/SettingsPanel.tsx`: zwei Checkboxen
+- `src/renderer/src/components/AudioPanel.tsx`: zwei Checkboxen
   („Mikrofon transkribieren“, „Speaker-Loopback transkribieren“) ueber
   `AudioSources` ausschliesslich auf der Startseite. Aenderungen speichern
   sofort; keine Kopie dieser Audiofelder im Settings-Dialog (siehe T-403). Die

@@ -38,7 +38,7 @@ export function formatSpeakerKey(key: string): string {
   if (separator < 0) return key
   const source = key.slice(0, separator)
   const speaker = key.slice(separator + 1)
-  return `${source === 'mic' ? 'Mic' : 'Speaker'} · ${speaker}`
+  return source ? `${source === 'mic' ? 'Mic' : 'Speaker'} · ${speaker}` : speaker
 }
 
 export function getSpeakerClass(key: string): string {

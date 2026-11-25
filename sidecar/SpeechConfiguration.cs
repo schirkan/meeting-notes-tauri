@@ -51,8 +51,11 @@ public static class SpeechConfiguration
         return string.IsNullOrWhiteSpace(key) ? args.GetValueOrDefault("--speech-key") : key;
     }
 
-    public static SpeechConfig Create(AzureSpeechConfig config, string language, bool diarizeIntermediateResults = true, bool stereo = false)
+    public static SpeechConfig Create(AzureSpeechConfig config, string language, bool diarizeIntermediateResults = true, bool stereo = false, bool autoLanguageDetection = true)
     {
+        if (stereo && config.Model == AzureSpeechModel.MaiTranscribe2Streaming)
+            throw new ArgumentException("Stereo is not supported with MAI Transcribe.");
+
         var speech = config.Model switch
         {
             AzureSpeechModel.Standard => SpeechConfig.FromEndpoint(new Uri(config.Endpoint), config.SpeechKey),
@@ -66,12 +69,12 @@ public static class SpeechConfiguration
         else
         {
             speech.SpeechRecognitionLanguage = language;
-            speech.SetProperty(PropertyId.SpeechServiceResponse_DiarizeIntermediateResults,
-                diarizeIntermediateResults ? "true" : "false");
-            if (!stereo) speech.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
+            if (!stereo && autoLanguageDetection) speech.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous");
         }
+        speech.SetProperty(PropertyId.SpeechServiceResponse_DiarizeIntermediateResults,
+            config.Model == AzureSpeechModel.Standard && diarizeIntermediateResults && config.InterimResults ? "true" : "false");
         if (stereo) speech.SetProperty(PropertyId.Speech_EnableMultiChannelProcessing, "true");
-        speech.SetProperty("SpeechServiceResponse_InterimResults", config.InterimResults && !stereo ? "true" : "false");
+        speech.SetProperty("SpeechServiceResponse_InterimResults", config.InterimResults ? "true" : "false");
         if (config.Proxy is { } proxy)
             speech.SetProxy(proxy.Host, proxy.Port, proxy.Username ?? string.Empty, proxy.Password ?? string.Empty);
         return speech;
@@ -80,8 +83,8 @@ public static class SpeechConfiguration
     public static SpeechRecognizer CreateRecognizer(SpeechConfig speech, AudioConfig audio, AutoDetectSourceLanguageConfig? lid) =>
         lid is null ? new SpeechRecognizer(speech, audio) : new SpeechRecognizer(speech, lid, audio);
 
-    public static AutoDetectSourceLanguageConfig? CreateLanguageDetection(AzureSpeechModel model, string language) =>
-        model == AzureSpeechModel.Standard ? AutoDetectSourceLanguageConfig.FromLanguages(LidCandidates(language.Trim())) : null;
+    public static AutoDetectSourceLanguageConfig? CreateLanguageDetection(AzureSpeechModel model, string language, bool enabled = true) =>
+        model == AzureSpeechModel.Standard && enabled ? AutoDetectSourceLanguageConfig.FromLanguages(LidCandidates(language.Trim())) : null;
 
     public static string[] LidCandidates(string language) =>
         new[] { language, "de-DE", "en-US", "fr-FR", "es-ES", "it-IT", "pt-BR", "nl-NL", "pl-PL", "tr-TR", "ja-JP" }

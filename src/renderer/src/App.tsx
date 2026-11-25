@@ -7,6 +7,7 @@ import { DebugLogPanel } from './components/DebugLogPanel'
 import { HeroStatusCard } from './components/HeroStatusCard'
 import { ProxyPanel } from './components/ProxyPanel'
 import { SettingsDialog } from './components/SettingsDialog'
+import { AudioPanel } from './components/AudioPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SpeakerMappingPanel } from './components/SpeakerMappingPanel'
 import { TranscriptPanel } from './components/TranscriptPanel'
@@ -126,7 +127,7 @@ export function App() {
             following={autoScrollEnabled}
             onFollow={onFollowTranscript}
             emptyContent={!isLoadingInitialData && !status.running && !isStarting && <div className="idle-audio-panel">
-              <SettingsPanel audioOnly statusRunning={false} useMaiModel={configState?.config?.model === 'mai-transcribe-2-streaming'} settings={settings} devices={devices} setSettings={setIdleSettings} onChooseDirectory={onChooseTranscriptDirectory} />
+              <AudioPanel statusRunning={false} settings={settings} devices={devices} setSettings={setIdleSettings} />
             </div>}
           />
           <aside className="console-inspector" id="console-speakers" hidden={!speakersOpen} aria-labelledby="console-speakers-title">
@@ -189,9 +190,9 @@ export function App() {
       >
         <SettingsPanel
           statusRunning={status.running}
-          useMaiModel={configDraft.model === 'mai-transcribe-2-streaming'}
+          configDraft={configDraft}
+          setConfigDraft={setConfigDraft}
           settings={dialogSettings}
-          devices={devices}
           setSettings={setDialogSettings}
           onChooseDirectory={onChooseTranscriptDirectory}
           choosingDirectory={isChoosingDirectory}

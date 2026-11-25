@@ -20,13 +20,10 @@
     "transcription": {
       "mic": true,
       "speaker": true,
-      "echoCancellation": false,
       "audioMode": "dual-mono"
     },
-    "diarization": {
-      "mic": true,
-      "speaker": true
-    },
+    "autoLanguageDetection": true,
+    "diarization": true,
     "devices": {
       "micId": null,
       "speakerLoopbackId": null

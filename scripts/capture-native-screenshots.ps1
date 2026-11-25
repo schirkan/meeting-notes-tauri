@@ -113,7 +113,7 @@ L ('work copy: ' + $workDir)
 $configPath = Join-Path $workDir 'MeetingNotes.config.json'
 $cfg = @{
   azure = @{ endpoint = 'https://westeurope.stt.speech.microsoft.com'; region = 'westeurope'; speechKey = 'dummy-key-for-screenshot-capture'; interimResults = $true }
-  user = @{ language = 'de-DE'; transcription = @{ mic = $true; speaker = $true }; diarization = @{ mic = $true; speaker = $true }; devices = @{ micId = $null; speakerLoopbackId = $null }; transcript = @{ markdownExport = @{ enabled = $true; path = $null } }; autoStart = @{ enabled = $true; processes = @() }; window = @{ minimizeToTrayOnClose = $true } }
+  user = @{ language = 'de-DE'; transcription = @{ mic = $true; speaker = $true }; autoLanguageDetection = $true; diarization = $true; devices = @{ micId = $null; speakerLoopbackId = $null }; transcript = @{ markdownExport = @{ enabled = $true; path = $null } }; autoStart = @{ enabled = $true; processes = @() }; window = @{ minimizeToTrayOnClose = $true } }
 } | ConvertTo-Json -Depth 8
 [System.IO.File]::WriteAllText($configPath, $cfg, (New-Object System.Text.UTF8Encoding($false)))
 L ('wrote dummy config (no BOM, no proxy): ' + $configPath)
@@ -243,7 +243,7 @@ function Click([string]$needle, [string]$type) {
   return $true
 }
 
-# Exact name match. A substring match would hit 'Audio settings' in the
+# Exact name match. A substring match would hit 'Audio devices' in the
 # background panel behind the dialog and scroll the wrong element.
 function Find-El-Exact([string]$name, [string]$type) {
   $all = All-Elements

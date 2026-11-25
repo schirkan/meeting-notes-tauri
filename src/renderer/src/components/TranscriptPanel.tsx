@@ -39,7 +39,7 @@ function TranscriptRow({ segment, getSpeakerLabel, speakerAliases, setSpeakerAli
   return (
     <li className={`segment ${segment.state}`}>
       <div className="segment-heading">
-        <div className={`speaker-editor speaker-tone ${getSpeakerClassForIdentity(identity)}`}>
+        {(segment.source || segment.speaker) && <div className={`speaker-editor speaker-tone ${getSpeakerClassForIdentity(identity)}`}>
           <button ref={buttonRef} className="speaker-badge" type="button" hidden={editing} title={`Change speaker name: ${label}`}
             onClick={() => { originalAlias.current = speakerAliases[identity]; setAlias(label); setEditing(true) }}>{label}</button>
           {editing && <input ref={inputRef} aria-label="Speaker name" value={speakerAliases[identity] ?? ''}
@@ -48,7 +48,7 @@ function TranscriptRow({ segment, getSpeakerLabel, speakerAliases, setSpeakerAli
               if (event.key === 'Escape') { event.preventDefault(); setAlias(originalAlias.current); finish() }
               if (event.key === 'Enter') { event.preventDefault(); finish() }
             }} />}
-        </div>
+        </div>}
         <span className="segment-meta">{new Date(segment.timestampIso).toLocaleTimeString('en-US')}{segment.language && ` | ${segment.language}`}</span>
       </div>
       <div className="segment-text">{segment.text}</div>

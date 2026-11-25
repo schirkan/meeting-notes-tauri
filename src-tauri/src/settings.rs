@@ -5,7 +5,7 @@
 //!
 //!   MeetingNotes.config.json
 //!     azure: { model?, endpoint, region, speechKey, interimResults, proxy? }
-//!     user:  { language, devices, transcription, diarization, transcript }
+//!     user:  { language, autoLanguageDetection, devices, transcription, diarization, transcript }
 //!
 //! Both sections live in the same file. Every write re-reads the file
 //! first and replaces only the section that changed, so saving the Azure
@@ -86,8 +86,10 @@ pub struct UserSettings {
     pub devices: DeviceIds,
     #[serde(default)]
     pub transcription: TranscriptionSettings,
-    #[serde(default)]
-    pub diarization: DiarizationSettings,
+    #[serde(default = "default_true")]
+    pub auto_language_detection: bool,
+    #[serde(default = "default_true", deserialize_with = "deserialize_diarization")]
+    pub diarization: bool,
     #[serde(default)]
     pub transcript: TranscriptSettings,
     #[serde(default)]
@@ -149,8 +151,6 @@ impl Default for AutoStartSettings {
 pub struct TranscriptionSettings {
     pub mic: bool,
     pub speaker: bool,
-    #[serde(default, deserialize_with = "deserialize_echo_cancellation")]
-    pub echo_cancellation: bool,
     #[serde(default, deserialize_with = "deserialize_audio_mode")]
     pub audio_mode: AudioMode,
 }
@@ -173,39 +173,22 @@ where
     })
 }
 
-fn deserialize_echo_cancellation<'de, D>(deserializer: D) -> Result<bool, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    // A malformed opt-in must not discard the rest of the user's settings.
-    Ok(serde_json::Value::deserialize(deserializer)?.as_bool() == Some(true))
-}
-
 impl Default for TranscriptionSettings {
     fn default() -> Self {
         Self {
             mic: true,
             speaker: true,
-            echo_cancellation: false,
             audio_mode: AudioMode::DualMono,
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, rename_all = "camelCase")]
-pub struct DiarizationSettings {
-    pub mic: bool,
-    pub speaker: bool,
-}
-
-impl Default for DiarizationSettings {
-    fn default() -> Self {
-        Self {
-            mic: true,
-            speaker: true,
-        }
-    }
+pub(crate) fn deserialize_diarization<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    let value = serde_json::Value::deserialize(d)?;
+    Ok(value.as_bool().unwrap_or_else(|| {
+        value.get("mic").and_then(|v| v.as_bool()).unwrap_or(true)
+            || value.get("speaker").and_then(|v| v.as_bool()).unwrap_or(true)
+    }))
 }
 
 /// Transcript output settings (T-506).
@@ -420,7 +403,7 @@ pub async fn write_transcript_markdown(markdown: &str) -> Result<PathBuf, Settin
 
 pub const DEFAULT_LANGUAGE: &str = "de-DE";
 
-fn default_true() -> bool {
+pub(crate) fn default_true() -> bool {
     true
 }
 
@@ -439,7 +422,8 @@ pub fn default_user_settings() -> UserSettings {
         language: DEFAULT_LANGUAGE.into(),
         devices: DeviceIds::default(),
         transcription: TranscriptionSettings::default(),
-        diarization: DiarizationSettings::default(),
+        diarization: true,
+        auto_language_detection: true,
         transcript: TranscriptSettings::default(),
         auto_start: AutoStartSettings::default(),
         window: WindowSettings::default(),
@@ -528,7 +512,7 @@ mod config_tests {
             assert_eq!(settings.transcription, TranscriptionSettings { mic, speaker, ..Default::default() });
             let persisted = serde_json::to_string_pretty(&settings).unwrap();
             let json: serde_json::Value = serde_json::from_str(&persisted).unwrap();
-            assert_eq!(json["transcription"], serde_json::json!({"mic": mic, "speaker": speaker, "echoCancellation": false, "audioMode": "dual-mono"}));
+            assert_eq!(json["transcription"], serde_json::json!({"mic": mic, "speaker": speaker, "audioMode": "dual-mono"}));
             assert_eq!(
                 serde_json::from_str::<UserSettings>(&persisted).unwrap().transcription,
                 settings.transcription
@@ -540,62 +524,40 @@ mod config_tests {
     fn normalize_and_persist_audio_mode_without_resetting_source_preferences() {
         for (value, expected) in [(serde_json::json!("stereo"), AudioMode::Stereo),
             (serde_json::json!("invalid"), AudioMode::DualMono), (serde_json::Value::Null, AudioMode::DualMono)] {
-            let raw = serde_json::json!({"transcription": {"mic":false, "audioMode":value, "echoCancellation":true}});
+            let raw = serde_json::json!({"transcription": {"mic":false, "audioMode":value}});
             let settings = normalize_user_settings(serde_json::from_value(raw).unwrap());
             let saved: UserSettings = serde_json::from_value(serde_json::to_value(settings).unwrap()).unwrap();
             assert_eq!(saved.transcription, TranscriptionSettings {
-                mic: false, speaker: true, echo_cancellation: true, audio_mode: expected,
+                mic: false, speaker: true, audio_mode: expected,
             });
         }
     }
 
     #[test]
-    fn echo_cancellation_requires_a_boolean_opt_in_without_resetting_other_settings() {
-        for (value, enabled) in [
-            ("true", true),
-            ("false", false),
-            (r#""true""#, false),
-            ("1", false),
-            ("null", false),
-            ("{}", false),
-            ("[true]", false),
-        ] {
-            let raw = format!(r#"{{"language":"en-US","transcription":{{"mic":false,"echoCancellation":{value}}}}}"#);
-            let settings: UserSettings = serde_json::from_str(&raw).unwrap();
-            assert_eq!(settings.language, "en-US");
-            assert!(!settings.transcription.mic);
-            assert!(settings.transcription.speaker);
-            assert_eq!(settings.transcription.echo_cancellation, enabled);
-            let saved = serde_json::to_value(&settings).unwrap();
-            assert_eq!(saved["transcription"]["echoCancellation"], serde_json::json!(enabled));
-            let roundtrip: UserSettings = serde_json::from_value(saved).unwrap();
-            assert_eq!(roundtrip.transcription, settings.transcription);
-        }
+    fn removed_transcription_option_is_ignored_and_not_serialized() {
+        let raw = r#"{"language":"en-US","transcription":{"mic":false,"echoCancellation":true,"audioMode":"stereo"}}"#;
+        let settings: UserSettings = serde_json::from_str(raw).unwrap();
+        assert_eq!(settings.language, "en-US");
+        assert_eq!(serde_json::to_value(&settings).unwrap()["transcription"],
+            serde_json::json!({"mic": false, "speaker": true, "audioMode": "stereo"}));
     }
 
     #[test]
-    fn diarization_defaults_and_persistence_preserve_each_source() {
-        assert_eq!(default_user_settings().diarization, DiarizationSettings::default());
-        for (options, mic, speaker) in [
-            ("", true, true),
-            (r#", "diarization": {}"#, true, true),
-            (r#", "diarization": {"mic": false}"#, false, true),
-            (r#", "diarization": {"speaker": false}"#, true, false),
-            (r#", "diarization": {"mic": false, "speaker": false}"#, false, false),
-            (r#", "diarization": {"mic": true, "speaker": true}"#, true, true),
+    fn recognition_settings_migrate_legacy_diarization_and_preserve_explicit_false() {
+        for (raw, expected) in [
+            (r#"{}"#, true),
+            (r#"{"diarization":{"mic":false}}"#, true),
+            (r#"{"diarization":{"mic":true,"speaker":false}}"#, true),
+            (r#"{"diarization":{"mic":false,"speaker":false}}"#, false),
+            (r#"{"diarization":false}"#, false),
         ] {
-            let raw = format!(r#"{{"language":"invalid","devices":{{}}{options}}}"#);
-            let settings = normalize_user_settings(serde_json::from_str(&raw).unwrap());
-            assert_eq!(settings.language, DEFAULT_LANGUAGE);
-            assert_eq!(settings.diarization, DiarizationSettings { mic, speaker });
-            let persisted = serde_json::to_string_pretty(&settings).unwrap();
-            let json: serde_json::Value = serde_json::from_str(&persisted).unwrap();
-            assert_eq!(json["diarization"], serde_json::json!({"mic": mic, "speaker": speaker}));
-            assert_eq!(
-                serde_json::from_str::<UserSettings>(&persisted).unwrap().diarization,
-                settings.diarization
-            );
+            let settings: UserSettings = serde_json::from_str(raw).unwrap();
+            assert_eq!(settings.diarization, expected);
+            assert!(settings.auto_language_detection);
+            assert_eq!(serde_json::to_value(settings).unwrap()["diarization"], expected);
         }
+        let settings: UserSettings = serde_json::from_str(r#"{"autoLanguageDetection":false}"#).unwrap();
+        assert!(!settings.auto_language_detection);
     }
 
     #[test]
@@ -640,7 +602,7 @@ mod config_tests {
         let parsed: AppConfig = serde_json::from_str("{}").unwrap();
         assert!(parsed.azure.is_none());
         assert_eq!(parsed.user.language, DEFAULT_LANGUAGE);
-        assert_eq!(parsed.user.diarization, DiarizationSettings::default());
+        assert!(parsed.user.diarization);
     }
 
     #[test]
@@ -735,10 +697,7 @@ mod config_tests {
             .join("target")
             .join(format!("diarization-{}.json", uuid::Uuid::new_v4()));
         let mut settings = default_user_settings();
-        settings.diarization = DiarizationSettings {
-            mic: false,
-            speaker: true,
-        };
+        settings.diarization = false;
         let json = serde_json::to_string_pretty(&settings).unwrap();
         write_atomic(&path, json.as_bytes()).await.unwrap();
         let raw = tokio::fs::read_to_string(&path).await.unwrap();

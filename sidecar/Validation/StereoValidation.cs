@@ -90,10 +90,11 @@ internal static class StereoValidation
         using var singleSource = new AzureSpeechService(standard, user with { Transcription = new(true, false) });
         check(!singleSource.IsStereo && singleSource.TranscriptionSources.SequenceEqual(new[] { "mic" }), "A stereo preference with only one source uses mono");
         var mai = standard with { Model = AzureSpeechModel.MaiTranscribe2Streaming };
-        using var maiService = new AzureSpeechService(mai, user);
-        var speech = SpeechConfiguration.Create(mai, user.Language, stereo: true);
-        check(maiService.IsStereo && maiService.GetRecognitionMode("stereo") == "speechRecognizer" &&
-            speech.Model == "mai-transcribe-2-streaming" && speech.GetProperty(PropertyId.Speech_EnableMultiChannelProcessing) == "true",
-            "The installed SDK accepts the experimental MAI stereo configuration without diarization");
+        try
+        {
+            SpeechConfiguration.Create(mai, user.Language, stereo: true);
+            check(false, "MAI stereo must not reach the SDK");
+        }
+        catch (ArgumentException) { check(true, "MAI stereo is rejected before configuring the SDK"); }
     }
 }

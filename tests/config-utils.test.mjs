@@ -63,7 +63,7 @@ test('window preferences preserve explicit values independently without changing
       autoStart: { enabled: true, processes: ['teams'] }
     })
     assert.deepEqual(result.window, { minimizeToTrayOnClose: enabled, hideFromTaskbar: !enabled })
-    assert.deepEqual(result.transcription, { mic: false, speaker: true, echoCancellation: false, audioMode: 'dual-mono' })
+    assert.deepEqual(result.transcription, { mic: false, speaker: true, audioMode: 'dual-mono' })
     assert.equal(result.autoStart.enabled, true)
   }
 })
@@ -117,9 +117,9 @@ test('normalizeUserSettings accepts valid BCP-47', () => {
 
 test('stereo preference survives a single enabled source and invalid modes fall back to dual mono', () => {
   for (const [input, expected] of [['stereo', 'stereo'], ['unsupported', 'dual-mono'], [null, 'dual-mono']]) {
-    const settings = contract.normalizeUserSettings({ transcription: { mic: false, speaker: true, echoCancellation: true, audioMode: input } })
+    const settings = contract.normalizeUserSettings({ transcription: { mic: false, speaker: true, audioMode: input } })
     assert.deepEqual(contract.normalizeUserSettings(JSON.parse(JSON.stringify(settings))).transcription, {
-      mic: false, speaker: true, echoCancellation: true, audioMode: expected
+      mic: false, speaker: true, audioMode: expected
     })
   }
 })
@@ -129,71 +129,49 @@ test('normalizeUserSettings handles null/undefined input', () => {
   assert.equal(contract.normalizeUserSettings(undefined).language, contract.DEFAULT_USER_SETTINGS.language)
 })
 
-test('diarization defaults enable both sources for legacy and partial settings', () => {
-  for (const input of [null, undefined, {}, { language: 'en-US' }, { diarization: null }, { diarization: {} }]) {
-    assert.deepEqual(contract.normalizeUserSettings(input).diarization, { mic: true, speaker: true })
+test('speaker recognition migrates legacy settings and preserves explicit false', () => {
+  for (const input of [undefined, {}, { diarization: { mic: false } }, { diarization: { mic: false, speaker: true } }]) {
+    assert.equal(contract.normalizeUserSettings(input).diarization, true)
   }
-  assert.deepEqual(contract.normalizeUserSettings({ diarization: { mic: false } }).diarization, { mic: false, speaker: true })
-  assert.deepEqual(contract.normalizeUserSettings({ diarization: { speaker: false } }).diarization, { mic: true, speaker: false })
+  for (const diarization of [false, { mic: false, speaker: false }]) {
+    const settings = contract.normalizeUserSettings({ diarization, autoLanguageDetection: false })
+    assert.equal(settings.diarization, false)
+    assert.equal(settings.autoLanguageDetection, false)
+  }
 })
 
-test('diarization normalization preserves every independent boolean combination', () => {
+test('transcription defaults enable both sources for legacy and partial settings', () => {
+  for (const input of [null, undefined, {}, { language: 'en-US' }, { transcription: null }, { transcription: {} }]) {
+    assert.deepEqual(contract.normalizeUserSettings(input).transcription, { mic: true, speaker: true, audioMode: 'dual-mono' })
+  }
+  assert.deepEqual(contract.normalizeUserSettings({ transcription: { mic: false } }).transcription, { mic: false, speaker: true, audioMode: 'dual-mono' })
+  assert.deepEqual(contract.normalizeUserSettings({ transcription: { speaker: false } }).transcription, { mic: true, speaker: false, audioMode: 'dual-mono' })
+})
+
+test('transcription normalization preserves every independent boolean combination', () => {
   for (const mic of [true, false]) {
     for (const speaker of [true, false]) {
-      const settings = contract.normalizeUserSettings({ diarization: { mic, speaker } })
-      assert.deepEqual(settings.diarization, { mic, speaker })
-      assert.deepEqual(contract.normalizeUserSettings(JSON.parse(JSON.stringify(settings))).diarization, { mic, speaker })
+      const settings = contract.normalizeUserSettings({ transcription: { mic, speaker } })
+      assert.deepEqual(settings.transcription, { mic, speaker, audioMode: 'dual-mono' })
+      assert.deepEqual(contract.normalizeUserSettings(JSON.parse(JSON.stringify(settings))).transcription, { mic, speaker, audioMode: 'dual-mono' })
     }
   }
 })
 
-  test('transcription defaults enable both sources for legacy and partial settings', () => {
-    for (const input of [null, undefined, {}, { language: 'en-US' }, { transcription: null }, { transcription: {} }]) {
-      assert.deepEqual(contract.normalizeUserSettings(input).transcription, { mic: true, speaker: true, echoCancellation: false, audioMode: 'dual-mono' })
-    }
-    assert.deepEqual(contract.normalizeUserSettings({ transcription: { mic: false } }).transcription, { mic: false, speaker: true, echoCancellation: false, audioMode: 'dual-mono' })
-    assert.deepEqual(contract.normalizeUserSettings({ transcription: { speaker: false } }).transcription, { mic: true, speaker: false, echoCancellation: false, audioMode: 'dual-mono' })
-  })
+test('malformed transcription values do not become truthy checkbox settings', () => {
+  assert.deepEqual(contract.normalizeUserSettings({ transcription: { mic: 'false', speaker: 0 } }).transcription, { mic: true, speaker: true, audioMode: 'dual-mono' })
+})
 
-  test('transcription normalization preserves every independent boolean combination', () => {
-    for (const mic of [true, false]) {
-      for (const speaker of [true, false]) {
-        const settings = contract.normalizeUserSettings({ transcription: { mic, speaker } })
-        assert.deepEqual(settings.transcription, { mic, speaker, echoCancellation: false, audioMode: 'dual-mono' })
-        assert.deepEqual(contract.normalizeUserSettings(JSON.parse(JSON.stringify(settings))).transcription, { mic, speaker, echoCancellation: false, audioMode: 'dual-mono' })
-      }
-    }
-  })
-
-  test('malformed transcription values do not become truthy checkbox settings', () => {
-    assert.deepEqual(contract.normalizeUserSettings({ transcription: { mic: 'false', speaker: 0 } }).transcription, { mic: true, speaker: true, echoCancellation: false, audioMode: 'dual-mono' })
-  })
-
-  test('transcription and diarization stay independent axes', () => {
-    const settings = contract.normalizeUserSettings({
-      transcription: { mic: false, speaker: true },
-      diarization: { mic: true, speaker: false }
-    })
-    assert.deepEqual(settings.transcription, { mic: false, speaker: true, echoCancellation: false, audioMode: 'dual-mono' })
-    assert.deepEqual(settings.diarization, { mic: true, speaker: false })
-  })
-
-test('echo cancellation defaults off, requires a boolean opt-in, and is independent of source selection', () => {
-  assert.equal(contract.DEFAULT_USER_SETTINGS.transcription.echoCancellation, false)
+test('removed transcription option is ignored in legacy config and omitted from the example', () => {
   const example = JSON.parse(readFileSync(join(ROOT, 'MeetingNotes.config.example.json'), 'utf8'))
-  assert.equal(example.user.transcription.echoCancellation, false)
-  for (const echoCancellation of [undefined, null, false, 'true', 1, [], {}, true]) {
-    const settings = contract.normalizeUserSettings({
-      language: 'en-US', transcription: { mic: false, speaker: true, echoCancellation }
-    })
-    assert.deepEqual(settings.transcription, { mic: false, speaker: true, echoCancellation: echoCancellation === true, audioMode: 'dual-mono' })
-    assert.equal(settings.language, 'en-US')
-    assert.deepEqual(contract.normalizeUserSettings(JSON.parse(JSON.stringify(settings))), settings)
-  }
+  assert.equal(Object.hasOwn(example.user.transcription, 'echoCancellation'), false)
+  const settings = contract.normalizeUserSettings({ language: 'en-US', transcription: { mic: false, echoCancellation: true, audioMode: 'stereo' } })
+  assert.deepEqual(settings.transcription, { mic: false, speaker: true, audioMode: 'stereo' })
+  assert.equal(settings.language, 'en-US')
 })
 
 test('malformed diarization values do not become truthy checkbox settings', () => {
-  assert.deepEqual(contract.normalizeUserSettings({ diarization: { mic: 'false', speaker: 0 } }).diarization, { mic: true, speaker: true })
+  assert.equal(contract.normalizeUserSettings({ diarization: { mic: 'false', speaker: 0 } }).diarization, true)
 })
 
 test('markdown export defaults to enabled without a path', () => {

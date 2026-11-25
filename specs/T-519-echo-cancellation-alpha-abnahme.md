@@ -1,7 +1,10 @@
 # T-519: Echo cancellation (Alpha) – Hardware-Abnahme
 
 ## Kontext
-Status: geplant (2 Punkte offen; nicht abgenommen)
+Status: not working
+
+Abnahme geschlossen: Die praktischen Versuche unten zeigten keine verlaessliche
+Verbesserung der Mikrofon-Transkripte. Die Alpha wurde aus der App entfernt.
 Reifegrad: Alpha
 Abhaengigkeiten: [T-517: Bedienung](./T-517-echo-cancellation-alpha.md), [T-518: Audio-Pipeline](./T-518-echo-cancellation-audio-pipeline.md), [T-502: Latenzmessung](./T-502-latency-messung.md)
 
@@ -77,8 +80,8 @@ Grenze des Ein-Tap-Filters steht in
 [T-518](./T-518-echo-cancellation-audio-pipeline.md#fehleranalyse-24112026).
 
 ## Done When
-- [ ] A/B mit Laptop-Lautsprechern und zweitem Geraetepaar belegt Nutzen gegen Doppeleintraege und Erhalt der Nahstimme bei Doppelsprache. - **offen**: Windows-Hardware und Azure-Testzugang fuer echte Transkripte sind erforderlich.
-- [ ] Portable misst Verhalten bei Luecken, Resume und Last; Latenz, CPU, Queue und Drop-Zaehler sind dokumentiert. - **offen**: Dauerlauf auf Zielhardware fehlt.
+- Nicht abgenommen: A/B-Nutzen gegen Doppeleintraege und Erhalt der Nahstimme bei Doppelsprache.
+- Nicht abgenommen: Portable-Dauerlauf bei Luecken, Resume und Last. Weitere Messungen entfallen.
 
 ## Workboard
 Hardware-Abnahme: `455a9e0c-15af-4470-af29-28513028af63`.

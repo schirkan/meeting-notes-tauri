@@ -207,7 +207,8 @@ export function useAppState() {
           getSpeakerIdentity(entry) === identity
 
         const withoutInterimForSource = prev.filter(
-          (entry) => !(entry.source === segment.source && entry.state === 'interim')
+          (entry) => !(entry.state === 'interim' && (entry.source === segment.source ||
+            (entry.source === '' && entry.sessionId === segment.sessionId)))
         )
 
         if (segment.state === 'final') {
@@ -725,8 +726,11 @@ export function useAppState() {
       const payload = {
         ...draftToConfig(configDraft),
         language: dialogSettings.language,
-        transcription: dialogSettings.transcription,
-        diarization: dialogSettings.diarization
+        autoLanguageDetection: dialogSettings.autoLanguageDetection,
+        transcription: configDraft.model === 'mai-transcribe-2-streaming'
+          ? { ...dialogSettings.transcription, audioMode: 'dual-mono' as const }
+          : dialogSettings.transcription,
+        diarization: configDraft.model === 'standard' && dialogSettings.diarization
       }
       requestSubmitted = true
       const result = await window.transcriptApi.testAzureConnectivity(payload)

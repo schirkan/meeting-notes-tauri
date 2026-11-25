@@ -30,20 +30,27 @@ public static class ArgsParser
         return new TranscriptionSettings(Enabled("--transcription-mic"), Enabled("--transcription-speaker"));
     }
 
-    public static bool ParseStereo(IReadOnlyDictionary<string, string?> args, TranscriptionSettings sources) =>
+    public static bool ParseStereo(IReadOnlyDictionary<string, string?> args, TranscriptionSettings sources, AzureSpeechModel model) =>
         args.GetValueOrDefault("--audio-mode") switch
         {
             null or "dual-mono" => false,
+            "stereo" when sources.Mic && sources.Speaker && model == AzureSpeechModel.MaiTranscribe2Streaming =>
+                throw new ArgumentException("Stereo is not supported with MAI Transcribe. Use dual mono."),
             "stereo" => sources.Mic && sources.Speaker,
             _ => throw new ArgumentException("--audio-mode must be dual-mono or stereo.")
         };
 
-    public static bool ParseEchoCancellation(IReadOnlyDictionary<string, string?> args, TranscriptionSettings sources)
+    public static bool ParseAutoLanguageDetection(IReadOnlyDictionary<string, string?> args) =>
+        Enabled(args, "--auto-language-detection");
+
+    public static bool ParseInterimResults(IReadOnlyDictionary<string, string?> args) =>
+        Enabled(args, "--interim-results");
+
+    private static bool Enabled(IReadOnlyDictionary<string, string?> args, string key)
     {
-        const string key = "--echo-cancellation";
-        if (!args.TryGetValue(key, out var raw)) return false;
-        if (!bool.TryParse(raw, out var enabled)) throw new ArgumentException($"{key} must be true or false.");
-        return enabled && sources.Mic && sources.Speaker;
+        if (!args.TryGetValue(key, out var raw)) return true;
+        if (bool.TryParse(raw, out var enabled)) return enabled;
+        throw new ArgumentException($"{key} must be true or false.");
     }
 
     public static Dictionary<string, string?> Parse(string[] args)

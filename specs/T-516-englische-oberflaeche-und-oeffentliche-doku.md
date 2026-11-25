@@ -43,7 +43,7 @@ nicht uebersetzt; die Anwendung verfasst ihre eigenen Labels und Meldungen engli
 | Einstellungen | Settings |
 | Allgemein | General |
 | Transkription | Transcription |
-| Audio Einstellungen | Audio settings |
+| Audio Einstellungen | Audio devices |
 | Speichern | Save |
 | Schliessen | Close |
 | Verbindung testen | Test connection |

@@ -4,20 +4,13 @@ import { Icon } from './Icon'
 
 type AudioSourcesProps = {
   statusRunning: boolean
-  sourceLabelsOnly?: boolean
   settings: UserSettings
   devices: AudioDeviceSnapshot
   setSettings: React.Dispatch<React.SetStateAction<UserSettings>>
 }
 
-/**
- * Mic and speaker loopback as independent sources.
- *
- * Shared by the idle panel on the start screen and by the Audio section of the
- * settings dialog, so both places always show the same controls.
- */
-export function AudioSources(props: AudioSourcesProps) {
-  const { statusRunning, sourceLabelsOnly = false, settings, devices, setSettings } = props
+function AudioSources(props: AudioSourcesProps) {
+  const { statusRunning, settings, devices, setSettings } = props
 
   return (
     <>
@@ -54,20 +47,6 @@ export function AudioSources(props: AudioSourcesProps) {
             </select>
           </div>
         </div>
-
-        <label className="checkbox-field source-diarization" title={sourceLabelsOnly ? 'Not available with MAI Transcribe' : 'Distinguish speakers in the microphone transcript'}>
-          <input
-            type="checkbox"
-            aria-label="Speaker recognition for microphone"
-            checked={!sourceLabelsOnly && settings.diarization.mic}
-            onChange={(event) => {
-              const mic = event.currentTarget.checked
-              setSettings((prev) => ({ ...prev, diarization: { ...prev.diarization, mic } }))
-            }}
-            disabled={statusRunning || sourceLabelsOnly || !settings.transcription.mic}
-          />
-          <span>Speaker recognition</span>
-        </label>
       </div>
 
       <div className="audio-source-row full-field">
@@ -103,20 +82,6 @@ export function AudioSources(props: AudioSourcesProps) {
             </select>
           </div>
         </div>
-
-        <label className="checkbox-field source-diarization" title={sourceLabelsOnly ? 'Not available with MAI Transcribe' : 'Distinguish speakers in the speaker loopback transcript'}>
-          <input
-            type="checkbox"
-            aria-label="Speaker recognition for speaker loopback"
-            checked={!sourceLabelsOnly && settings.diarization.speaker}
-            onChange={(event) => {
-              const speaker = event.currentTarget.checked
-              setSettings((prev) => ({ ...prev, diarization: { ...prev.diarization, speaker } }))
-            }}
-            disabled={statusRunning || sourceLabelsOnly || !settings.transcription.speaker}
-          />
-          <span>Speaker recognition</span>
-        </label>
       </div>
     </>
   )
@@ -129,7 +94,7 @@ export function AudioPanel(props: AudioSourcesProps) {
   return (
     <section className="panel settings">
       <div className="panel-header">
-        <h2>Audio</h2>
+        <h2>Audio devices</h2>
       </div>
 
       <div className="settings-block audio-settings-grid">

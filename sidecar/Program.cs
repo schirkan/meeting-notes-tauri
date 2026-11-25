@@ -184,12 +184,16 @@ if (!transcription.Mic && !transcription.Speaker)
 }
 Logger.Info("config", "transcription", $"Transcribed sources: mic={transcription.Mic}, speaker={transcription.Speaker}.");
 
-bool echoEnabled;
 bool stereo;
+AzureSpeechModel speechModel;
+bool autoLanguageDetection;
+bool interimResults;
 try
 {
-    echoEnabled = ArgsParser.ParseEchoCancellation(argsMap, transcription);
-    stereo = ArgsParser.ParseStereo(argsMap, transcription);
+    speechModel = SpeechConfiguration.ParseModel(argsMap.GetValueOrDefault("--speech-model"));
+    stereo = ArgsParser.ParseStereo(argsMap, transcription, speechModel);
+    autoLanguageDetection = ArgsParser.ParseAutoLanguageDetection(argsMap);
+    interimResults = ArgsParser.ParseInterimResults(argsMap);
 }
 catch (ArgumentException ex)
 {
@@ -231,16 +235,6 @@ var language = argsMap.GetValueOrDefault("--language") ?? "de-DE";
 var speechKey = SpeechConfiguration.GetSpeechKey(argsMap);
 var speechRegion = argsMap.GetValueOrDefault("--speech-region");
 var speechEndpoint = argsMap.GetValueOrDefault("--speech-endpoint");
-AzureSpeechModel speechModel;
-try
-{
-    speechModel = SpeechConfiguration.ParseModel(argsMap.GetValueOrDefault("--speech-model"));
-}
-catch (ArgumentException ex)
-{
-    Logger.Error("SIDECAR_START_FAILED", ex.Message);
-    return 11;
-}
 var azureEnabled = !string.IsNullOrWhiteSpace(speechKey)
                    && !string.IsNullOrWhiteSpace(speechRegion)
                    && (speechModel == AzureSpeechModel.MaiTranscribe2Streaming || !string.IsNullOrWhiteSpace(speechEndpoint));
@@ -280,19 +274,6 @@ using var stereoStartup = stereo ? CancellationTokenSource.CreateLinkedTokenSour
 var startupStatusGate = new object();
 var userStopRequested = false;
 var commandsReady = stereo ? new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously) : null;
-EchoCancellation? echo = null;
-Task echoDiagnostics = Task.CompletedTask;
-if (echoEnabled)
-{
-    try { echo = new EchoCancellation(sampleRate); }
-    catch (Exception) { Logger.Debug("audio", "echo_cancellation", "Echo cancellation (Alpha): Bypass (initialization failed)."); }
-}
-
-void LogEchoDiagnostics(EchoCancellation filter)
-{
-    if (filter.TakeDiagnosticSummary() is { } summary)
-        Logger.Debug("audio", "echo_cancellation_stats", summary);
-}
 
 void RequestStop()
 {
@@ -351,13 +332,14 @@ async Task<int> StartCaptureAsync(CancellationToken startup)
             Endpoint: speechEndpoint ?? string.Empty,
             Region: speechRegion!,
             SpeechKey: speechKey!,
-            InterimResults: true,
+            InterimResults: interimResults,
             Proxy: proxy,
             Model: speechModel);
         var userSettings = new UserSettings(language, new DeviceIds(micId, speakerId))
         {
             Transcription = transcription,
             Diarization = diarization,
+            AutoLanguageDetection = autoLanguageDetection,
             Stereo = stereo
         };
         var service = new AzureSpeechService(azureConfig, userSettings, RequestStop);
@@ -369,7 +351,6 @@ async Task<int> StartCaptureAsync(CancellationToken startup)
 
     startup.ThrowIfCancellationRequested();
     var azurePushLock = new object();
-    EchoCancellation.Phase? lastEchoPhase = null;
 
     // T-511: Nur transkribierte Quellen werden aufgenommen. Eine abgeschaltete
     // Quelle erhaelt weder Recorder noch Azure-Stream.
@@ -380,22 +361,12 @@ async Task<int> StartCaptureAsync(CancellationToken startup)
         loopback: false,
         targetWaveFormat,
         "Mic",
-        includePacketTimestamp: echo is not null || stereo,
+        includePacketTimestamp: stereo,
         (pcm, capturedAtTicks, captureLatencyMs, packetTimestamp) =>
         {
             try
             {
                 if (pcm.Length == 0) return;
-                if (echo is not null)
-                {
-                    pcm = echo.ProcessMic(pcm, packetTimestamp);
-                    var phase = echo.State;
-                    if (lastEchoPhase != phase)
-                    {
-                        lastEchoPhase = phase;
-                        Logger.Debug("audio", "echo_cancellation", $"Echo cancellation (Alpha): {phase}.");
-                    }
-                }
                 var frame = new AudioFrame(
                         AzureSpeechService.SourceMic,
                         sampleRate, 16, 1,
@@ -419,13 +390,12 @@ async Task<int> StartCaptureAsync(CancellationToken startup)
         loopback: true,
         targetWaveFormat,
         "Speaker-Loopback",
-        includePacketTimestamp: echo is not null || stereo,
+        includePacketTimestamp: stereo,
         (pcm, capturedAtTicks, captureLatencyMs, packetTimestamp) =>
         {
             try
             {
                 if (pcm.Length == 0) return;
-                echo?.AddReference(pcm, packetTimestamp);
                 var frame = new AudioFrame(
                         AzureSpeechService.SourceSpeaker,
                         sampleRate, 16, 1,
@@ -446,19 +416,6 @@ async Task<int> StartCaptureAsync(CancellationToken startup)
     startup.ThrowIfCancellationRequested();
     speakerSource?.Start();
     startup.ThrowIfCancellationRequested();
-
-    if (echo is { } filter)
-    {
-        echoDiagnostics = Task.Run(async () =>
-        {
-            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
-            try
-            {
-                while (await timer.WaitForNextTickAsync(stopping)) LogEchoDiagnostics(filter);
-            }
-            catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
-        });
-    }
 
     Logger.Info("format", "mic_format", micSource is null
         ? "Mic: not transcribed."
@@ -511,14 +468,12 @@ async Task HandleCommandAsync(string command)
             break;
         case SidecarCommands.Pause:
             azure?.SetPaused(true);
-            echo?.SetPaused(true);
             Logger.Info("sidecar", "pause", "Transcription paused; the Azure session stays connected.");
             Logger.Event("status", new { phase = "paused", running = true });
             break;
         case SidecarCommands.Resume:
             await ReconnectAsync(resuming: true);
             stopping.ThrowIfCancellationRequested();
-            echo?.SetPaused(false);
             azure?.SetPaused(false);
             Logger.Info("sidecar", "resume", "Transcription resumed.");
             Logger.Event("status", new { phase = "resumed", running = true });
@@ -565,12 +520,6 @@ async Task<int> StopRecordingAsync(bool wasStarted, bool acknowledge = true)
                 try
                 {
                     deviceEnumerator?.Dispose();
-                    if (echo is { } filter)
-                    {
-                        filter.Stop();
-                        await echoDiagnostics.WaitAsync(shutdownToken);
-                        LogEchoDiagnostics(filter);
-                    }
                 }
                 finally
                 {
@@ -677,7 +626,6 @@ finally
         if (stereo) _ = await StopRecordingAsync(wasStarted: false, acknowledge: false);
         else
         {
-            echo?.Stop();
             try { micSource?.Dispose(); }
             finally
             {

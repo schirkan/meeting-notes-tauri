@@ -1,4 +1,4 @@
-import { isAzureSpeechModel, type AppConfigState } from '@shared/config-contract'
+import type { AppConfigState } from '@shared/config-contract'
 import type { ConfigDraft } from '../config-utils'
 
 type ConfigPanelProps = {
@@ -31,30 +31,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
       )}
 
       <div className="settings-block">
-        <label className="speech-model-field" title="Choose the Azure Speech model for the next transcription">
-          Transcription model
-          <select
-            value={configDraft.model}
-            onChange={(event) => {
-              const model = event.currentTarget.value
-              if (isAzureSpeechModel(model)) setConfigDraft((prev) => ({ ...prev, model }))
-            }}
-            disabled={statusRunning}
-          >
-            <option value="standard">Azure Speech (standard)</option>
-            <option value="mai-transcribe-2-streaming">MAI Transcribe (Preview)</option>
-          </select>
-        </label>
-        {isMai && (
-          <p className="settings-inline-hint speech-model-hint">
-            Requires a supported Azure region and speech key. The endpoint below is only used by Standard.
-            MAI detects the language automatically and labels audio by source, not by speaker.
-            Dual mono uses one Azure session per enabled source. Stereo mix uses one session for both sources.
-            Stereo is experimental; billing savings have not been verified.
-          </p>
-        )}
-
-        <label title="Enter the HTTPS endpoint of your Azure Speech resource">
+        <label className="full-field" title="Enter the HTTPS endpoint of your Azure Speech resource">
           Endpoint
           <input
             type="text"
@@ -86,18 +63,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
             disabled={statusRunning}
           />
         </label>
-
-        <label className="checkbox-field" title="Show provisional text while Azure Speech is still recognizing it">
-          <input
-            type="checkbox"
-            checked={configDraft.interimResults}
-            onChange={(event) => setConfigDraft((prev) => ({ ...prev, interimResults: event.target.checked }))}
-            disabled={statusRunning}
-          />
-          <span>Enable interim results</span>
-        </label>
       </div>
-
     </section>
   )
 }

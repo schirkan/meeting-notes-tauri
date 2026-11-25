@@ -15,7 +15,7 @@ export function ProxyPanel({ configDraft, setConfigDraft }: ProxyPanelProps) {
 
       <div className="settings-block proxy-settings-grid">
         <label title="Enter the proxy server hostname or IP address. Leave blank for a direct connection.">
-          Proxy Host
+          Host
           <input
             type="text"
             value={configDraft.proxyHost}
@@ -24,7 +24,7 @@ export function ProxyPanel({ configDraft, setConfigDraft }: ProxyPanelProps) {
         </label>
 
         <label title="Enter the port on which the proxy accepts connections">
-          Proxy Port
+          Port
           <input
             type="number"
             min={1}
@@ -35,7 +35,7 @@ export function ProxyPanel({ configDraft, setConfigDraft }: ProxyPanelProps) {
         </label>
 
         <label title="Enter a username only if the proxy requires authentication">
-          Proxy username (optional)
+          Username (optional)
           <input
             type="text"
             value={configDraft.proxyUsername}
@@ -44,7 +44,7 @@ export function ProxyPanel({ configDraft, setConfigDraft }: ProxyPanelProps) {
         </label>
 
         <label title="Enter a password only if the proxy requires authentication">
-          Proxy password (optional)
+          Password (optional)
           <input
             type="password"
             value={configDraft.proxyPassword}

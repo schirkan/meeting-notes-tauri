@@ -3,7 +3,8 @@ export type TranscriptState = 'interim' | 'final'
 
 export interface TranscriptSegment {
   id: string
-  source: TranscriptSource
+  /** Empty on stereo interim results without verifiable channel metadata. */
+  source: TranscriptSource | ''
   speaker: string
   /**
    * Azure-Sitzung, in der das Segment entstanden ist. Azure vergibt die

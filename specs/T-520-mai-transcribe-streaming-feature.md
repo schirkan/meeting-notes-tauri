@@ -22,7 +22,7 @@ WebSocket-Client. Eine unerwartet teurere zweite Cloud-Sitzung ist kein Fallback
 
 ## Verhalten und Konfiguration
 
-- Im Azure-Bereich zwischen **Azure Speech (standard)** und **MAI Transcribe (Preview)**
+- Unter **Speech recognition** zwischen **Azure Speech (standard)** und **MAI Transcribe (Preview)**
   waehlen. Additives Feld: `azure.model` (`standard` oder
   `mai-transcribe-2-streaming`). Fehlendes Feld bleibt Standard; unbekannten
   Wert validieren und nicht still als Standard ausfuehren. Azure-Einstellungen
@@ -34,14 +34,13 @@ WebSocket-Client. Eine unerwartet teurere zweite Cloud-Sitzung ist kein Fallback
   oder falsche Region/Ressource/Key bzw. eine nicht verfuegbare Kombination erzeugt
   einen sichtbaren Fehler, auch bei Auto-Start, nie einen stillen Tarifwechsel.
 - Mic, Speaker und **Mix** bleiben bedienbar; Mix ist eine Ansicht ueber beide
-  Quellen, kein Azure-Mono-Mix. AEC bleibt optional, lokal und betrifft nur Mic.
+  Quellen, kein Azure-Mono-Mix.
 - `Channel` bezeichnet eine Quelle, keinen Sprecher innerhalb dieser Quelle.
-  Bei Standard bleiben Sprecherlabels je Quelle waehlbar; im Stereo-Modus
-  aktiviert eine gewaehlte Quelle die Diarization fuer den gesamten Stream.
-  Lokale Unterdrueckung einer ID schaltet sie serverseitig nicht ab. MAI nutzt
-  *source labels only*; die Standard-Werte bleiben gespeichert. MAI-Stereo
-  ist fuer den Live-Test als experimentelle Option verfuegbar, nicht als
-  gepruefter Produktionsmodus. Auto-Spracherkennung und erkannte Sprachlabels
+  Die gemeinsame Einstellung **Speaker recognition** gilt fuer beide Quellen.
+  Im Standard-Stereo gilt sie fuer den gesamten Stream. MAI nutzt nach einem
+  fehlgeschlagenen Praxistest keine Sprechererkennung; Aufnahme und Diagnose
+  verwenden den `SpeechRecognizer`. Die gespeicherte Standard-Praeferenz bleibt
+  erhalten. MAI-Stereo ist ebenfalls nach erneut beobachtetem Fehlschlag deaktiviert. Auto-Spracherkennung und erkannte Sprachlabels
   werden getrennt abgenommen (T-522).
 - Bestehende Sitzungsausgabe, Export, Auto-Start/Stop und Tray-Quit bleiben erhalten.
   Bei einer endenden Cloud-Sitzung keine erfundene Sprecherkontinuitaet und
@@ -54,11 +53,9 @@ WebSocket-Client. Eine unerwartet teurere zweite Cloud-Sitzung ist kein Fallback
 
 Die Auswahl gilt fuer den naechsten manuellen oder automatischen Start. MAI
 nutzt `FromSubscription(key, region)`, das explizite SDK-Modell und dessen
-Spracherkennung. Die App liefert nur Quellenlabels; Primaersprache und
-Sprechererkennung bleiben als Standard-Einstellungen erhalten. **Dual mono**
-bleibt der Standardwert. **Stereo mix** ist fuer Standard und experimentell
-fuer MAI waehlbar, liefert nur Finals und faellt bei Fehlern nicht automatisch
-zurueck. Die bisherige App-API bleibt unveraendert. Kanalzuordnung und Lifecycle
+Spracherkennung. Die Primaersprache bleibt als Standard-Einstellung erhalten.
+MAI verwendet Mono pro aktiver Quelle; eine gespeicherte Stereo-Praeferenz
+wird erst bei Rueckkehr zu Standard wieder wirksam. Kanalzuordnung und Lifecycle
 sind in [T-521](./T-521-mai-transcribe-mehrkanal-sidecar.md) beschrieben.
 
 **Test connection** prueft fuer MAI die regionale Speech/WSS-Verbindung mit
@@ -67,5 +64,5 @@ Kanaltrennung und Kosten sind damit nicht abgenommen.
 
 ## Done When
 - [x] Modellauswahl, Draft-Diagnose und Rueckkehr zu Standard sind ohne Migration alter Configs implementiert. Beleg: Konfigurations-Unit-Tests in `tests/config-utils.test.mjs`, Settings-/Diagnose-Regression in `tests/startup-ui.test.mjs` (Playwright Chromium mit IPC-Mock) und lokaler SDK-Konfigurationstest in `sidecar/Validation/DiarizationValidation.cs` ohne Azure-Verbindung. Rust-Tests waren durch einen verweigerten MSBuild-Taskhost beim Sidecar-Publish blockiert.
-- [ ] UI, IPC und Export bewahren getrennte Quellen; Sprach- und Sprechergrenzen sind sichtbar dokumentiert. - **offen**: Die Mehrkanal-Ausgabe sowie Sprache und Quellenlabels bei einer Live-Aufnahme mit MAI muessen noch abgenommen werden.
+- [ ] UI, IPC und Export bewahren getrennte Quellen; Sprachgrenzen sind sichtbar dokumentiert. - **offen**: Sprache und Quellenlabels bei einer Live-Aufnahme mit MAI-Mono muessen noch abgenommen werden.
 - [ ] Preview ist nur nach Kosten-, Qualitaets-, Proxy- und Portable-Freigabe verfuegbar. - **offen**: Freigabekriterien und Messung siehe T-522.

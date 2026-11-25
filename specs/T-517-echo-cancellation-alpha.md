@@ -1,7 +1,12 @@
 # T-517: Echo cancellation (Alpha)
 
 ## Kontext
-Status: umgesetzt (Alpha)
+Status: not working
+
+Die Alpha wurde entfernt: Praxistests zeigten keine verlaessliche Verbesserung
+der Mikrofon-Transkripte ([T-519](./T-519-echo-cancellation-alpha-abnahme.md)).
+Alte Einstellungen werden ignoriert und beim Speichern nicht mehr ausgegeben.
+Der folgende Stand dokumentiert die fruehere Alpha, nicht den aktuellen Code.
 Reifegrad: Alpha
 Prioritaet: medium
 Abhaengigkeiten: [T-403: Einstellungen](./T-403-settings-dialog-mit-verbindung-testen-button.md), [T-511: Transkriptionsquellen](./T-511-transkriptions-quellen-auswaehlen.md)

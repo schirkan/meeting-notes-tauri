@@ -46,21 +46,46 @@ internal static class DiarizationValidation
         check(SidecarCommands.ReadType("") == SidecarCommands.Unknown, "Empty line is rejected");
 
         var config = new AzureSpeechConfig("wss://localhost/speech/universal/v2", "westeurope", "validation-key", true, null);
+        var disabled = ArgsParser.Parse(["--auto-language-detection", "false", "--interim-results", "false"]);
+        var fixedSpeech = SpeechConfiguration.Create(config with { InterimResults = ArgsParser.ParseInterimResults(disabled) },
+            "fr-FR", autoLanguageDetection: ArgsParser.ParseAutoLanguageDetection(disabled));
+        check(fixedSpeech.SpeechRecognitionLanguage == "fr-FR" &&
+            fixedSpeech.GetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode) != "Continuous" &&
+            SpeechConfiguration.CreateLanguageDetection(config.Model, "fr-FR", ArgsParser.ParseAutoLanguageDetection(disabled)) is null,
+            "Disabling language detection uses only the primary language");
+        check(fixedSpeech.GetProperty("SpeechServiceResponse_InterimResults") == "false" &&
+            fixedSpeech.GetProperty(PropertyId.SpeechServiceResponse_DiarizeIntermediateResults) == "false",
+            "Disabling interim results also disables intermediate diarization");
         var mai = config with
         {
             Endpoint = "not a URL",
             Region = "swedencentral",
             Model = SpeechConfiguration.ParseModel("mai-transcribe-2-streaming")
         };
-        var maiSpeech = SpeechConfiguration.Create(mai, "de-DE");
-        using (var service = new AzureSpeechService(mai, new UserSettings("de-DE", new DeviceIds(null, null))))
+        var stereoSpeech = SpeechConfiguration.Create(config, "de-DE", stereo: true);
+        check(stereoSpeech.GetProperty("SpeechServiceResponse_InterimResults") == "true" &&
+            stereoSpeech.GetProperty(PropertyId.SpeechServiceResponse_DiarizeIntermediateResults) == "true",
+            "Stereo can request interim results and interim speaker IDs");
+        foreach (var enabled in new[] { false, true })
+        using (var service = new AzureSpeechService(mai, new UserSettings("de-DE", new DeviceIds(null, null))
+            { Diarization = new DiarizationSettings(enabled, enabled) }))
         {
+            var maiSpeech = SpeechConfiguration.Create(mai, "de-DE", diarizeIntermediateResults: enabled);
             check(maiSpeech.Model == "mai-transcribe-2-streaming" &&
                 SpeechConfiguration.CreateLanguageDetection(mai.Model, "de-DE") is null &&
-                !service.EffectiveDiarization && service.GetRecognitionMode(AzureSpeechService.SourceMic) == "speechRecognizer" &&
+                maiSpeech.GetProperty(PropertyId.SpeechServiceResponse_DiarizeIntermediateResults) == "false" &&
+                !service.EffectiveDiarization &&
+                service.GetRecognitionMode(AzureSpeechService.SourceMic) == "speechRecognizer" &&
                 service.GetRecognitionMode(AzureSpeechService.SourceSpeaker) == "speechRecognizer",
-                "MAI uses the regional SDK model without Standard endpoint, LID candidates or speaker recognition");
+                "MAI uses the speech recognizer without diarization regardless of speaker settings");
         }
+        var stereoArgs = ArgsParser.Parse(["--audio-mode", "stereo"]);
+        try
+        {
+            ArgsParser.ParseStereo(stereoArgs, new TranscriptionSettings(true, true), mai.Model);
+            check(false, "MAI must reject stereo on the standalone CLI");
+        }
+        catch (ArgumentException) { check(true, "MAI rejects stereo on the standalone CLI"); }
         foreach (var mic in new[] { true, false })
         foreach (var speaker in new[] { true, false })
         {

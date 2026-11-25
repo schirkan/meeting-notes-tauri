@@ -29,11 +29,8 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
   englisch; Specs, `SPEC.md` und diese Datei bleiben intern deutsch.
   Siehe [T-516](./specs/T-516-englische-oberflaeche-und-oeffentliche-doku.md).
 - Mikrofon, Speaker-Loopback oder beide Quellen sind waehlbar. Sprechererkennung
-  ist je Quelle unabhaengig konfigurierbar; mindestens eine Transkriptionsquelle
+  ist fuer alle aktiven Quellen gemeinsam konfigurierbar; mindestens eine Transkriptionsquelle
   bleibt aktiv. Siehe [T-511](./specs/T-511-transkriptions-quellen-auswaehlen.md).
-- Seit v0.1.7: [Echo cancellation (Alpha)](./specs/T-517-echo-cancellation-alpha.md),
-  standardmaessig aus; nur fuer Mic + Speaker-Loopback und nur im Mic-Transkript.
-  Die [Hardware-Abnahme](./specs/T-519-echo-cancellation-alpha-abnahme.md) ist offen.
 - **Pause/Resume** erhaelt die Azure-Sitzung ohne Audiozufuhr. **Stop** beendet sie;
   der naechste Start beginnt ein neues Transkript. Sprecheraliase und Segment-Merge
   sind sitzungsgebunden. Siehe [T-507](./specs/T-507-pause-stop-und-sitzungsgebundene-sprecherzuordnung.md).
@@ -52,7 +49,7 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
   bei Pause gelb, nach Stop wieder in Originalfarbe.
   Siehe [T-514](./specs/T-514-systray-und-schliessen-verhalten.md).
 - Einstellungen stehen auf einer scrollenden Seite ohne Tabs oder Bereichsnavigation:
-  **General**, **Transcription**, **Azure**, **Proxy**. Audiooptionen stehen nur
+  **General**, **Transcription**, **Speech recognition**, **Azure**, **Proxy**. Die Quellenauswahl steht nur
   im Leerzustand der Startseite und werden sofort gespeichert. Der Dialog hat
   einen temporaeren Store, initialen Speichern-Fokus und fragt beim Schliessen
   nach ungespeicherten Aenderungen. Nur **Save** persistiert den Dialog-Draft.
@@ -152,7 +149,7 @@ Offene Abnahmen und Messverfahren: [T-500](./specs/T-500-qualitaetssicherung-und
 - Echo cancellation (Alpha): Settings, lokale Audioverarbeitung und Abnahme
   (`4f1a482b-afa7-42a3-a933-ef145302a856`, done).
 - Separate Hardware-Abnahme der Echo-Alpha
-  (`455a9e0c-15af-4470-af29-28513028af63`, backlog).
+  (`455a9e0c-15af-4470-af29-28513028af63`): fachlich geschlossen, siehe [T-519](./specs/T-519-echo-cancellation-alpha-abnahme.md).
 
 ## CI/CD
 
@@ -165,4 +162,4 @@ Offene Abnahmen und Messverfahren: [T-500](./specs/T-500-qualitaetssicherung-und
   [Run 45337473666](https://github.com/schirkan/meeting-notes-tauri/actions/runs/45337473666), **success**.
 - **Release:** [v0.1.7](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.7),
   Download-/Hash-/Versions-/Deployment-Nachweis in [T-515](./specs/T-515-github-actions-pipeline-und-release.md#release-v017-24112026).
-  108 Node- und 53 Rust-Tests bestanden; Hardware-/Live-Azure-Abnahme der Echo-Alpha offen.
+  Damals 108 Node- und 53 Rust-Tests bestanden.

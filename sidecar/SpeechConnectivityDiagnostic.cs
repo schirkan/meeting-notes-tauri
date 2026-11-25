@@ -39,16 +39,18 @@ public static class SpeechConnectivityDiagnostic
                 return new(false, steps);
             }
             var sources = ArgsParser.ParseTranscription(args);
-            var stereo = ArgsParser.ParseStereo(args, sources);
+            var stereo = ArgsParser.ParseStereo(args, sources, model);
             var diarization = ArgsParser.ParseDiarization(args);
+            var autoLanguageDetection = ArgsParser.ParseAutoLanguageDetection(args);
             var proxy = ProxyOptions.Parse(args);
             steps.Add(new("speech_proxy", "ok", proxy is null ? "Native Speech SDK uses direct transport." : "Native Speech SDK SetProxy configured; credentials are not logged."));
-            var config = new AzureSpeechConfig(endpoint, region, key, true, proxy, model);
+            var config = new AzureSpeechConfig(endpoint, region, key, ArgsParser.ParseInterimResults(args), proxy, model);
             var timeout = TimeSpan.FromSeconds(12);
             var probes = stereo
-                ? new[] { await ProbeAsync(config, language, model == AzureSpeechModel.Standard && (diarization.Mic || diarization.Speaker), timeout, stereo: true) }
+                ? new[] { await ProbeAsync(config, language, (sources.Mic && diarization.Mic) || (sources.Speaker && diarization.Speaker), timeout, stereo: true) }
                 : model == AzureSpeechModel.Standard
-                ? await Task.WhenAll(ProbeAsync(config, language, false, timeout), ProbeAsync(config, language, true, timeout))
+                ? await Task.WhenAll(ProbeAsync(config, language, false, timeout, autoLanguageDetection: autoLanguageDetection),
+                    ProbeAsync(config, language, true, timeout, autoLanguageDetection: autoLanguageDetection))
                 : new[] { await ProbeAsync(config, language, false, timeout) };
             foreach (var probe in probes) steps.AddRange(probe);
             return new(probes.All(p => p[0].status == "ok"), steps);
@@ -66,10 +68,12 @@ public static class SpeechConnectivityDiagnostic
     }
 
     public static async Task<IReadOnlyList<SpeechConnectivityStep>> ProbeAsync(
-        AzureSpeechConfig config, string language, bool conversation, TimeSpan timeout, bool stereo = false)
+        AzureSpeechConfig config, string language, bool conversation, TimeSpan timeout, bool stereo = false, bool autoLanguageDetection = true)
     {
-        var name = conversation ? "conversation_transcriber_wss" : config.Model == AzureSpeechModel.MaiTranscribe2Streaming
-            ? "mai_transcribe_wss" : "speech_recognizer_wss";
+        conversation = config.Model == AzureSpeechModel.Standard && conversation;
+        var name = config.Model == AzureSpeechModel.MaiTranscribe2Streaming
+            ? "mai_transcribe_wss"
+            : (conversation ? "conversation_transcriber_wss" : "speech_recognizer_wss");
         if (stereo) name += "_stereo";
         var connectionHint = config.Model == AzureSpeechModel.Standard
             ? "Check credentials, endpoint, proxy and TLS trust"
@@ -99,12 +103,12 @@ public static class SpeechConnectivityDiagnostic
         }
         try
         {
-            speech = SpeechConfiguration.Create(config, language, diarizeIntermediateResults: !stereo, stereo: stereo);
+            speech = SpeechConfiguration.Create(config, language, diarizeIntermediateResults: conversation, stereo: stereo, autoLanguageDetection: autoLanguageDetection);
             var channels = (byte)(stereo ? 2 : 1);
             format = AudioStreamFormat.GetWaveFormatPCM(16000, 16, channels);
             push = AudioInputStream.CreatePushStream(format);
             audio = AudioConfig.FromStreamInput(push);
-            lid = stereo ? null : SpeechConfiguration.CreateLanguageDetection(config.Model, language);
+            lid = stereo ? null : SpeechConfiguration.CreateLanguageDetection(config.Model, language, autoLanguageDetection);
             Func<Task> start;
             if (conversation)
             {

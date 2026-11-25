@@ -18,14 +18,17 @@ Continuous LID und Speaker-Diarization in der C#-Recognizer-Konfiguration aktivi
 - [ ] Diarization funktioniert für mindestens 2 Sprecher je aktivierter Quelle (manueller Live-Azure-Test). - **offen**: Erfordert einen manuellen Live-Azure-Test mit mindestens zwei Sprechern je Quelle.
 
 ## Approach
-- Persistenz: `diarization: { "mic": true, "speaker": true }` in User-Settings. Speichern wirkt beim nächsten Aufnahmestart, nicht auf eine laufende Sitzung.
+- Persistenz: `diarization: true` in User-Settings. Speichern wirkt beim nächsten Aufnahmestart, nicht auf eine laufende Sitzung.
 - Transport zum Sidecar: `--diarization-mic true|false` und `--diarization-speaker true|false`.
 - API-Mapping C#:
   - `AutoDetectSourceLanguageConfig.FromLanguages(...)` für AutoDetect.
   - `SpeechConfig.SetProperty(PropertyId.SpeechServiceConnection_LanguageIdMode, "Continuous")`.
   - `ConversationTranscriber` für jede Quelle mit aktivierter Sprechererkennung, sonst `SpeechRecognizer`; Start/Stop und Event-Verarbeitung folgen dem gewählten Typ.
-- JSON-Lines-Segmente behalten `source: "mic" | "speaker"`, `speaker`, `state` und optional `language`. SDK-IDs werden im Backend nicht mit der Quelle präfixiert; die UI bildet daraus z. B. `mic:Guest-1` und `speaker:Guest-1`.
+- JSON-Lines-Segmente behalten `source: "mic" | "speaker"` (bei nicht zuordenbarem Stereo-Interim `""`), `speaker`, `state` und optional `language`. SDK-IDs werden im Backend nicht mit der Quelle präfixiert; die UI bildet daraus z. B. `mic:Guest-1` und `speaker:Guest-1`.
 - Validierung: drei Rust-Tests und 334 C#-Assertions erfolgreich. Diese prüfen Konfiguration, CLI und Auswahl-/Mapping-Logik, nicht die Qualität realer Azure-Sprechererkennung. Status bleibt deshalb `draft`.
+
+- Standard-Mono: Continuous LID ist standardmaessig aktiv. Ist es deaktiviert, setzt die App nur die Primaersprache. Standard-Stereo verwendet immer die Primaersprache; MAI erkennt die Sprache selbst.
+- Zwischenergebnisse sind in Mono und Standard-Stereo aktivierbar; bei Stereo bleibt die Quelle ohne verifizierten Kanal leer. MAI-Mono verwendet nach fehlgeschlagenem Praxistest keine Diarization (T-520). Bei ausgeschalteter Interim-Option werden keine Interim-Callbacks registriert und Intermediate-Diarization bleibt aus. Beleg: [DiarizationValidation.cs](../sidecar/Validation/DiarizationValidation.cs) und [AzureSpeechService.cs](../sidecar/AzureSpeechService.cs).
 
 ## Log
 - 2026-06-25: Spec angelegt.

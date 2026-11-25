@@ -54,7 +54,8 @@ const validConfig = {
 const userSettings = {
   language: 'en-US',
   transcription: { mic: true, speaker: true },
-  diarization: { mic: true, speaker: true },
+  autoLanguageDetection: true,
+  diarization: true,
   devices: { micId: 'mic-demo', speakerLoopbackId: 'speaker-demo' },
   transcript: { markdownExport: { enabled: true, path: null } },
   autoStart: { enabled: true, autoStop: true, processes: [] },

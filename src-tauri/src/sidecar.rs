@@ -40,8 +40,12 @@ pub struct SidecarOptions {
     pub sample_rate: u32,
     #[serde(default)]
     pub transcription: crate::settings::TranscriptionSettings,
-    #[serde(default)]
-    pub diarization: crate::settings::DiarizationSettings,
+    #[serde(default = "crate::settings::default_true", deserialize_with = "crate::settings::deserialize_diarization")]
+    pub diarization: bool,
+    #[serde(default = "crate::settings::default_true")]
+    pub auto_language_detection: bool,
+    #[serde(default = "crate::settings::default_true")]
+    pub interim_results: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -74,21 +78,21 @@ pub struct SidecarHandle {
     pub shutdown: Option<tokio::sync::oneshot::Sender<Result<(), String>>>,
 }
 
-fn transcription_arguments(settings: &crate::settings::TranscriptionSettings) -> Vec<String> {
+fn transcription_arguments(settings: &crate::settings::TranscriptionSettings, model: crate::settings::AzureSpeechModel) -> Vec<String> {
     let mut args = vec!["--transcription-mic".into(), settings.mic.to_string(),
         "--transcription-speaker".into(), settings.speaker.to_string()];
-    if settings.echo_cancellation && settings.mic && settings.speaker {
-        args.extend(["--echo-cancellation".to_string(), "true".to_string()]);
-    }
-    if settings.audio_mode == crate::settings::AudioMode::Stereo && settings.mic && settings.speaker {
+    if model == crate::settings::AzureSpeechModel::Standard
+        && settings.audio_mode == crate::settings::AudioMode::Stereo && settings.mic && settings.speaker {
         args.extend(["--audio-mode".into(), "stereo".into()]);
     }
     args
 }
 
-fn diarization_arguments(settings: &crate::settings::DiarizationSettings) -> [String; 4] {
-    ["--diarization-mic".into(), settings.mic.to_string(),
-        "--diarization-speaker".into(), settings.speaker.to_string()]
+fn recognition_arguments(diarization: bool, auto_language_detection: bool, interim_results: bool) -> [String; 8] {
+    ["--diarization-mic".into(), diarization.to_string(),
+        "--diarization-speaker".into(), diarization.to_string(),
+        "--auto-language-detection".into(), auto_language_detection.to_string(),
+        "--interim-results".into(), interim_results.to_string()]
 }
 
 fn proxy_arguments(proxy: &crate::settings::AzureProxyConfig) -> Result<Vec<String>, SidecarError> {
@@ -122,14 +126,15 @@ pub async fn diagnose_speech<R: Runtime>(
     config: &crate::settings::AzureConfig,
     language: &str,
     audio: &crate::settings::TranscriptionSettings,
-    diarization: &crate::settings::DiarizationSettings,
+    diarization: bool,
+    auto_language_detection: bool,
 ) -> Result<SpeechConnectivityResult, String> {
     let exe_path = resolve_sidecar_path(app).map_err(|e| e.to_string())?;
     let command = app.shell().command(exe_path.to_string_lossy().as_ref())
         .args(["--test-connectivity", "--speech-region", &config.region,
             "--speech-model", config.model.as_str(), "--language", language])
-        .args(transcription_arguments(audio))
-        .args(diarization_arguments(diarization))
+        .args(transcription_arguments(audio, config.model))
+        .args(recognition_arguments(diarization, auto_language_detection, config.interim_results))
         .env("MEETING_NOTES_SPEECH_KEY", &config.speech_key);
     let command = if config.model == crate::settings::AzureSpeechModel::Standard {
         command.args(["--speech-endpoint", &config.endpoint])
@@ -191,35 +196,29 @@ mod connectivity_tests {
     use super::*;
 
     #[test]
-    fn transcription_arguments_preserve_sources_and_gate_echo_cancellation() {
+    fn transcription_arguments_preserve_sources() {
         for mic in [true, false] {
             for speaker in [true, false] {
-                for echo_cancellation in [true, false] {
-                    let settings = crate::settings::TranscriptionSettings { mic, speaker, echo_cancellation, ..Default::default() };
-                    let args = transcription_arguments(&settings);
-                    assert_eq!(&args[..4],
-                        ["--transcription-mic".to_string(), mic.to_string(),
-                            "--transcription-speaker".to_string(), speaker.to_string()]);
-                    if echo_cancellation && mic && speaker {
-                        assert_eq!(&args[4..], ["--echo-cancellation", "true"]);
-                    } else {
-                        assert_eq!(args.len(), 4);
-                    }
-                }
+                let settings = crate::settings::TranscriptionSettings { mic, speaker, ..Default::default() };
+                let args = transcription_arguments(&settings, crate::settings::AzureSpeechModel::Standard);
+                assert_eq!(args, ["--transcription-mic".to_string(), mic.to_string(),
+                    "--transcription-speaker".to_string(), speaker.to_string()]);
             }
         }
         let options: SidecarOptions = serde_json::from_str(r#"{"sampleRate":16000}"#).unwrap();
-        assert_eq!(transcription_arguments(&options.transcription),
+        assert_eq!(transcription_arguments(&options.transcription, options.speech_model),
             ["--transcription-mic", "true", "--transcription-speaker", "true"]);
     }
 
     #[test]
-    fn stereo_requires_both_sources_without_changing_the_saved_preference() {
+    fn stereo_requires_standard_and_both_sources_without_changing_the_saved_preference() {
         for (mic, speaker) in [(true, true), (true, false), (false, true)] {
             let settings = crate::settings::TranscriptionSettings {
                 mic, speaker, audio_mode: crate::settings::AudioMode::Stereo, ..Default::default()
             };
-            assert_eq!(transcription_arguments(&settings).ends_with(&["--audio-mode".into(), "stereo".into()]), mic && speaker);
+            assert_eq!(transcription_arguments(&settings, crate::settings::AzureSpeechModel::Standard).ends_with(&["--audio-mode".into(), "stereo".into()]), mic && speaker);
+            assert!(!transcription_arguments(&settings, crate::settings::AzureSpeechModel::MaiTranscribe2Streaming)
+                .iter().any(|argument| argument == "--audio-mode"));
         }
     }
 
@@ -238,18 +237,10 @@ mod connectivity_tests {
     }
 
     #[test]
-    fn diarization_arguments_forward_independent_explicit_booleans() {
-        for mic in [true, false] {
-            for speaker in [true, false] {
-                let settings = crate::settings::DiarizationSettings { mic, speaker };
-                assert_eq!(diarization_arguments(&settings),
-                    ["--diarization-mic".to_string(), mic.to_string(),
-                        "--diarization-speaker".to_string(), speaker.to_string()]);
-            }
-        }
-        let options: SidecarOptions = serde_json::from_str(r#"{"sampleRate":16000}"#).unwrap();
-        assert_eq!(diarization_arguments(&options.diarization),
-            ["--diarization-mic", "true", "--diarization-speaker", "true"]);
+    fn recognition_arguments_forward_shared_setting_and_explicit_false() {
+        let options: SidecarOptions = serde_json::from_str(r#"{"sampleRate":16000,"diarization":{"mic":false,"speaker":true},"autoLanguageDetection":false,"interimResults":false}"#).unwrap();
+        assert_eq!(recognition_arguments(options.diarization, options.auto_language_detection, options.interim_results),
+            ["--diarization-mic", "true", "--diarization-speaker", "true", "--auto-language-detection", "false", "--interim-results", "false"]);
     }
 
     #[test]
@@ -282,8 +273,8 @@ pub async fn start<R: Runtime>(
 
     let sample_rate = options.sample_rate.clamp(8000, 48000);
     command = command.args(["--sample-rate".to_string(), sample_rate.to_string()])
-        .args(transcription_arguments(&options.transcription))
-        .args(diarization_arguments(&options.diarization))
+        .args(transcription_arguments(&options.transcription, options.speech_model))
+        .args(recognition_arguments(options.diarization, options.auto_language_detection, options.interim_results))
         .args(["--speech-model", options.speech_model.as_str()]);
 
     if let Some(language) = options.language.as_deref() {

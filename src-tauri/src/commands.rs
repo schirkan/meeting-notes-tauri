@@ -163,7 +163,9 @@ async fn start_recording_with_origin(
     let options = SidecarOptions {
         sample_rate: 16_000,
         transcription: user.transcription.clone(),
-        diarization: user.diarization.clone(),
+        diarization: user.diarization,
+        auto_language_detection: user.auto_language_detection,
+        interim_results: azure.interim_results,
         language: Some(user.language.clone()),
         speech_key: Some(azure.speech_key),
         speech_region: Some(azure.region),
@@ -935,9 +937,9 @@ pub async fn test_azure_connectivity(
     let audio = value.get("transcription").cloned()
         .map(serde_json::from_value::<settings::TranscriptionSettings>)
         .transpose().map_err(|_| "Invalid transcription settings.")?.unwrap_or_default();
-    let diarization = value.get("diarization").cloned()
-        .map(serde_json::from_value::<settings::DiarizationSettings>)
-        .transpose().map_err(|_| "Invalid speaker recognition settings.")?.unwrap_or_default();
+    let diarization = value.get("diarization").map(settings::deserialize_diarization)
+        .transpose().map_err(|_| "Invalid speaker recognition settings.")?.unwrap_or(true);
+    let auto_language_detection = value.get("autoLanguageDetection").and_then(|v| v.as_bool()).unwrap_or(true);
     let start = std::time::Instant::now();
     let (mut result, speech) = tokio::join!(
         async {
@@ -961,7 +963,7 @@ pub async fn test_azure_connectivity(
                 }
             }
         },
-        sidecar::diagnose_speech(&app, &config, &language, &audio, &diarization),
+        sidecar::diagnose_speech(&app, &config, &language, &audio, diarization, auto_language_detection),
     );
     match speech {
         Ok(speech) => {

@@ -33,12 +33,12 @@ sind aber nicht dasselbe Protokoll und koennen unterschiedlich abgerechnet werde
 **8–14 Personentage** bei positivem Spike; Wartezeit fuer Zugriffe, Azure-Billing
 und Freigaben nicht enthalten. SDK-/Proxy-/Policy-Blocker oder ein anderer
 Transport erfordern eine neue Schaetzung. Die Schaetzung stammt aus der
-Planung; App und Sidecar sind inzwischen lokal fuer den Spike implementiert.
+Historische Planung. MAI-Stereo ist nach erneut gemeldetem Fehlschlag deaktiviert (T-521); aktuelle Live-Tests fokussieren MAI-Mono ohne Sprechererkennung und Standard-Stereo mit Interim Results.
 
 ## Kosten- und Qualitaets-Gate
 
 1. Referenz sind zwei aktive Standard-Streams mit den heute genutzten LID-/
-   Sprecheroptionen. Dagegen MAI-Mono und MAI-Stereo mit derselben Audiodauer,
+   Sprecheroptionen. Dagegen MAI-Mono und Standard-Stereo mit derselben Audiodauer,
    Stille, Pausen und Ueberlappung messen. Isolierte Azure-Ressourcen oder
    hinreichend getrennte Messfenster nutzen. Meter-ID, Region, SKU, Waehrung,
    erfasste Nutzungsmenge, etwaige Add-ons und Nettokosten je realer Meetingstunde
@@ -55,8 +55,8 @@ Planung; App und Sidecar sind inzwischen lokal fuer den Spike implementiert.
    andernfalls bleibt die Umstellung getrennt vom Sparziel und wird nicht freigegeben.
 3. Live zwei unterscheidbare DE-/EN-Sprechskripte je getrenntem Kanal, stumme
    Gegenseite und gleichzeitige Sprache abspielen; Kanalzuordnung fuer alle
-   erwarteten Finals muss stimmen. Interim-Zuordnung, Sprecher-IDs mit globaler
-   und ggf. unabhaengiger Diarization, Sprachwechsel und Sprachmetadaten separat
+   erwarteten Finals muss stimmen. Interim-Zuordnung, Sprecher-IDs mit Standard-
+   Diarization, Sprachwechsel und Sprachmetadaten separat
    dokumentieren. Fehlende Sprecherfaehigkeit nur als explizit akzeptierte
    Feature-Grenze (T-520), nicht als bestanden werten. Vor dem Lauf Vergleichs-
    schwelle festlegen: Vorschlag maximal 5 Prozentpunkte hoehere Wortfehlerrate
@@ -73,15 +73,15 @@ Planung; App und Sidecar sind inzwischen lokal fuer den Spike implementiert.
 
 ## Go / No-Go
 
-Die Opt-in-Implementierung steht lokal fuer den Spike zur Verfuegung. Fuer
-eine MAI-Stereo-Freigabe sind ein bestaetigtes MAI-Modell, eine Stereo-Sitzung
+MAI-Stereo ist derzeit No-Go. Fuer eine spaetere MAI-Stereo-Freigabe sind ein bestaetigtes MAI-Modell, eine Stereo-Sitzung
 mit sicheren Kanal-Finals und ein tragfaehiger Ressourcen-/Proxy-Pfad noetig.
+MAI-Sprechererkennung scheiterte im Praxistest und ist in der App deaktiviert (T-520).
 Kein stiller Downgrade auf Mix oder zwei Sessions. Freigabe fuer das Sparziel
 erst nach Kosten- und Qualitaets-Gate; ein Standardwechsel ist eine separate
 Entscheidung. Der lokale Virenscanner blockiert das Sidecar-Trimming; der
 getrimmte Portable-Build bleibt unveraendert und muss separat abgenommen werden.
 
 ## Done When
-- [ ] Spike belegt Modell, Stereo in einer Sitzung, Kanalresultate und Ziel-Proxy. - **offen**: Reale Azure-Ressource und kompatibler SDK-Endpunkt muessen getestet werden.
+- [ ] Spike belegt MAI-Mono-Modell, Standard-Stereo-Kanalresultate und Ziel-Proxy. - **offen**: Live-Tests mit einer geeigneten Azure-Ressource stehen aus.
 - [ ] Meter und Kostenvorteil ausserhalb der Promo sind fuer die Zielnutzung belegt. - **offen**: Vertragsdaten und Azure-Usage eines kontrollierten A/B-Laufs fehlen.
 - [ ] Live-Qualitaet, Lifecycle und Portable-Abnahme sind dokumentiert. - **offen**: Zielhardware, Live-Azure und Preview-Build stehen noch aus.

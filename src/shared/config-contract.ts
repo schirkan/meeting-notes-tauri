@@ -16,21 +16,13 @@ export interface AzureConfig {
   proxy?: AzureProxyConfig
 }
 
-export interface DiarizationSettings {
-  mic: boolean
-  speaker: boolean
-}
-
 /**
- * Which audio sources are transcribed. Independent of the diarization
- * settings: a source can be transcribed without speaker recognition, and
- * diarization can be switched off for a source that is still transcribed.
+ * Which audio sources are transcribed, independently of speaker recognition.
  */
 export interface TranscriptionSettings {
   mic: boolean
   speaker: boolean
   /** Alpha opt-in; only effective when both sources are active. */
-  echoCancellation: boolean
   audioMode: 'dual-mono' | 'stereo'
 }
 
@@ -67,7 +59,8 @@ export interface WindowSettings {
 export interface UserSettings {
   language: string
   transcription: TranscriptionSettings
-  diarization: DiarizationSettings
+  autoLanguageDetection: boolean
+  diarization: boolean
   devices: {
     micId: string | null
     speakerLoopbackId: string | null
@@ -91,8 +84,9 @@ export interface AppConfigState {
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   language: 'de-DE',
-  transcription: { mic: true, speaker: true, echoCancellation: false, audioMode: 'dual-mono' },
-  diarization: { mic: true, speaker: true },
+  transcription: { mic: true, speaker: true, audioMode: 'dual-mono' },
+  autoLanguageDetection: true,
+  diarization: true,
   devices: {
     micId: null,
     speakerLoopbackId: null
@@ -113,7 +107,7 @@ export function isValidBcp47Language(input: unknown): input is string {
 type UserSettingsInput = Partial<Omit<UserSettings, 'devices' | 'transcription' | 'diarization' | 'transcript' | 'autoStart' | 'window'>> & {
   devices?: Partial<UserSettings['devices']> | null
   transcription?: Partial<TranscriptionSettings> | null
-  diarization?: Partial<DiarizationSettings> | null
+  diarization?: boolean | { mic?: boolean; speaker?: boolean } | null
   transcript?: Partial<TranscriptSettings> & {
     markdownExport?: Partial<MarkdownExportSettings> | null
   } | null
@@ -136,13 +130,11 @@ export function normalizeUserSettings(input: UserSettingsInput | null | undefine
         typeof input?.transcription?.speaker === 'boolean'
           ? input.transcription.speaker
           : DEFAULT_USER_SETTINGS.transcription.speaker,
-      echoCancellation: input?.transcription?.echoCancellation === true,
       audioMode: input?.transcription?.audioMode === 'stereo' ? 'stereo' : 'dual-mono'
     },
-    diarization: {
-      mic: typeof input?.diarization?.mic === 'boolean' ? input.diarization.mic : DEFAULT_USER_SETTINGS.diarization.mic,
-      speaker: typeof input?.diarization?.speaker === 'boolean' ? input.diarization.speaker : DEFAULT_USER_SETTINGS.diarization.speaker
-    },
+    autoLanguageDetection: input?.autoLanguageDetection !== false,
+    diarization: typeof input?.diarization === 'boolean' ? input.diarization
+      : input?.diarization?.mic !== false || input?.diarization?.speaker !== false,
     devices: {
       micId: input?.devices?.micId ?? DEFAULT_USER_SETTINGS.devices.micId,
       speakerLoopbackId: input?.devices?.speakerLoopbackId ?? DEFAULT_USER_SETTINGS.devices.speakerLoopbackId

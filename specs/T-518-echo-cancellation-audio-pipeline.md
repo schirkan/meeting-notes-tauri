@@ -1,7 +1,10 @@
 # T-518: Echo cancellation – lokale Audio-Pipeline
 
 ## Kontext
-Status: teils umgesetzt (1 Punkt offen; Alpha)
+Status: not working
+
+Die lokale Verarbeitung wurde entfernt. Die folgenden Design- und Testnotizen
+sind historisch und belegen keine Wirksamkeit auf Zielhardware.
 Reifegrad: Alpha
 Abhaengigkeiten: [T-517: Feature und Einstellungen](./T-517-echo-cancellation-alpha.md), [T-203: PCM](./T-203-audio-resampling-16khz-mono-pcm.md), [T-509: WASAPI](./T-509-audio-capture-auf-wasapirecorderbuilder-umstellen.md)
 
@@ -95,7 +98,7 @@ Sprachqualitaet bleibt in [T-519](./T-519-echo-cancellation-alpha-abnahme.md) of
 - [x] Managed-Engine ohne zusaetzliche native Abhaengigkeit integriert. Beleg: `sidecar/EchoCancellation.cs`; die Integration erfordert keine neuen Pakete.
 - [x] Deterministische PCM-Tests belegen Offset/Drift, mehr als 12 dB Echoabnahme im Einpfad-Test und mehr als 8 dB weniger Fehler bei synthetischer Doppelsprache; Nahstimme ohne Echo bleibt bytegleich. Beleg: `EchoCancellationValidation.cs`; Speaker-PCM wird unveraendert an Azure uebergeben (`Program.cs`).
 - [x] Fehlende Referenz, Warmup, Ringgrenze, Pause/Resume und Stop reichen Mic unveraendert durch oder geben den Filterzustand frei. Beleg: AEC-Regressionen in `EchoCancellationValidation.cs` sowie Fail-open im `EchoCancellation`-Pfad.
-- [ ] Echte Windows-Capture-Queues, Rueckkehr nach Geraetestoerungen und A/B-Sprachqualitaet sind gemessen. - **offen**: Native Zielgeraete-/Azure-Abnahme folgt in T-519.
+- Nicht abgenommen: Windows-Capture-Queues, Geraetestoerungen und A/B-Sprachqualitaet. Die weitere Abnahme entfaellt nach Entfernen der Alpha (T-519).
 
 ## Workboard
 `4f1a482b-afa7-42a3-a933-ef145302a856`

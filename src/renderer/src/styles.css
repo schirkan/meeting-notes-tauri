@@ -99,7 +99,7 @@ summary::-webkit-details-marker { display: none; }
 .speaker-editor input:focus-visible { outline: none; }
 .floating-follow { position: absolute; bottom: 16px; right: 24px; z-index: 2; background: #363044; color: #d4c5ff; border-color: #655282; box-shadow: 0 5px 20px #00000040; }
 .floating-follow:hover { background: #4a3d62; }
-.idle-audio-panel { width: 100%; max-width: 720px; padding: 28px; margin: auto; min-height: 0; overflow: auto; flex-shrink: 1; transform: translateX(150px); }
+.idle-audio-panel { width: 100%; max-width: 500px; padding: 28px; margin: auto; min-height: 0; overflow: auto; flex-shrink: 1; transform: translateX(150px); }
 @media (max-width: 1100px) { .idle-audio-panel { transform: none; } }
 .idle-audio-panel + .transcript-list { display: none; }
 .idle-audio-panel h2 { font-size: 16px; }
@@ -183,8 +183,6 @@ summary::-webkit-details-marker { display: none; }
 .meta-path { margin: 0; color: var(--muted); font-size: 10px; user-select: text; overflow-wrap: anywhere; }
 .settings-block { display: grid; gap: 17px; margin: 0 0 18px; }
 .settings-dialog .settings-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.speech-model-field, .speech-model-hint { grid-column: 1 / -1; }
-.settings-dialog :is(.language-field, .audio-mode-field) { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 17px; align-items: center; }
 .about-dialog { max-width: 450px; }
 .about-content { display: flex; align-items: center; gap: 28px; }
 .about-content img { width: 128px; height: 128px; flex-shrink: 0; }
@@ -192,11 +190,10 @@ summary::-webkit-details-marker { display: none; }
 .about-details > * { margin: 0; }
 .about-details a { color: var(--accent); overflow-wrap: anywhere; }
 .audio-settings-grid { grid-template-columns: minmax(0, 1fr); margin-top: 22px; }
-.settings-dialog .audio-settings-grid { grid-template-columns: minmax(0, 1fr); margin-top: 0; }
-.proxy-settings-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.settings-dialog .proxy-settings-grid { grid-template-columns: minmax(0, 35fr) minmax(0, 15fr) repeat(2, minmax(0, 25fr)); }
 .proxy-settings-grid > label { align-content: end; }
 .audio-source-field { display: grid; gap: 7px; min-width: 0; font-size: 11px; color: var(--muted); }
-.audio-source-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px; align-items: end; }
+.audio-source-row { min-width: 0; }
 .directory-control { display: flex; gap: 8px; align-items: center; min-width: 0; }
 .directory-control input[type="text"] { flex: 1; }
 .directory-control button { flex-shrink: 0; width: 36px; height: 36px; padding: 8px; }
@@ -250,7 +247,7 @@ input[type="checkbox"] { width: 14px; height: 14px; min-height: 14px; padding: 0
   .audio-settings-grid { grid-template-columns: minmax(0, 1fr); }
   .settings-dialog-overlay { padding: 16px; }
   .settings-dialog-grid { padding: 18px; }
-  .settings-dialog .settings-block { grid-template-columns: minmax(0, 1fr); }
+  .settings-dialog .settings-block, .settings-dialog .proxy-settings-grid { grid-template-columns: minmax(0, 1fr); }
   .settings-dialog-footer-content { grid-template-columns: minmax(0, 1fr); }
   .settings-dialog-footer-actions { justify-content: flex-end; max-width: none; flex-wrap: wrap; }
   .idle-audio-panel { padding: 24px; }

@@ -201,10 +201,7 @@ test('settings drafts are isolated, warn on close, discard and only persist on s
     const close = dialog.getByRole('button', { name: 'Close dialog', exact: true })
     const language = dialog.getByRole('combobox', { name: 'Primary language', exact: true })
     const hideFromTaskbar = dialog.getByRole('checkbox', { name: 'Hide from taskbar', exact: true })
-    const echoCancellation = dialog.getByRole('checkbox', { name: 'Echo cancellation (Alpha)', exact: true })
     await page.waitForFunction(() => document.activeElement?.classList.contains('settings-save-button'))
-    assert.equal(await echoCancellation.isChecked(), false)
-    await echoCancellation.check()
     await hideFromTaskbar.uncheck()
     await language.selectOption('en-US')
     await dialog.getByLabel('Endpoint', { exact: true }).fill('https://draft.test')
@@ -218,21 +215,18 @@ test('settings drafts are isolated, warn on close, discard and only persist on s
     await close.click()
     assert.equal(await dialog.isVisible(), true)
     assert.equal(await language.inputValue(), 'en-US')
-    assert.equal(await echoCancellation.isChecked(), true)
     page.once('dialog', confirmation => confirmation.accept())
     await close.click()
     await dialog.waitFor({ state: 'hidden' })
     // An idle autosave must not include any abandoned dialog values.
-    await page.getByRole('checkbox', { name: 'Speaker recognition for microphone', exact: true }).uncheck()
-    await page.waitForFunction(() => window.lastSavedSettings?.diarization.mic === false)
+    await page.getByRole('checkbox', { name: 'Transcribe speaker loopback', exact: true }).uncheck()
+    await page.waitForFunction(() => window.lastSavedSettings?.transcription.speaker === false)
     assert.equal(await page.evaluate(() => window.lastSavedSettings.language), 'de-DE')
     assert.equal(await page.evaluate(() => window.lastSavedSettings.window.hideFromTaskbar), true)
     assert.equal(await page.evaluate(() => window.lastSavedSettings.transcript.markdownExport.enabled), true)
-    assert.equal(await page.evaluate(() => window.lastSavedSettings.transcription.echoCancellation), false)
     assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
     await reopenSettings(page)
     assert.equal(await language.inputValue(), 'de-DE')
-    assert.equal(await echoCancellation.isChecked(), false)
     assert.equal(await dialog.getByLabel('Endpoint', { exact: true }).inputValue(), validConfig.endpoint)
     await language.selectOption('fr-FR')
     await dialog.getByRole('button', { name: 'Save', exact: true }).click()
@@ -247,56 +241,14 @@ test('settings drafts are isolated, warn on close, discard and only persist on s
   } finally { await page.close() }
 })
 
-test('echo cancellation can be saved with one source and is locked while running or paused', async () => {
-  const page = await openApp({
-    configState: { exists: true, path: 'test-config', config: validConfig },
-    transcription: { mic: true, speaker: false }
-  })
-  try {
-    await reopenSettings(page)
-    const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
-    const echoCancellation = dialog.getByRole('checkbox', { name: 'Echo cancellation (Alpha)', exact: true })
-    const sourceHint = dialog.getByText('Echo cancellation won’t apply unless both Microphone and Speaker Loopback are enabled in Audio settings.', { exact: true })
-    await sourceHint.waitFor()
-    assert.equal(await echoCancellation.locator('..').getAttribute('title'), 'Reduces speaker audio picked up by your microphone. Requires both microphone and speaker loopback. Applies to the next transcription.')
-    assert.equal(await echoCancellation.isEnabled(), true)
-    await echoCancellation.check()
-    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
-    await dialog.waitFor({ state: 'hidden' })
-    assert.deepEqual(await page.evaluate(() => window.lastSavedSettings.transcription), {
-      mic: true, speaker: false, echoCancellation: true, audioMode: 'dual-mono'
-    })
-
-    const speaker = page.getByRole('checkbox', { name: 'Transcribe speaker loopback', exact: true })
-    await speaker.check()
-    await page.waitForFunction(() => window.lastSavedSettings?.transcription.speaker === true)
-    const mic = page.getByRole('checkbox', { name: 'Transcribe microphone', exact: true })
-    await mic.uncheck()
-    await page.waitForFunction(() => window.lastSavedSettings?.transcription.mic === false)
-    assert.equal(await page.evaluate(() => window.lastSavedSettings.transcription.echoCancellation), true)
-    await mic.check()
-    await page.waitForFunction(() => window.lastSavedSettings?.transcription.mic === true)
-    await reopenSettings(page)
-    assert.equal(await echoCancellation.isChecked(), true)
-    assert.equal(await sourceHint.count(), 0)
-
-    const startedAt = new Date().toISOString()
-    for (const paused of [false, true]) {
-      await page.evaluate(value => window.emitStatus(value), { running: true, paused, startedAt })
-      await page.waitForFunction(value => document.querySelector('.live-badge')?.classList.contains('paused') === value, paused)
-      assert.equal(await echoCancellation.isDisabled(), true)
-    }
-  } finally { await page.close() }
-})
-
 test('testing unsaved settings preserves drafts without persisting and footer buttons have equal height', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, connectivityError: 'test' })
   try {
     await page.getByRole('button', { name: 'Open settings dialog' }).click()
     const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
     await dialog.getByRole('combobox', { name: 'Primary language', exact: true }).selectOption('en-US')
-    await dialog.getByLabel('Proxy Host', { exact: true }).fill('draft.proxy')
-    await dialog.getByLabel('Proxy Port', { exact: true }).fill('8080')
+    await dialog.getByLabel('Host', { exact: true }).fill('draft.proxy')
+    await dialog.getByLabel('Port', { exact: true }).fill('8080')
     await dialog.getByRole('button', { name: 'Test connection', exact: true }).click()
     const diagnostic = page.getByRole('dialog', { name: 'Connection test', exact: true })
     await diagnostic.waitFor()
@@ -305,7 +257,7 @@ test('testing unsaved settings preserves drafts without persisting and footer bu
     assert.equal(await page.evaluate(() => window.lastSavedSettings), undefined)
     assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
     await diagnostic.getByRole('button', { name: 'Close dialog', exact: true }).click()
-    assert.equal(await dialog.getByLabel('Proxy Host', { exact: true }).inputValue(), 'draft.proxy')
+    assert.equal(await dialog.getByLabel('Host', { exact: true }).inputValue(), 'draft.proxy')
     assert.equal(await dialog.getByRole('combobox', { name: 'Primary language', exact: true }).inputValue(), 'en-US')
     for (const width of [1280, 950, 390]) {
       await page.setViewportSize({ width, height: 860 })
@@ -461,15 +413,16 @@ test('settings shows all sections without navigation and preserves two-column la
     await page.getByRole('button', { name: 'Open settings dialog' }).click()
     const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
     const panels = dialog.locator('.panel')
-    assert.deepEqual(await panels.locator('h2').allTextContents(), ['General', 'Transcription', 'Azure', 'Proxy'])
-    const azure = panels.nth(2)
-    const proxy = panels.nth(3)
+    assert.deepEqual(await panels.locator('h2').allTextContents(), ['General', 'Transcription', 'Speech recognition', 'Azure', 'Proxy'])
+    const speech = panels.nth(2)
+    const azure = panels.nth(3)
+    const proxy = panels.nth(4)
     // Alle Abschnitte stehen gleichzeitig auf einer Seite.
     assert.equal(await dialog.getByRole('navigation').count(), 0)
     assert.equal(await dialog.getByRole('tab').count(), 0)
     assert.equal(await dialog.getByRole('combobox', { name: 'Microphone', exact: true }).count(), 0)
     await azure.getByRole('heading', { name: 'Azure', exact: true }).scrollIntoViewIfNeeded()
-    assert.equal(await azure.getByLabel('Proxy Host', { exact: true }).count(), 0)
+    assert.equal(await azure.getByLabel('Host', { exact: true }).count(), 0)
     assert.equal(await proxy.getByRole('button', { name: 'Test connection', exact: true }).count(), 0)
     assert.equal(await azure.getByRole('button', { name: 'Test connection', exact: true }).count(), 0)
     assert.equal(await panels.locator('.meta-path').count(), 0)
@@ -486,24 +439,27 @@ test('settings shows all sections without navigation and preserves two-column la
       azure.getByLabel('Endpoint', { exact: true }).boundingBox(),
       azure.getByLabel('Region', { exact: true }).boundingBox()
     ])
-    assert.equal(endpointBox.y, regionBox.y)
-    assert.ok(endpointBox.x + endpointBox.width <= regionBox.x)
+    assert.ok(endpointBox.y + endpointBox.height <= regionBox.y)
     const general = panels.nth(0)
     const transcription = panels.nth(1)
-    assert.equal(await general.getByRole('checkbox').count(), 4)
-    assert.equal(await transcription.getByRole('checkbox').count(), 2)
-    const autoStart = general.getByRole('checkbox', { name: 'Start transcription automatically', exact: true })
-    const autoStop = general.getByRole('checkbox', { name: 'Stop transcription automatically', exact: true })
+    assert.equal(await general.getByRole('checkbox').count(), 2)
+    assert.equal(await transcription.getByRole('checkbox').count(), 3)
+    const autoStart = transcription.getByRole('checkbox', { name: 'Start transcription automatically', exact: true })
+    const autoStop = transcription.getByRole('checkbox', { name: 'Stop transcription automatically', exact: true })
     await autoStart.uncheck()
     assert.equal(await autoStop.isDisabled(), true)
     await autoStart.check()
     assert.equal(await autoStop.isDisabled(), false)
-    const languageField = transcription.locator('.language-field')
-    const [caption, languageBox] = await Promise.all([
-      languageField.locator('.field-caption').boundingBox(), languageField.getByRole('combobox').boundingBox()
-    ])
-    assert.ok(caption.x + caption.width <= languageBox.x)
-    assert.ok(Math.abs(caption.y + caption.height / 2 - languageBox.y - languageBox.height / 2) < 1)
+    const speechControl = (role, name) => speech.getByRole(role, { name, exact: true }).locator('..')
+    for (const [left, right] of [
+      [speechControl('combobox', 'Transcription model'), speechControl('combobox', 'Audio stream mode')],
+      [speechControl('combobox', 'Primary language'), speechControl('checkbox', 'Automatic language detection')],
+      [speechControl('checkbox', 'Speaker recognition'), speechControl('checkbox', 'Enable interim results')]
+    ]) {
+      const [a, b] = await Promise.all([left.boundingBox(), right.boundingBox()])
+      assert.ok(Math.abs(a.y + a.height - b.y - b.height) < 1)
+      assert.ok(a.x + a.width < b.x)
+    }
     for (const [left, right] of [
       [autoStart.locator('..'), autoStop.locator('..')],
       [transcription.getByRole('checkbox', { name: 'Save transcript automatically', exact: true }).locator('..'), transcription.locator('.directory-control')]
@@ -520,7 +476,7 @@ test('settings shows all sections without navigation and preserves two-column la
       const style = getComputedStyle(element)
       return [style.columnGap, style.rowGap]
     }))
-    assert.deepEqual(gaps, Array(4).fill(['17px', '17px']))
+    assert.deepEqual(gaps, Array(5).fill(['17px', '17px']))
     for (const checkbox of await dialog.getByRole('checkbox').all()) {
       const box = await checkbox.boundingBox()
       assert.equal(box.width, 14)
@@ -539,14 +495,14 @@ test('settings shows all sections without navigation and preserves two-column la
     const gridBox = await dialog.locator('.settings-dialog-grid').boundingBox()
     const proxyBox = await proxy.boundingBox()
     assert.ok(proxyBox.y < gridBox.y + gridBox.height, 'Proxy-Abschnitt bleibt im sichtbaren Bereich')
-    assert.equal(await panels.count(), 4)
+    assert.equal(await panels.count(), 5)
     assert.equal(await proxy.locator('.settings-inline-hint').count(), 0)
     assert.equal(await proxy.getByRole('checkbox').count(), 0)
     assert.equal(await proxy.locator('input:disabled').count(), 0)
-    await proxy.getByLabel('Proxy Host', { exact: true }).fill('proxy.test')
-    await proxy.getByLabel('Proxy Port', { exact: true }).fill('8080')
-    await proxy.getByLabel('Proxy username (optional)', { exact: true }).fill('test-user')
-    await proxy.getByLabel('Proxy password (optional)', { exact: true }).fill('test-password')
+    await proxy.getByLabel('Host', { exact: true }).fill('proxy.test')
+    await proxy.getByLabel('Port', { exact: true }).fill('8080')
+    await proxy.getByLabel('Username (optional)', { exact: true }).fill('test-user')
+    await proxy.getByLabel('Password (optional)', { exact: true }).fill('test-password')
     const proxyConfig = { host: 'proxy.test', port: 8080, username: 'test-user', password: 'test-password' }
     await dialog.getByRole('button', { name: 'Save', exact: true }).click()
     await page.waitForFunction(() => !!window.lastSavedConfig)
@@ -557,23 +513,25 @@ test('settings shows all sections without navigation and preserves two-column la
     for (const width of [1280, 800, 560, 390]) {
       await page.setViewportSize({ width, height: 860 })
       const before = await dialog.boundingBox()
-      for (const section of ['General', 'Transcription', 'Azure', 'Proxy']) {
+      for (const section of ['General', 'Transcription', 'Speech recognition', 'Azure', 'Proxy']) {
         await dialog.getByRole('heading', { name: section, exact: true }).scrollIntoViewIfNeeded()
         assert.deepEqual(await dialog.boundingBox(), before)
-        assert.equal(await panels.count(), 4)
+        assert.equal(await panels.count(), 5)
       }
       const [host, port, username, password] = await Promise.all([
-        'Proxy Host', 'Proxy Port', 'Proxy username (optional)', 'Proxy password (optional)'
+        'Host', 'Port', 'Username (optional)', 'Password (optional)'
       ].map(name => proxy.getByLabel(name, { exact: true }).boundingBox()))
       if (width > 500) {
         assert.equal(host.y, port.y)
+        assert.equal(host.y, username.y)
         assert.equal(username.y, password.y)
+        assert.ok(Math.abs(host.width / port.width - 35 / 15) < 0.05)
+        assert.ok(Math.abs(username.width - password.width) < 1)
         assert.ok(host.x + host.width <= port.x)
       } else {
         assert.ok(port.y > host.y + host.height)
         assert.ok(password.y > username.y + username.height)
       }
-      assert.ok(username.y > host.y + host.height)
       assert.equal(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth), true)
       assert.equal(await footer.evaluate((element) => element.scrollWidth <= element.clientWidth), true)
     }
@@ -581,11 +539,12 @@ test('settings shows all sections without navigation and preserves two-column la
     await page.getByRole('dialog', { name: 'Connection test', exact: true }).locator('tbody tr').waitFor()
     assert.deepEqual(await page.evaluate(() => window.lastConnectivityPayload), {
       ...validConfig, proxy: proxyConfig, language: 'de-DE',
-      transcription: { mic: true, speaker: true, echoCancellation: false, audioMode: 'dual-mono' },
-      diarization: { mic: true, speaker: true }
+      transcription: { mic: true, speaker: true, audioMode: 'dual-mono' },
+      autoLanguageDetection: true,
+      diarization: true
     })
     await page.getByRole('dialog', { name: 'Connection test', exact: true }).getByRole('button', { name: 'Close dialog', exact: true }).click()
-    await proxy.getByLabel('Proxy Host', { exact: true }).fill('')
+    await proxy.getByLabel('Host', { exact: true }).fill('')
     await dialog.getByRole('button', { name: 'Save', exact: true }).click()
     await dialog.waitFor({ state: 'hidden' })
     assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), validConfig)
@@ -659,7 +618,7 @@ test('MAI selection tests the unsaved draft and preserves Standard controls when
     configState: { exists: true, path: 'test-config', config: validConfig },
     connectivityResult: {
       reachable: true, speechReachable: true, latencyMs: 10,
-      steps: [{ step: 'mai_transcribe_wss_stereo', status: 'ok', detail: 'Speech connection ready' }]
+      steps: [{ step: 'mai_transcribe_wss', status: 'ok', detail: 'Speech connection ready' }]
     }
   })
   try {
@@ -669,16 +628,22 @@ test('MAI selection tests the unsaved draft and preserves Standard controls when
     const audioMode = settings.getByLabel('Audio stream mode')
     const endpoint = settings.getByRole('textbox', { name: 'Endpoint', exact: true })
     const language = settings.locator('.language-field').getByRole('combobox')
-    const speakerRecognition = page.getByRole('checkbox', { name: 'Speaker recognition for microphone', exact: true })
+    const speakerRecognition = settings.getByRole('checkbox', { name: 'Speaker recognition', exact: true })
     assert.equal(await modelSelect.inputValue(), 'standard')
     assert.equal(await audioMode.inputValue(), 'dual-mono')
-    await modelSelect.selectOption(model)
+    assert.deepEqual(await audioMode.locator('option').allTextContents(), [
+      'Mono (separate sessions per audio device)', 'Stereo (one session)'
+    ])
     await audioMode.selectOption('stereo')
-    assert.match(await settings.locator('#audio-stream-mode-hint').innerText(), /MAI stereo is experimental/)
-    const modelHint = await settings.locator('.speech-model-hint').innerText()
-    assert.match(modelHint, /Dual mono uses one Azure session per enabled source/)
-    assert.match(modelHint, /Stereo mix uses one session for both sources/)
-    assert.match(modelHint, /billing savings have not been verified/)
+    await modelSelect.selectOption(model)
+    assert.equal(await audioMode.inputValue(), 'dual-mono')
+    assert.equal(await audioMode.isDisabled(), true)
+    assert.equal(await speakerRecognition.isDisabled(), true)
+    assert.equal(await speakerRecognition.isChecked(), false)
+    const modelHint = await settings.locator('#audio-stream-mode-hint').innerText()
+    assert.match(modelHint, /Mono uses one Azure session per enabled source/)
+    assert.match(modelHint, /Stereo uses one session for both sources/)
+    assert.match(modelHint, /MAI uses mono only/)
     assert.equal(await endpoint.isDisabled(), true)
     assert.equal(await language.isDisabled(), true)
     await settings.getByRole('button', { name: 'Test connection', exact: true }).click()
@@ -687,27 +652,29 @@ test('MAI selection tests the unsaved draft and preserves Standard controls when
     await connection.getByText('Speech connection ready', { exact: true }).waitFor()
     assert.match(await connection.innerText(), /HTTPS: not checked · Speech\/WSS: reachable/)
     assert.equal(await page.evaluate(() => window.lastConnectivityPayload.model), model)
-    assert.equal(await page.evaluate(() => window.lastConnectivityPayload.transcription.audioMode), 'stereo')
+    assert.equal(await page.evaluate(() => window.lastConnectivityPayload.transcription.audioMode), 'dual-mono')
+    assert.equal(await page.evaluate(() => window.lastConnectivityPayload.diarization), false)
     assert.equal(await page.evaluate(() => window.lastSavedSettings), undefined)
     assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
     await connection.getByRole('button', { name: 'Close dialog', exact: true }).click()
     await settings.getByRole('button', { name: 'Save', exact: true }).click()
     await settings.waitFor({ state: 'hidden' })
     assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), { ...validConfig, model })
-    assert.equal(await speakerRecognition.isDisabled(), true)
-
     await reopenSettings(page)
+    assert.equal(await speakerRecognition.isDisabled(), true)
+    assert.equal(await speakerRecognition.isChecked(), false)
     assert.equal(await modelSelect.inputValue(), model)
-    assert.equal(await audioMode.inputValue(), 'stereo')
+    assert.equal(await audioMode.inputValue(), 'dual-mono')
     await modelSelect.selectOption('standard')
+    assert.equal(await audioMode.inputValue(), 'stereo')
     assert.equal(await endpoint.inputValue(), validConfig.endpoint)
     assert.equal(await endpoint.isEnabled(), true)
     assert.equal(await language.isEnabled(), true)
+    assert.equal(await speakerRecognition.isEnabled(), true)
+    assert.equal(await speakerRecognition.isChecked(), true)
     await settings.getByRole('button', { name: 'Save', exact: true }).click()
     await settings.waitFor({ state: 'hidden' })
     assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), validConfig)
-    assert.equal(await speakerRecognition.isEnabled(), true)
-    assert.equal(await speakerRecognition.isChecked(), true)
   } finally {
     await page.close()
   }
@@ -741,14 +708,15 @@ test('idle settings save rapid changes in order before enabling recording', asyn
   })
   try {
     const idle = page.locator('.idle-audio-panel')
-    await idle.getByRole('checkbox', { name: 'Speaker recognition for microphone', exact: true }).uncheck()
+    await idle.getByRole('checkbox', { name: 'Transcribe microphone', exact: true }).uncheck()
+    await idle.getByRole('checkbox', { name: 'Transcribe microphone', exact: true }).check()
     await idle.getByRole('combobox', { name: 'Microphone', exact: true }).selectOption('mic-one')
     await idle.getByRole('checkbox', { name: 'Transcribe speaker loopback', exact: true }).uncheck()
     assert.equal(await page.getByRole('button', { name: 'Start', exact: true }).isDisabled(), true)
     assert.equal(await page.evaluate(() => window.settingsSaveCalls.length), 1)
-    for (let count = 1; count <= 3; count++) {
+    for (let count = 1; count <= 4; count++) {
       await page.evaluate(() => window.pendingSettingsSaves.shift()())
-      if (count < 3) {
+      if (count < 4) {
         await page.waitForFunction(value => window.settingsSaveCalls.length === value, count + 1)
         assert.equal(await idle.getByRole('combobox', { name: 'Microphone', exact: true }).inputValue(), 'mic-one')
         assert.equal(await idle.getByRole('checkbox', { name: 'Transcribe speaker loopback', exact: true }).isChecked(), false)
@@ -756,7 +724,6 @@ test('idle settings save rapid changes in order before enabling recording', asyn
     }
     await page.waitForFunction(() => window.lastSavedSettings?.devices.micId === 'mic-one' && window.lastSavedSettings.transcription.speaker === false)
     assert.equal(await page.evaluate(() => window.lastSavedSettings.language), 'de-DE')
-    assert.equal(await page.evaluate(() => window.lastSavedSettings.diarization.mic), false)
     await page.locator('.hero-controls .primary-button:not(:disabled)').waitFor()
     assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
   } finally { await page.close() }
@@ -769,13 +736,13 @@ test('failed idle autosave is visible and a successful retry restores recording'
   })
   try {
     const idle = page.locator('.idle-audio-panel')
-    await idle.getByRole('checkbox', { name: 'Speaker recognition for speaker loopback', exact: true }).uncheck()
+    await idle.getByRole('checkbox', { name: 'Transcribe speaker loopback', exact: true }).uncheck()
     await page.getByRole('alert').waitFor()
     assert.match(await page.getByRole('alert').innerText(), /read-only/)
     assert.equal(await page.getByRole('button', { name: 'Start', exact: true }).isDisabled(), true)
     await page.evaluate(() => { window.settingsSaveError = null })
-    await idle.getByRole('checkbox', { name: 'Speaker recognition for microphone', exact: true }).uncheck()
-    await page.waitForFunction(() => window.lastSavedSettings?.language === 'de-DE' && window.lastSavedSettings.diarization.mic === false && window.lastSavedSettings.diarization.speaker === false)
+    await idle.getByRole('checkbox', { name: 'Transcribe speaker loopback', exact: true }).check()
+    await page.waitForFunction(() => window.lastSavedSettings?.language === 'de-DE' && window.lastSavedSettings.transcription.speaker === true)
     await page.locator('.hero-controls .primary-button:not(:disabled)').waitFor()
     assert.equal(await page.getByRole('alert').count(), 0)
   } finally { await page.close() }
@@ -855,7 +822,7 @@ test('proxy fields stay editable while the language dropdown and Save are disabl
   try {
     await page.getByRole('button', { name: 'Open settings dialog' }).click()
     assert.equal(await page.getByRole('combobox', { name: 'Primary language', exact: true }).isDisabled(), true)
-    await page.getByLabel('Proxy Host', { exact: true }).fill('proxy.test')
+    await page.getByLabel('Host', { exact: true }).fill('proxy.test')
     assert.equal(await page.locator('.proxy-settings-grid input:disabled').count(), 0)
     assert.equal(await page.getByRole('button', { name: 'Save', exact: true }).isDisabled(), true)
     assert.equal(await page.getByRole('checkbox', { name: 'Speaker recognition for microphone', exact: true }).count(), 0)
@@ -865,25 +832,45 @@ test('proxy fields stay editable while the language dropdown and Save are disabl
   }
 })
 
-test('diarization settings default on and independently save all source combinations', async () => {
+test('recognition switches respect effective mode and save the draft preferences', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
   try {
-    const mic = page.getByRole('checkbox', { name: 'Speaker recognition for microphone', exact: true })
-    const speaker = page.getByRole('checkbox', { name: 'Speaker recognition for speaker loopback', exact: true })
-    assert.equal(await mic.isChecked(), true)
-    assert.equal(await speaker.isChecked(), true)
-    for (const settings of [{ mic: false, speaker: true }, { mic: true, speaker: false }, { mic: false, speaker: false }, { mic: true, speaker: true }]) {
-      await mic.setChecked(settings.mic)
-      await speaker.setChecked(settings.speaker)
-      await page.waitForFunction((value) => window.lastSavedSettings?.diarization.mic === value.mic && window.lastSavedSettings?.diarization.speaker === value.speaker, settings)
-      assert.equal(await mic.isChecked(), settings.mic)
-      assert.equal(await speaker.isChecked(), settings.speaker)
-    }
-    assert.equal(await mic.isChecked(), true)
-    assert.equal(await speaker.isChecked(), true)
-  } finally {
-    await page.close()
-  }
+    await reopenSettings(page)
+    const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
+    const model = dialog.getByLabel('Transcription model')
+    const mode = dialog.getByLabel('Audio stream mode')
+    const lid = dialog.getByLabel('Automatic language detection')
+    const interim = dialog.getByLabel('Enable interim results')
+    const speakers = dialog.getByLabel('Speaker recognition', { exact: true })
+    await lid.uncheck()
+    await interim.uncheck()
+    await speakers.uncheck()
+    await mode.selectOption('stereo')
+    assert.equal(await lid.isDisabled(), true)
+    assert.equal(await interim.isEnabled(), true)
+    await interim.check()
+    await interim.uncheck()
+    await model.selectOption('mai-transcribe-2-streaming')
+    assert.equal(await lid.isChecked(), true)
+    assert.equal(await speakers.isDisabled(), true)
+    assert.equal(await speakers.isChecked(), false)
+    await model.selectOption('standard')
+    assert.equal(await speakers.isEnabled(), true)
+    assert.equal(await speakers.isChecked(), false)
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    assert.equal(await page.evaluate(() => window.lastSavedSettings.autoLanguageDetection), false)
+    assert.equal(await page.evaluate(() => window.lastSavedSettings.diarization), false)
+    assert.equal(await page.evaluate(() => window.lastSavedConfig.interimResults), false)
+    await page.locator('.idle-audio-panel').getByRole('checkbox', { name: 'Transcribe speaker loopback', exact: true }).uncheck()
+    await page.waitForFunction(() => window.lastSavedSettings?.transcription.speaker === false)
+    await reopenSettings(page)
+    assert.equal(await mode.inputValue(), 'stereo')
+    assert.equal(await lid.isEnabled(), true)
+    assert.equal(await interim.isEnabled(), true)
+    assert.equal(await lid.isChecked(), false)
+    assert.equal(await interim.isChecked(), false)
+  } finally { await page.close() }
 })
 
   test('microphone transcription toggles independently in the idle panel', async () => {
@@ -892,25 +879,16 @@ test('diarization settings default on and independently save all source combinat
       const panel = page.locator('.idle-audio-panel')
       const mic = panel.getByRole('checkbox', { name: 'Transcribe microphone', exact: true })
       const speaker = panel.getByRole('checkbox', { name: 'Transcribe speaker loopback', exact: true })
-      for (const width of [950, 390]) {
+      await panel.getByRole('heading', { name: 'Audio devices', exact: true }).waitFor()
+      for (const width of [1280, 950, 390]) {
         await page.setViewportSize({ width, height: 650 })
+        assert.ok((await panel.boundingBox()).width <= 500)
         for (const [checkbox, device] of [[mic, 'Microphone'], [speaker, 'Speaker Loopback']]) {
           const toggleBox = await checkbox.boundingBox()
           const deviceBox = await panel.getByRole('combobox', { name: device, exact: true }).boundingBox()
           assert.ok(toggleBox.x + toggleBox.width <= deviceBox.x)
           assert.ok(Math.abs(toggleBox.y + toggleBox.height / 2 - deviceBox.y - deviceBox.height / 2) < 1)
           assert.equal(await panel.getByText(await checkbox.getAttribute('aria-label'), { exact: true }).count(), 0)
-          const diarization = await panel.getByRole('checkbox', {
-            name: device === 'Microphone' ? 'Speaker recognition for microphone' : 'Speaker recognition for speaker loopback', exact: true
-          }).boundingBox()
-          assert.ok(diarization.x >= deviceBox.x + deviceBox.width)
-          assert.ok(Math.abs(diarization.y + diarization.height / 2 - deviceBox.y - deviceBox.height / 2) < 1)
-          const row = panel.locator('.audio-source-row').nth(device === 'Microphone' ? 0 : 1)
-          const [deviceColumn, diarizationColumn] = await Promise.all([
-            row.locator('.audio-source-field').boundingBox(), row.locator('.source-diarization').boundingBox()
-          ])
-          assert.ok(Math.abs(deviceColumn.width - diarizationColumn.width) < 1)
-          assert.ok(Math.abs(diarizationColumn.x - deviceColumn.x - deviceColumn.width - 17) < 1)
           const arrowStyle = await panel.getByRole('combobox', { name: device, exact: true }).evaluate(element => {
             const style = getComputedStyle(element)
             return [style.appearance, style.paddingRight, style.backgroundPositionX]
@@ -974,8 +952,6 @@ test('transcription sources default on, persist independently and keep the last 
     assert.equal(await page.getByRole('combobox', { name: 'Speaker Loopback', exact: true }).isDisabled(), true)
     // Die Diarization-Checkboxen folgen der Quelle: ohne Transkription ist
     // die Sprechererkennung fuer diese Quelle wirkungslos.
-    assert.equal(await page.getByRole('checkbox', { name: 'Speaker recognition for speaker loopback', exact: true }).isDisabled(), true)
-    assert.equal(await page.getByRole('checkbox', { name: 'Speaker recognition for microphone', exact: true }).isDisabled(), false)
     assert.equal(await page.getByRole('combobox', { name: 'Microphone', exact: true }).isDisabled(), false)
     await speaker.check()
     assert.equal(await page.getByRole('combobox', { name: 'Speaker Loopback', exact: true }).isDisabled(), false)
@@ -1068,14 +1044,29 @@ test('saved close-to-tray preference loads and is disabled during recording', as
 test('saved disabled diarization options remain disabled on startup', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, diarization: { mic: false, speaker: false } })
   try {
-    // Die Diarization-Schalter stehen seit dem Dialog-Umbau nur auf der Startseite.
-    const idle = page.locator('.idle-audio-panel')
-    await idle.waitFor()
-    assert.equal(await idle.getByRole('checkbox', { name: 'Speaker recognition for microphone', exact: true }).isChecked(), false)
-    assert.equal(await idle.getByRole('checkbox', { name: 'Speaker recognition for speaker loopback', exact: true }).isChecked(), false)
+    await reopenSettings(page)
+    const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
+    assert.equal(await dialog.getByRole('checkbox', { name: 'Speaker recognition', exact: true }).isChecked(), false)
   } finally {
     await page.close()
   }
+})
+
+test('unattributed stereo interim text has no source badge and clears on final', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.waitForFunction(() => typeof window.emitSegment === 'function')
+    const emit = (event) => page.evaluate((segment) => window.emitSegment(segment), {
+      sessionId: 'stereo-session', timestampIso: '2026-11-25T13:41:54Z', ...event
+    })
+    await emit({ id: 'interim', source: '', speaker: '', text: 'Unattributed words.', state: 'interim' })
+    const interim = page.locator('.segment.interim')
+    await interim.getByText('Unattributed words.').waitFor()
+    assert.equal(await interim.locator('.speaker-badge').count(), 0)
+    await emit({ id: 'final', source: 'speaker', speaker: 'guest', text: 'Confirmed words.', state: 'final' })
+    await page.locator('.segment.final').getByText('Confirmed words.').waitFor()
+    assert.equal(await interim.count(), 0)
+  } finally { await page.close() }
 })
 
 test('Mic speakers get independent badges, aliases, interim handling and export labels', async () => {
@@ -1498,28 +1489,28 @@ test('idle audio settings stay centered in the available transcript area', async
 test('idle audio settings synchronize with dialog, persist, and reset is stopped-only', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
   try {
-    await page.getByRole('heading', { name: 'Audio settings', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Audio devices', exact: true }).waitFor()
     const idle = page.locator('.idle-audio-panel')
     assert.equal(await idle.locator('.panel-header').evaluate(element => getComputedStyle(element, '::after').content), 'none')
     assert.equal(await idle.getByRole('combobox').count(), 2)
     assert.equal(await idle.getByRole('combobox', { name: 'Primary language', exact: true }).count(), 0)
-    assert.equal(await idle.getByRole('checkbox').count(), 4)
+    assert.equal(await idle.getByRole('checkbox').count(), 2)
     assert.equal(await idle.getByLabel('Speicherpfad (optional)', { exact: true }).count(), 0)
     assert.equal(await idle.getByRole('button', { name: 'Save', exact: true }).count(), 0)
     assert.equal(await idle.getByText(/Änderungen gelten/).count(), 0)
-    await idle.getByRole('checkbox', { name: 'Speaker recognition for speaker loopback', exact: true }).uncheck()
-    await page.waitForFunction(() => window.lastSavedSettings?.language === 'de-DE' && window.lastSavedSettings?.diarization.speaker === false)
+    await idle.getByRole('checkbox', { name: 'Transcribe speaker loopback', exact: true }).uncheck()
+    await page.waitForFunction(() => window.lastSavedSettings?.language === 'de-DE' && window.lastSavedSettings?.transcription.speaker === false)
     assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
     await page.getByRole('button', { name: 'Open settings dialog' }).click()
     const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
     assert.equal(await dialog.getByRole('combobox', { name: 'Primary language', exact: true }).inputValue(), 'de-DE')
-    assert.equal(await dialog.getByRole('checkbox', { name: 'Speaker recognition for speaker loopback', exact: true }).count(), 0)
+    assert.equal(await dialog.getByRole('checkbox', { name: 'Speaker recognition', exact: true }).isChecked(), true)
     await dialog.getByRole('combobox', { name: 'Primary language', exact: true }).selectOption('fr-FR')
     await dialog.getByRole('button', { name: 'Save', exact: true }).click()
     await page.waitForFunction(() => window.lastSavedSettings?.language === 'fr-FR')
     await dialog.waitFor({ state: 'hidden' })
     assert.equal(await idle.getByRole('combobox', { name: 'Primary language', exact: true }).count(), 0)
-    assert.equal(await idle.getByRole('checkbox', { name: 'Speaker recognition for speaker loopback', exact: true }).isChecked(), false)
+    assert.equal(await idle.getByRole('checkbox', { name: 'Transcribe speaker loopback', exact: true }).isChecked(), false)
     await reopenSettings(page)
     assert.equal(await dialog.getByRole('combobox', { name: 'Primary language', exact: true }).inputValue(), 'fr-FR')
     await dialog.getByRole('button', { name: 'Close dialog', exact: true }).click()
