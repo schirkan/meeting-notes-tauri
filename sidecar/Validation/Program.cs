@@ -305,7 +305,8 @@ try
     {
         var start = new ProcessStartInfo(sidecar) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
         ProbeSelfContained(start);
-        foreach (var arg in new[] { "--test-connectivity", "--speech-region", "westeurope", "--speech-endpoint", "wss://localhost:443/speech/universal/v2", "--language", "de-DE", "--proxy-host", "127.0.0.1", "--proxy-port", port.ToString() }) start.ArgumentList.Add(arg);
+        // Mixed per-source diarization exercises both required native paths through the proxy.
+        foreach (var arg in new[] { "--test-connectivity", "--speech-region", "westeurope", "--speech-endpoint", "wss://localhost:443/speech/universal/v2", "--language", "de-DE", "--diarization-mic", "false", "--proxy-host", "127.0.0.1", "--proxy-port", port.ToString() }) start.ArgumentList.Add(arg);
         start.Environment[variables[0]] = "00000000000000000000000000000000";
         start.Environment[variables[1]] = "fake-local-proxy-user";
         start.Environment[variables[2]] = "fake-local-proxy-password";

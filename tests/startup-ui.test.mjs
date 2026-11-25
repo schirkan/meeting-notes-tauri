@@ -1059,13 +1059,45 @@ test('unattributed stereo interim text has no source badge and clears on final',
     const emit = (event) => page.evaluate((segment) => window.emitSegment(segment), {
       sessionId: 'stereo-session', timestampIso: '2026-11-25T13:41:54Z', ...event
     })
-    await emit({ id: 'interim', source: '', speaker: '', text: 'Unattributed words.', state: 'interim' })
+    await emit({ id: 'interim', source: '', speaker: '', text: 'Unattributed words.', state: 'interim', utteranceOffsetTicks: 0 })
     const interim = page.locator('.segment.interim')
     await interim.getByText('Unattributed words.').waitFor()
     assert.equal(await interim.locator('.speaker-badge').count(), 0)
-    await emit({ id: 'final', source: 'speaker', speaker: 'guest', text: 'Confirmed words.', state: 'final' })
+    await emit({ id: 'final', source: 'speaker', speaker: 'guest', text: 'Confirmed words.', state: 'final', utteranceOffsetTicks: 0 })
     await page.locator('.segment.final').getByText('Confirmed words.').waitFor()
     assert.equal(await interim.count(), 0)
+  } finally { await page.close() }
+})
+
+test('stereo hypotheses survive channel metadata changes without duplicating or clearing another utterance', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.waitForFunction(() => typeof window.emitSegment === 'function')
+    const emit = (id, source, utteranceOffsetTicks, state = 'interim', sessionId = 'stereo-session') => page.evaluate((segment) => window.emitSegment(segment), {
+      id, source, utteranceOffsetTicks, state, speaker: '', text: id,
+      sessionId, timestampIso: '2026-11-25T13:41:54Z'
+    })
+    const interims = page.locator('.segment.interim')
+    await emit('Mic labelled', 'mic', 10)
+    await emit('Speaker in progress', 'speaker', 20)
+    await emit('Mic unlabelled', '', 10)
+    await interims.getByText('Mic unlabelled', { exact: true }).waitFor()
+    assert.equal(await interims.getByText('Mic labelled', { exact: true }).count(), 0)
+    await emit('Mic labelled again', 'mic', 10)
+    await interims.getByText('Mic labelled again', { exact: true }).waitFor()
+    assert.equal(await interims.getByText('Mic unlabelled', { exact: true }).count(), 0)
+    await emit('Mic finalized', 'mic', 10, 'final')
+    await page.locator('.segment.final').getByText('Mic finalized').waitFor()
+    assert.deepEqual(await interims.locator('.segment-text').allTextContents(), ['Speaker in progress'])
+    await emit('Mic same offset', 'mic', 20)
+    await interims.getByText('Mic same offset', { exact: true }).waitFor()
+    await emit('Ambiguous update', '', 20)
+    await emit('Marker', 'speaker', 30, 'interim', 'another-session')
+    await interims.getByText('Marker', { exact: true }).waitFor()
+    assert.deepEqual(await interims.locator('.segment-text').allTextContents(), ['Speaker in progress', 'Mic same offset', 'Marker'])
+    await emit('Mic offset adjusted', 'mic', 23)
+    await interims.getByText('Mic offset adjusted', { exact: true }).waitFor()
+    assert.equal(await interims.getByText('Mic same offset', { exact: true }).count(), 0)
   } finally { await page.close() }
 })
 

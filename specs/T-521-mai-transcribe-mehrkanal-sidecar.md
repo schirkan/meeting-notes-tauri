@@ -30,8 +30,12 @@ Recognizer mit `Speech_EnableMultiChannelProcessing` (Speech SDK 1.53.1).
   sind ohne Audioinhalte in der Diagnose sichtbar.
 - Der SDK-Kanal und das explizite `Channel`-Feld des Ergebnis-JSON muessen
   fuer eine Quellzuordnung uebereinstimmen. Bei aktivierten Interim Results
-  wird Text ohne sicheren Kanal mit `source: ""` angezeigt und durch das
-  naechste Ergebnis der Sitzung ersetzt. Fuer Finals bleiben fehlende oder
+  wird Text ohne sicheren Kanal mit `source: ""` angezeigt. Interim und Final
+  werden ueber Sitzung und SDK-Offset (`utteranceOffsetTicks`) derselben
+  Aeusserung zugeordnet, auch wenn sich die Kanalangabe aendert. Bei gleichem
+  Offset fuer zwei bekannte Kanaele ersetzt ein unzuordenbares Interim keines
+  davon. Die gemockte UI-Regression prueft beide Wechselrichtungen und
+  parallele Kanaele; echte SDK-Events bleiben Teil der Live-Abnahme. Fuer Finals bleiben fehlende oder
   ungueltige Kanalangaben ein sichtbarer Sitzungsfehler. Ob beide Standard-
   Recognizer im Betrieb zuordenbare Interims liefern, ist offen.
 

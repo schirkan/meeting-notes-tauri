@@ -659,6 +659,10 @@ Keine neue Lokalisierungsbibliothek oder Sprachauswahl fuer die UI.
 **Nachweis:** [T-516](./specs/T-516-englische-oberflaeche-und-oeffentliche-doku.md),
 neue englische Screenshots und Release 0.1.4 nach erfolgreicher Verifikation.
 
+## AD-023 - Gemeinsames Speaker-Setting ohne Rollback (2026-11-25)
+
+**Entscheidung:** Ab v0.1.9 wird `user.diarization` als gemeinsamer Boolean gespeichert. Legacy-Werte werden beim Upgrade gelesen und per ODER vereinigt. Fuer aeltere Versionen wird kein Rueckschreiben oder kompatibles Zweitformat implementiert: Rollback ist nicht vorgesehen. Der Breaking Change, die Wirkung einer gemischten Alt-Einstellung und der Hinweis zur Config-Sicherung stehen im [Changelog](./CHANGELOG.md) und in [T-103](./specs/T-103-konfiguration-azure-und-user-settings.md).
+
 | # | Frage | Status |
 |---|---|---|
 | OQ-1 | Soll der Sidecar-EXE-Name gleich bleiben (`MeetingNotes.Sidecar.exe`) oder umbenannt werden (`MeetingNotes.AudioService.exe` o. ä.)? | offen — wird in `specs/T-201` entschieden |

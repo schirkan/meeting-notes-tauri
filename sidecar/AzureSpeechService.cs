@@ -562,13 +562,13 @@ public sealed class AzureSpeechService : IDisposable
             return;
         }
         EmitTranscript(source ?? string.Empty, text, interim ? "interim" : "final", interim ? 0.8 : 0.9,
-            speaker, _settings.Language, state.ResolveSessionId());
+            speaker, _settings.Language, state.ResolveSessionId(), result.OffsetInTicks);
     }
 
     internal string GetRecognitionMode(string source) =>
         (source == StereoSource ? EffectiveDiarization : UsesDiarization(source)) ? "conversationTranscriber" : "speechRecognizer";
 
-    internal void EmitTranscript(string source, string text, string state, double confidence, string? speaker, string? language, string? sessionId = null)
+    internal void EmitTranscript(string source, string text, string state, double confidence, string? speaker, string? language, string? sessionId = null, long? utteranceOffsetTicks = null)
     {
         var diarized = UsesDiarization(source);
         if (diarized && string.IsNullOrWhiteSpace(speaker))
@@ -620,6 +620,7 @@ public sealed class AzureSpeechService : IDisposable
             // pro Session. Ohne diese Angabe kann das UI eine ID aus einer
             // alten Session nicht von einer neuen unterscheiden.
             sessionId = sessionId ?? _runId,
+            utteranceOffsetTicks,
             language,
             timestampIso = DateTime.UtcNow.ToString("O"),
             text,

@@ -35,6 +35,26 @@ internal static class DiarizationValidation
             catch (ArgumentException) { check(true, "Invalid diarization boolean rejected"); }
         }
 
+        (string[] Args, bool[] Expected)[] monoCases =
+        [
+            ([], [true]),
+            (["--diarization-mic", "false", "--diarization-speaker", "false"], [false]),
+            (["--diarization-mic", "false"], [false, true]),
+            (["--diarization-speaker", "false"], [false, true]),
+            (["--transcription-speaker", "false", "--diarization-speaker", "false"], [true]),
+            (["--transcription-speaker", "false", "--diarization-mic", "false"], [false]),
+            (["--transcription-mic", "false", "--diarization-mic", "false"], [true]),
+            (["--transcription-mic", "false", "--diarization-speaker", "false"], [false]),
+            (["--transcription-mic", "false", "--transcription-speaker", "false"], [])
+        ];
+        foreach (var (cli, expected) in monoCases)
+        {
+            var args = ArgsParser.Parse(cli);
+            var probes = SpeechConnectivityDiagnostic.SelectStandardMonoProbes(
+                ArgsParser.ParseTranscription(args), ArgsParser.ParseDiarization(args));
+            check(probes.SequenceEqual(expected), $"Standard mono selects one probe per active recognizer type: {string.Join(" ", cli.DefaultIfEmpty("(defaults)"))}");
+        }
+
         // T-507: Die stdin-Kommandoschale des Sidecars.
         check(SidecarCommands.ReadType("{\"type\":\"pause\"}") == "pause", "Pause command parsed");
         check(SidecarCommands.ReadType("{\"type\":\"resume\"}") == "resume", "Resume command parsed");

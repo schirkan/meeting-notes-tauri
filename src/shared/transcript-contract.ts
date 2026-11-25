@@ -12,6 +12,8 @@ export interface TranscriptSegment {
    * Sprecher-ID untrennbar zusammen (T-507).
    */
   sessionId?: string
+  /** SDK stream offset used to correlate stereo hypotheses within a session. */
+  utteranceOffsetTicks?: number | null
   language?: string
   timestampIso: string
   text: string

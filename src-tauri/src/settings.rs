@@ -86,7 +86,7 @@ pub struct UserSettings {
     pub devices: DeviceIds,
     #[serde(default)]
     pub transcription: TranscriptionSettings,
-    #[serde(default = "default_true")]
+    #[serde(default = "default_true", deserialize_with = "deserialize_bool_default_true")]
     pub auto_language_detection: bool,
     #[serde(default = "default_true", deserialize_with = "deserialize_diarization")]
     pub diarization: bool,
@@ -407,6 +407,10 @@ pub(crate) fn default_true() -> bool {
     true
 }
 
+fn deserialize_bool_default_true<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    Ok(serde_json::Value::deserialize(d)?.as_bool().unwrap_or_else(default_true))
+}
+
 fn default_language() -> String {
     DEFAULT_LANGUAGE.to_string()
 }
@@ -540,6 +544,24 @@ mod config_tests {
         assert_eq!(settings.language, "en-US");
         assert_eq!(serde_json::to_value(&settings).unwrap()["transcription"],
             serde_json::json!({"mic": false, "speaker": true, "audioMode": "stereo"}));
+    }
+
+    #[test]
+    fn invalid_auto_language_detection_preserves_other_user_settings() {
+        for value in [serde_json::Value::Null, serde_json::json!("false"), serde_json::json!([])] {
+            let settings: UserSettings = serde_json::from_value(serde_json::json!({
+                "autoLanguageDetection": value,
+                "transcription": { "mic": false },
+                "devices": { "speakerLoopbackId": "selected-speaker" },
+                "autoStart": { "enabled": false },
+                "transcript": { "markdownExport": { "path": "notes" } }
+            })).unwrap();
+            assert!(settings.auto_language_detection);
+            assert!(!settings.transcription.mic);
+            assert_eq!(settings.devices.speaker_loopback_id.as_deref(), Some("selected-speaker"));
+            assert!(!settings.auto_start.enabled);
+            assert_eq!(settings.transcript.markdown_export.path.as_deref(), Some("notes"));
+        }
     }
 
     #[test]

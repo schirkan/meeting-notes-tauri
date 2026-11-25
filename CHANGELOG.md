@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.1.9 - 2026-11-25
+
+### Breaking change
+- `user.diarization` is now one boolean for all active sources. Older per-source settings are combined with OR on upgrade. Once settings have been saved by v0.1.9, do not reuse that configuration with v0.1.8 or older: those versions can fall back to defaults for all user settings. Rollback is not supported. Back up `MeetingNotes.config.json` before upgrading if you need to keep your old settings file.
+
+### Changed
+- The new **Speech recognition** settings section groups the model, audio mode, language, speaker recognition and interim results. Standard mono can use a fixed language or automatic language detection.
+- **MAI Transcribe (Preview)** uses mono only, with one session per enabled source. A previously saved stereo preference is kept for Azure Speech Standard.
+- Removed **Echo cancellation (Alpha)**. Azure Speech Standard stereo now supports optional interim text, without a source label when the channel cannot be verified.
+
+### Fixed
+- **Test connection** checks the speech recognizer actually used by the draft rather than requiring an unused recognizer to connect.
+- Stereo interim updates for the same utterance no longer duplicate text as channel metadata becomes available or unavailable. A malformed automatic language detection setting no longer resets unrelated preferences.
+
 ## v0.1.8 - 2026-11-24
 
 ### Added

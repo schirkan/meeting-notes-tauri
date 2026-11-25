@@ -206,10 +206,24 @@ export function useAppState() {
         const sameSpeakerKey = (entry: TranscriptSegment) =>
           getSpeakerIdentity(entry) === identity
 
-        const withoutInterimForSource = prev.filter(
-          (entry) => !(entry.state === 'interim' && (entry.source === segment.source ||
-            (entry.source === '' && entry.sessionId === segment.sessionId)))
-        )
+        const sameUtterance = (entry: TranscriptSegment) =>
+          entry.sessionId === segment.sessionId && entry.utteranceOffsetTicks === segment.utteranceOffsetTicks
+        const hasOffset = segment.utteranceOffsetTicks != null
+        // Both stereo channels can start at the same offset. An unlabelled
+        // update cannot safely replace either when both are present.
+        if (hasOffset && segment.state === 'interim' && segment.source === '' &&
+          prev.some((entry) => entry.state === 'interim' && entry.source === 'mic' && sameUtterance(entry)) &&
+          prev.some((entry) => entry.state === 'interim' && entry.source === 'speaker' && sameUtterance(entry))) return prev
+
+        const withoutInterimForSource = prev.filter((entry) => {
+          if (entry.state !== 'interim' || entry.sessionId !== segment.sessionId) return true
+          if (!hasOffset) return entry.utteranceOffsetTicks != null ||
+            (entry.source !== segment.source && entry.source !== '')
+          // Preserve the channel's live slot if Azure adjusts its hypothesis offset.
+          if (segment.source && entry.source === segment.source) return false
+          if (!sameUtterance(entry)) return true
+          return entry.source !== segment.source && entry.source !== '' && segment.source !== ''
+        })
 
         if (segment.state === 'final') {
           const previousFinalIndex = [...withoutInterimForSource]

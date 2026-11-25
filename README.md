@@ -17,7 +17,7 @@ This README describes `main`. For the behavior of an installed release, use the 
 
 - **Live transcripts:** See finalized results as recognition completes, with optional interim text.
 - **Independent audio sources:** Choose a microphone, speaker playback (loopback), or both.
-- **Speaker mapping:** Enable speaker recognition for both active sources and replace speaker labels with names.
+- **Speaker mapping:** Enable speaker recognition for all active sources and replace speaker labels with names.
 - **Pause and resume:** Pause transcription and continue within the same session.
 - **Markdown export:** Save or copy finalized transcripts with timestamps, speakers, and session metadata.
 - **Portable app:** Extract the complete folder and run it without an installer. The .NET runtime ships with the app.
@@ -119,7 +119,9 @@ the draft without saving it and return to it when the test dialog closes.
 
 Under **Settings → Speech recognition → Audio stream mode**, **Mono (separate sessions per audio device)** is the default. **Stereo (one session)**, available only with Azure Speech Standard, sends both sources on separate channels in one Speech SDK session. With one source enabled, audio stays mono. Standard stereo uses the primary language; Standard mono can also use automatic language detection. **Enable interim results** is available in both modes. Stereo interim text appears without a source label when the channel cannot be verified. One session does not establish billing savings.
 
-**Test connection** uses the current settings draft and sends silence in stereo when Standard, both sources, and **Stereo (one session)** are selected. Stop recording before testing. Meetings detected during the test do not trigger a delayed auto-start; start manually afterward if the meeting is still in progress. A successful test verifies connection readiness, not channel routing or recognition quality.
+**Test connection** uses the current settings draft and checks the speech recognizer selected by its effective model and speaker recognition settings. It sends silence in stereo when Standard, both sources, and **Stereo (one session)** are selected. Stop recording before testing. Meetings detected during the test do not trigger a delayed auto-start; start manually afterward if the meeting is still in progress. A successful test verifies connection readiness, not channel routing or recognition quality.
+
+**Upgrading from v0.1.8:** From v0.1.9, `user.diarization` is saved as a single boolean. If speaker recognition was enabled for either source, it is enabled for all active sources after the upgrade. Back up `MeetingNotes.config.json` before upgrading. Rollback is not supported; v0.1.8 and earlier can use default user settings if given a configuration saved by v0.1.9.
 
 For MAI, **Test connection** checks the regional Speech/WSS connection, not the Standard HTTPS endpoint or transcription quality. The model change takes effect on the next recording. To switch back, select **Azure Speech (standard)** and save. The Standard endpoint, primary language, and stereo preference are retained; check that the region and key match the Standard resource before starting.
 

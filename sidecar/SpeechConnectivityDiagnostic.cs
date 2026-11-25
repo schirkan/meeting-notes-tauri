@@ -41,6 +41,11 @@ public static class SpeechConnectivityDiagnostic
             var sources = ArgsParser.ParseTranscription(args);
             var stereo = ArgsParser.ParseStereo(args, sources, model);
             var diarization = ArgsParser.ParseDiarization(args);
+            if (model == AzureSpeechModel.Standard && !sources.Mic && !sources.Speaker)
+            {
+                steps.Add(new("speech_config", "error", "Select at least one audio source for transcription."));
+                return new(false, steps);
+            }
             var autoLanguageDetection = ArgsParser.ParseAutoLanguageDetection(args);
             var proxy = ProxyOptions.Parse(args);
             steps.Add(new("speech_proxy", "ok", proxy is null ? "Native Speech SDK uses direct transport." : "Native Speech SDK SetProxy configured; credentials are not logged."));
@@ -49,8 +54,8 @@ public static class SpeechConnectivityDiagnostic
             var probes = stereo
                 ? new[] { await ProbeAsync(config, language, (sources.Mic && diarization.Mic) || (sources.Speaker && diarization.Speaker), timeout, stereo: true) }
                 : model == AzureSpeechModel.Standard
-                ? await Task.WhenAll(ProbeAsync(config, language, false, timeout, autoLanguageDetection: autoLanguageDetection),
-                    ProbeAsync(config, language, true, timeout, autoLanguageDetection: autoLanguageDetection))
+                ? await Task.WhenAll(SelectStandardMonoProbes(sources, diarization).Select(conversation =>
+                    ProbeAsync(config, language, conversation, timeout, autoLanguageDetection: autoLanguageDetection)))
                 : new[] { await ProbeAsync(config, language, false, timeout) };
             foreach (var probe in probes) steps.AddRange(probe);
             return new(probes.All(p => p[0].status == "ok"), steps);
@@ -65,6 +70,13 @@ public static class SpeechConnectivityDiagnostic
             steps.Add(new("speech_config", "error", $"Speech diagnostic could not initialize ({ex.GetType().Name}); sensitive SDK details omitted."));
             return new(false, steps);
         }
+    }
+
+    internal static IEnumerable<bool> SelectStandardMonoProbes(TranscriptionSettings sources, DiarizationSettings diarization)
+    {
+        // One probe per recognizer type used by the active sources, not per source.
+        if ((sources.Mic && !diarization.Mic) || (sources.Speaker && !diarization.Speaker)) yield return false;
+        if ((sources.Mic && diarization.Mic) || (sources.Speaker && diarization.Speaker)) yield return true;
     }
 
     public static async Task<IReadOnlyList<SpeechConnectivityStep>> ProbeAsync(
