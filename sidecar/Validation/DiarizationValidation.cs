@@ -145,6 +145,8 @@ internal static class DiarizationValidation
                             : source == AzureSpeechService.SourceMic ? "self" : "guest";
                         check(payload.GetProperty("source").GetString() == source, "Raw source preserved");
                         check(payload.GetProperty("speaker").GetString() == expected, "Raw SDK ID or fixed source speaker preserved, missing ID falls back to unknown");
+                        check(payload.GetProperty("speakerIdentified").GetBoolean() == (enabled && i % 6 < 2),
+                            "Only known diarized SDK IDs identify a speaker");
                         check(payload.GetProperty("state").GetString() == (i < 6 ? "interim" : "final"), "Transcript state preserved");
                         // T-507: Jedes Segment traegt die Session-Dimension. Ohne sie
                         // kann das UI "Guest-1" aus zwei Sitzungen nicht trennen.

@@ -8,7 +8,10 @@ type HeroStatusCardProps = {
   statusDescription: string
   runtimeIssue: string | null
   isStarting: boolean
+  batch: boolean
+  settingsDisabled: boolean
   startDisabled: boolean
+  pauseSupported: boolean
   canCopyTranscript: boolean
   canResetTranscript: boolean
   durationLabel: string
@@ -51,17 +54,19 @@ export function HeroStatusCard(props: HeroStatusCardProps) {
   }, [])
   const closeMenu = () => { if (menuRef.current) menuRef.current.open = false }
   const { status, isStarting } = props
-  const recordLabel = status.running ? 'Stop' : isStarting ? 'Starting …' : 'Start'
+  const recordLabel = status.running ? (props.batch ? 'Stop recording' : 'Stop')
+    : isStarting ? 'Starting …' : props.batch ? 'Start recording' : 'Start'
   const pauseLabel = status.paused ? 'Resume' : 'Pause'
   const speakerLabel = `Speaker mapping ${props.speakersOpen ? 'hide' : 'show'}`
 
   return (
     <header className="console-header">
-      <div className="toolbar-actions recording-actions hero-controls">
-        <button type="button" onClick={() => void (status.paused ? props.onResume() : props.onPause())}
-          disabled={!status.running} aria-label={pauseLabel} title={pauseLabel}>
+      <div className={`toolbar-actions recording-actions hero-controls${props.batch ? ' batch-recording-actions' : ''}`}>
+        {!props.batch && <button type="button" onClick={() => void (status.paused ? props.onResume() : props.onPause())}
+          disabled={!status.running || !props.pauseSupported || isStarting} aria-label={pauseLabel}
+          title={props.pauseSupported ? pauseLabel : 'Pause is not supported by this model'}>
           <Icon name={status.paused ? 'play' : 'pause'} /><span>{pauseLabel}</span>
-        </button>
+        </button>}
         <button className={status.running ? 'stop-button' : 'start-button primary-button'} type="button"
           onClick={() => void props.onToggleRecording()}
           disabled={!status.running && (isStarting || props.startDisabled || !!props.runtimeIssue)}
@@ -85,7 +90,7 @@ export function HeroStatusCard(props: HeroStatusCardProps) {
         </button>
         <button type="button" onClick={props.onToggleSpeakers} aria-expanded={props.speakersOpen}
           aria-controls="console-speakers" aria-label={speakerLabel} title={speakerLabel}><Icon name="users" /><span>Speakers</span></button>
-        <button className="icon-button" type="button" onClick={props.onOpenSettingsDialog}
+        <button className="icon-button" type="button" onClick={props.onOpenSettingsDialog} disabled={props.settingsDisabled}
           aria-label="Open settings dialog" title="Settings"><Icon name="settings" /></button>
         <details className="overflow-menu" ref={menuRef}>
           <summary aria-label="More actions" title="More actions"><Icon name="more" /></summary>

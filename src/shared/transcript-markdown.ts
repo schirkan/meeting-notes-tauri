@@ -67,7 +67,8 @@ export function buildTranscriptMetadata(
   const safeStart = Number.isNaN(start.getTime()) ? now : start
   const safeEnd = Number.isNaN(end.getTime()) ? safeStart : end
   const speakers = [
-    ...new Set(finals.map((segment) => segment.speaker.trim()).filter((speaker) => speaker.length > 0))
+    ...new Set(finals.filter((segment) => segment.speakerIdentified === true)
+      .map((segment) => segment.speaker.trim()).filter((speaker) => speaker.length > 0))
   ]
   const language = finals.find((segment) => segment.language)?.language ?? 'de-DE'
 

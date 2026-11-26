@@ -30,6 +30,8 @@ pub struct TranscriptStatus {
     pub paused: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub started_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recording_path: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]

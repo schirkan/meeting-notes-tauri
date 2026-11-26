@@ -616,6 +616,8 @@ public sealed class AzureSpeechService : IDisposable
             id = Guid.NewGuid().ToString(),
             source,
             speaker = speakerId,
+            speakerIdentified = diarized && !string.IsNullOrWhiteSpace(speaker)
+                && !string.Equals(speaker.Trim(), "unknown", StringComparison.OrdinalIgnoreCase),
             // Session-Dimension (T-507): Azure vergibt die Sprecher-IDs
             // pro Session. Ohne diese Angabe kann das UI eine ID aus einer
             // alten Session nicht von einer neuen unterscheiden.

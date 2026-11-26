@@ -1,3 +1,5 @@
+import type { AzureSpeechModel, RecognitionProvider, TranscriptionMode } from './config-contract'
+
 export type TranscriptSource = 'mic' | 'speaker'
 export type TranscriptState = 'interim' | 'final'
 
@@ -6,6 +8,8 @@ export interface TranscriptSegment {
   /** Empty on stereo interim results without verifiable channel metadata. */
   source: TranscriptSource | ''
   speaker: string
+  /** True only when the recognizer actually assigned a speaker identity. */
+  speakerIdentified?: boolean
   /**
    * Azure-Sitzung, in der das Segment entstanden ist. Azure vergibt die
    * Sprecher-IDs ("Guest-N") pro Sitzung neu, deshalb gehoeren Session und
@@ -14,7 +18,7 @@ export interface TranscriptSegment {
   sessionId?: string
   /** SDK stream offset used to correlate stereo hypotheses within a session. */
   utteranceOffsetTicks?: number | null
-  language?: string
+  language?: string | null
   timestampIso: string
   text: string
   state: TranscriptState
@@ -58,6 +62,8 @@ export interface TranscriptStatus {
   /** Aufnahme ist pausiert: die Azure-Sitzung lebt weiter, es wird kein Audio zugespeist. */
   paused?: boolean
   startedAt?: string
+  /** Path to the manifest of a cleanly stopped local batch recording. */
+  recordingPath?: string | null
 }
 
 export interface DebugLogEntry {
@@ -77,6 +83,7 @@ export type TranscriptErrorCode =
   | 'SIDECAR_UNAVAILABLE'
   | 'AZURE_AUTH_FAILED'
   | 'AZURE_RECOGNIZER_FAILED'
+  | 'WEB_SPEECH_ENDED'
   | 'UI_START_FAILED'
   | 'UI_STOP_FAILED'
   | 'UI_PAUSE_FAILED'
@@ -136,6 +143,11 @@ export const TRANSCRIPT_ERROR_CATALOG: Record<
     description: 'The recognizer reported a runtime error.',
     recoveryHint: 'Restart the transcription and check the Azure diagnostics.'
   },
+  WEB_SPEECH_ENDED: {
+    blocker: false,
+    description: 'Web Speech recognition ended unexpectedly.',
+    recoveryHint: 'Check microphone permissions, WebView2 policy and network access before restarting.'
+  },
   UI_START_FAILED: {
     blocker: false,
     description: 'The start was triggered in the renderer, but the main call failed.',
@@ -171,10 +183,14 @@ export interface MeetingDetected {
   signal: string
 }
 
+export type TranscriptProvider = 'azure' | Exclude<RecognitionProvider, 'unsupported'>
+
 export interface TranscriptApi {
   toggleDevtools: () => Promise<void>
   openRepository: () => Promise<void>
-  start: () => Promise<TranscriptStatus>
+  start: (expectedProvider?: TranscriptProvider, expectedMode?: TranscriptionMode) => Promise<TranscriptStatus>
+  pickBatchAudio: () => Promise<string | null>
+  transcribeBatchAudio: (path: string, expectedProvider: Exclude<TranscriptProvider, 'web-speech'>, expectedModel?: AzureSpeechModel) => Promise<TranscriptSegment[]>
   stop: () => Promise<TranscriptStatus>
   pause: () => Promise<TranscriptStatus>
   resume: () => Promise<TranscriptStatus>

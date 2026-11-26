@@ -4,39 +4,43 @@ import { Icon } from './Icon'
 
 type AudioSourcesProps = {
   statusRunning: boolean
+  selectDevices: boolean
+  speakerLoopback: boolean
+  batch?: boolean
   settings: UserSettings
   devices: AudioDeviceSnapshot
   setSettings: React.Dispatch<React.SetStateAction<UserSettings>>
 }
 
 function AudioSources(props: AudioSourcesProps) {
-  const { statusRunning, settings, devices, setSettings } = props
+  const { statusRunning, selectDevices, speakerLoopback, batch, settings, devices, setSettings } = props
+  const sourceAction = batch ? 'Record' : 'Transcribe'
 
   return (
     <>
       <div className="audio-source-row full-field">
         <div className="audio-source-field">
           <span className="field-caption"><Icon name="mic" />Microphone</span>
-          <div className="audio-source-control" title="Choose the microphone to transcribe; System default follows Windows">
+          <div className="audio-source-control" title={`Choose the microphone to ${sourceAction.toLowerCase()}; System default follows Windows`}>
             <input
               type="checkbox"
-              aria-label="Transcribe microphone"
-              checked={settings.transcription.mic}
+              aria-label={`${sourceAction} microphone`}
+              checked={!selectDevices || settings.transcription.mic}
               onChange={(event) => {
                 const mic = event.currentTarget.checked
                 setSettings((prev) => ({ ...prev, transcription: { ...prev.transcription, mic, speaker: !mic || prev.transcription.speaker } }))
               }}
-              disabled={statusRunning}
-              title="Transcribe microphone"
+              disabled={statusRunning || !speakerLoopback}
+              title={speakerLoopback ? `${sourceAction} microphone` : 'This model uses the default microphone'}
             />
             <select
               aria-label="Microphone"
-              value={settings.devices.micId ?? ''}
+              value={(selectDevices && settings.devices.micId) || ''}
               onChange={(event) => {
                 const micId = event.currentTarget.value || null
                 setSettings((prev) => ({ ...prev, devices: { ...prev.devices, micId } }))
               }}
-              disabled={statusRunning || !settings.transcription.mic}
+              disabled={statusRunning || !selectDevices || !settings.transcription.mic}
             >
               <option value="">System default</option>
               {devices.inputs.map((device) => (
@@ -52,17 +56,17 @@ function AudioSources(props: AudioSourcesProps) {
       <div className="audio-source-row full-field">
         <div className="audio-source-field">
           <span className="field-caption"><Icon name="speaker" />Speaker Loopback</span>
-          <div className="audio-source-control" title="Choose the Windows playback device whose audio to transcribe">
+          <div className="audio-source-control" title={`Choose the Windows playback device whose audio to ${sourceAction.toLowerCase()}`}>
             <input
               type="checkbox"
-              aria-label="Transcribe speaker loopback"
-              checked={settings.transcription.speaker}
+              aria-label={`${sourceAction} speaker loopback`}
+              checked={speakerLoopback && settings.transcription.speaker}
               onChange={(event) => {
                 const speaker = event.currentTarget.checked
                 setSettings((prev) => ({ ...prev, transcription: { ...prev.transcription, speaker, mic: !speaker || prev.transcription.mic } }))
               }}
-              disabled={statusRunning}
-              title="Transcribe speaker loopback"
+              disabled={statusRunning || !speakerLoopback}
+              title={speakerLoopback ? `${sourceAction} speaker loopback` : 'Speaker loopback is not supported by this model'}
             />
             <select
               aria-label="Speaker Loopback"
@@ -71,7 +75,7 @@ function AudioSources(props: AudioSourcesProps) {
                 const speakerLoopbackId = event.currentTarget.value || null
                 setSettings((prev) => ({ ...prev, devices: { ...prev.devices, speakerLoopbackId } }))
               }}
-              disabled={statusRunning || !settings.transcription.speaker}
+              disabled={statusRunning || !speakerLoopback || !settings.transcription.speaker}
             >
               <option value="">System default</option>
               {devices.outputs.map((device) => (

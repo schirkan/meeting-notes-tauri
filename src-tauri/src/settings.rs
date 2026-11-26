@@ -153,6 +153,86 @@ pub struct TranscriptionSettings {
     pub speaker: bool,
     #[serde(default, deserialize_with = "deserialize_audio_mode")]
     pub audio_mode: AudioMode,
+    #[serde(default, deserialize_with = "deserialize_provider", skip_serializing_if = "RecognitionProvider::is_azure")]
+    pub provider: RecognitionProvider,
+    #[serde(default, deserialize_with = "deserialize_transcription_mode", skip_serializing_if = "TranscriptionMode::is_live")]
+    pub mode: TranscriptionMode,
+    #[serde(default, deserialize_with = "deserialize_bool_default_false", skip_serializing_if = "is_false")]
+    pub web_interim_results: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RecognitionProvider {
+    #[default]
+    Azure,
+    WindowsSapi,
+    WindowsAiSpeech,
+    WebSpeech,
+    Unsupported,
+}
+
+impl RecognitionProvider {
+    fn is_azure(&self) -> bool { *self == Self::Azure }
+
+    pub fn supports_batch(self) -> bool {
+        matches!(self, Self::Azure | Self::WindowsSapi | Self::WindowsAiSpeech)
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Azure => "azure",
+            Self::WindowsSapi => "windows-sapi",
+            Self::WindowsAiSpeech => "windows-ai-speech",
+            Self::WebSpeech => "web-speech",
+            Self::Unsupported => "unsupported",
+        }
+    }
+}
+
+fn deserialize_provider<'de, D: serde::Deserializer<'de>>(d: D) -> Result<RecognitionProvider, D::Error> {
+    Ok(parse_provider(serde_json::Value::deserialize(d)?.as_str()))
+}
+
+fn parse_provider(value: Option<&str>) -> RecognitionProvider {
+    match value {
+        Some("azure") => RecognitionProvider::Azure,
+        Some("windows-sapi") => RecognitionProvider::WindowsSapi,
+        Some("windows-ai-speech") => RecognitionProvider::WindowsAiSpeech,
+        Some("web-speech") => RecognitionProvider::WebSpeech,
+        _ => RecognitionProvider::Unsupported,
+    }
+}
+
+fn is_false(value: &bool) -> bool { !value }
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TranscriptionMode {
+    #[default]
+    Live,
+    Batch,
+    Unsupported,
+}
+
+fn deserialize_transcription_mode<'de, D: serde::Deserializer<'de>>(d: D) -> Result<TranscriptionMode, D::Error> {
+    Ok(match serde_json::Value::deserialize(d)?.as_str() {
+        Some("live") => TranscriptionMode::Live,
+        Some("batch") => TranscriptionMode::Batch,
+        _ => TranscriptionMode::Unsupported,
+    })
+}
+
+impl TranscriptionMode {
+    fn is_live(&self) -> bool { *self == Self::Live }
+
+    pub fn as_str(self) -> &'static str {
+        match self { Self::Live => "live", Self::Batch => "batch", Self::Unsupported => "unsupported" }
+    }
+}
+
+fn deserialize_bool_default_false<'de, D: serde::Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    Ok(serde_json::Value::deserialize(d)?.as_bool() == Some(true))
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
@@ -179,6 +259,9 @@ impl Default for TranscriptionSettings {
             mic: true,
             speaker: true,
             audio_mode: AudioMode::DualMono,
+            provider: RecognitionProvider::Azure,
+            mode: TranscriptionMode::Live,
+            web_interim_results: false,
         }
     }
 }
@@ -272,8 +355,31 @@ pub fn app_dir_for(exe: &Path, development_root: Option<&Path>) -> PathBuf {
     }
 }
 
-/// Resolve the application directory for the running process.
+#[cfg(windows)]
+fn is_windows_ai_speech_lab() -> bool {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetCurrentPackageFamilyName(length: *mut u32, name: *mut u16) -> i32;
+    }
+    let mut name = [0u16; 128];
+    let mut length = name.len() as u32;
+    // The buffer is writable for its advertised length and lives through the call.
+    if unsafe { GetCurrentPackageFamilyName(&mut length, name.as_mut_ptr()) } != 0 {
+        return false;
+    }
+    String::from_utf16_lossy(&name[..(length.saturating_sub(1) as usize)])
+        .starts_with("MeetingNotes.WindowsAiSpeechLab_")
+}
+
+/// Resolve writable data storage; the experimental MSIX installation is read-only.
 pub fn app_dir() -> Result<PathBuf, SettingsError> {
+    #[cfg(windows)]
+    if is_windows_ai_speech_lab() {
+        let base = std::env::var_os("LOCALAPPDATA").ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "LOCALAPPDATA is unavailable for the Windows AI Speech lab package")
+        })?;
+        return Ok(PathBuf::from(base).join("MeetingNotes.WindowsAiSpeechLab"));
+    }
     let exe = std::env::current_exe()?;
     let development_root = if cfg!(debug_assertions) {
         Path::new(env!("CARGO_MANIFEST_DIR")).parent()
@@ -331,7 +437,22 @@ pub async fn load_app_config() -> Result<AppConfig, SettingsError> {
         .get("user")
         .and_then(|section| serde_json::from_value::<UserSettings>(section.clone()).ok())
         .map(normalize_user_settings)
-        .unwrap_or_else(default_user_settings);
+        .unwrap_or_else(|| {
+            let mut defaults = default_user_settings();
+            if let Some(provider) = value.pointer("/user/transcription/provider") {
+                if !parse_provider(provider.as_str()).is_azure() {
+                    // A corrupt user section must not silently activate Azure.
+                    defaults.transcription.provider = RecognitionProvider::Unsupported;
+                }
+            }
+            if let Some(mode) = value.pointer("/user/transcription/mode") {
+                if mode.as_str() != Some("live") {
+                    // A damaged Batch configuration cannot reactivate live capture or upload.
+                    defaults.transcription.mode = TranscriptionMode::Unsupported;
+                }
+            }
+            defaults
+        });
 
     Ok(AppConfig { azure, user })
 }
@@ -533,6 +654,7 @@ mod config_tests {
             let saved: UserSettings = serde_json::from_value(serde_json::to_value(settings).unwrap()).unwrap();
             assert_eq!(saved.transcription, TranscriptionSettings {
                 mic: false, speaker: true, audio_mode: expected,
+                ..Default::default()
             });
         }
     }
@@ -544,6 +666,19 @@ mod config_tests {
         assert_eq!(settings.language, "en-US");
         assert_eq!(serde_json::to_value(&settings).unwrap()["transcription"],
             serde_json::json!({"mic": false, "speaker": true, "audioMode": "stereo"}));
+    }
+
+    #[test]
+    fn explicit_invalid_provider_does_not_fall_back_to_azure() {
+        for value in [serde_json::Value::Null, serde_json::json!("future-model"), serde_json::json!(123)] {
+            let settings: UserSettings = serde_json::from_value(serde_json::json!({
+                "transcription": { "provider": value, "mic": false }
+            })).unwrap();
+            assert_eq!(settings.transcription.provider, RecognitionProvider::Unsupported);
+            assert!(!settings.transcription.mic);
+        }
+        let legacy: UserSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(legacy.transcription.provider, RecognitionProvider::Azure);
     }
 
     #[test]

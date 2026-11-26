@@ -21,6 +21,7 @@ Das Transkript soll als Markdown-Datei mit YAML-Frontmatter automatisch gespeich
 - [x] Der Pfad des geschriebenen Files wird als Toast zurückgemeldet. Auch beim manuellen Export bleibt ein Schreibfehler sichtbar und veraendert das Transkript nicht. Beleg: src/renderer/src/use-app-state.ts (Pfad- bzw. Fehler-Toast).
 
 ## Approach
+- Die Transkriptliste wird nicht nach einer festen Segmentzahl abgeschnitten. Anzeige, Zwischenablage und Datei behalten die Finals bis zum Beginn eines neuen Transkripts. Ohne Sprecherzuordnung zeigt der Markdown-Body die Audioquelle; `speakers` im Frontmatter enthaelt nur erkannte Sprecher. Beleg: UI-Test `more than 500 unattributed finals stay distinct in the UI, clipboard and Markdown` mit 525 Finals.
 - Das Markdown-Dokument entsteht im Renderer, geschrieben wird es im Rust-Backend. Der Renderer kennt die Segmente und die Sprecher-Aliase; das Backend kennt das Anwendungsverzeichnis und den konfigurierten Zielpfad. So bleibt die Formatierung an einer Stelle und die Pfadauflösung an einer anderen.
 - Rust-Command `save_transcript_markdown(markdown)` legt das Zielverzeichnis an, ermittelt den Dateinamen aus der lokalen Zeit und schreibt atomar. Der Zielordner ergibt sich aus `user.transcript.markdownExport.path` oder, wenn dieser fehlt, aus dem Anwendungsverzeichnis.
 - Frontmatter-Werte werden als YAML-Strings quotiert; die Sprecherliste ist ein YAML-Block. Werte mit Sonderzeichen brechen das Dokument nicht.

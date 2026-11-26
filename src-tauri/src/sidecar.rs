@@ -39,6 +39,8 @@ impl From<tauri_plugin_shell::Error> for SidecarError {
 pub struct SidecarOptions {
     pub sample_rate: u32,
     #[serde(default)]
+    pub use_sapi: bool,
+    #[serde(default)]
     pub transcription: crate::settings::TranscriptionSettings,
     #[serde(default = "crate::settings::default_true", deserialize_with = "crate::settings::deserialize_diarization")]
     pub diarization: bool,
@@ -78,9 +80,13 @@ pub struct SidecarHandle {
     pub shutdown: Option<tokio::sync::oneshot::Sender<Result<(), String>>>,
 }
 
+fn source_arguments(settings: &crate::settings::TranscriptionSettings) -> [String; 4] {
+    ["--transcription-mic".into(), settings.mic.to_string(),
+        "--transcription-speaker".into(), settings.speaker.to_string()]
+}
+
 fn transcription_arguments(settings: &crate::settings::TranscriptionSettings, model: crate::settings::AzureSpeechModel) -> Vec<String> {
-    let mut args = vec!["--transcription-mic".into(), settings.mic.to_string(),
-        "--transcription-speaker".into(), settings.speaker.to_string()];
+    let mut args = source_arguments(settings).to_vec();
     if model == crate::settings::AzureSpeechModel::Standard
         && settings.audio_mode == crate::settings::AudioMode::Stereo && settings.mic && settings.speaker {
         args.extend(["--audio-mode".into(), "stereo".into()]);
@@ -274,8 +280,14 @@ pub async fn start<R: Runtime>(
     let sample_rate = options.sample_rate.clamp(8000, 48000);
     command = command.args(["--sample-rate".to_string(), sample_rate.to_string()])
         .args(transcription_arguments(&options.transcription, options.speech_model))
-        .args(recognition_arguments(options.diarization, options.auto_language_detection, options.interim_results))
-        .args(["--speech-model", options.speech_model.as_str()]);
+        .args(recognition_arguments(options.diarization, options.auto_language_detection, options.interim_results));
+    if options.use_sapi {
+        command = command.args(["--recognition-provider", "windows-sapi"]);
+    } else if options.transcription.provider == crate::settings::RecognitionProvider::WindowsAiSpeech {
+        command = command.args(["--recognition-provider", "windows-ai-speech"]);
+    } else {
+        command = command.args(["--speech-model", options.speech_model.as_str()]);
+    }
 
     if let Some(language) = options.language.as_deref() {
         command = command.args(["--language".to_string(), language.into()]);
@@ -295,6 +307,23 @@ pub async fn start<R: Runtime>(
     }
 
     command = apply_proxy(command, options.proxy.as_ref())?;
+    spawn_session(command)
+}
+
+pub fn start_batch_recorder<R: Runtime>(
+    app: &AppHandle<R>, user: &crate::settings::UserSettings, directory: &Path,
+) -> Result<SidecarHandle, SidecarError> {
+    let exe = resolve_sidecar_path(app)?;
+    let mut command = app.shell().command(exe.to_string_lossy().as_ref())
+        .args(["--record-batch", directory.to_str().ok_or_else(|| SidecarError::Spawn("Invalid recording directory.".into()))?])
+        .args(source_arguments(&user.transcription))
+        .env("MEETING_NOTES_SPEECH_KEY", "");
+    if let Some(id) = user.devices.mic_id.as_deref() { command = command.args(["--mic-device-id", id]); }
+    if let Some(id) = user.devices.speaker_loopback_id.as_deref() { command = command.args(["--speaker-device-id", id]); }
+    spawn_session(apply_proxy(command, None)?)
+}
+
+fn spawn_session(command: tauri_plugin_shell::process::Command) -> Result<SidecarHandle, SidecarError> {
     let (mut rx, child) = command.spawn().map_err(|e| SidecarError::Spawn(e.to_string()))?;
 
     let (events_tx, events_rx) = mpsc::channel::<CommandEvent>(128);

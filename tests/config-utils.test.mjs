@@ -47,6 +47,15 @@ async function compileAndImport() {
 
 const { contract, utils, speakers, markdown } = await compileAndImport()
 
+test('transcription mode defaults to live, preserves batch, and does not mistake unknown modes for live', () => {
+  const normalize = (mode) => contract.normalizeUserSettings({ transcription: { provider: 'windows-sapi', mode } }).transcription
+  assert.equal(normalize(undefined).mode, undefined)
+  assert.equal(normalize('live').mode, undefined)
+  assert.equal(normalize('batch').mode, 'batch')
+  assert.equal(normalize('batch').provider, 'windows-sapi')
+  assert.equal(normalize('future-mode').mode, 'unsupported')
+})
+
 test('window preferences default on for legacy and malformed settings', () => {
   for (const input of [null, undefined, {}, { window: null }, { window: {} },
     { window: { minimizeToTrayOnClose: 'true', hideFromTaskbar: 'false' } },
@@ -203,8 +212,8 @@ test('markdown export keeps an explicitly disabled flag', () => {
 
 test('transcript markdown starts with yaml frontmatter carrying the session metadata', () => {
   const segments = [
-    { id: '1', source: 'mic', speaker: 'Guest-1', language: 'de-DE', timestampIso: '2026-11-09T13:00:00.000Z', text: 'Hallo.', state: 'final' },
-    { id: '2', source: 'speaker', speaker: 'Guest-2', language: 'de-DE', timestampIso: '2026-11-09T13:00:05.000Z', text: 'Guten Tag.', state: 'final' }
+    { id: '1', source: 'mic', speaker: 'Guest-1', speakerIdentified: true, language: 'de-DE', timestampIso: '2026-11-09T13:00:00.000Z', text: 'Hallo.', state: 'final' },
+    { id: '2', source: 'speaker', speaker: 'Guest-2', speakerIdentified: true, language: 'de-DE', timestampIso: '2026-11-09T13:00:05.000Z', text: 'Guten Tag.', state: 'final' }
   ]
   const document = markdown.buildTranscriptMarkdown(segments)
   assert.ok(document.startsWith('---\n'), 'document starts with frontmatter')

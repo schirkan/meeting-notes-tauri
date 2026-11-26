@@ -7,6 +7,7 @@
 
 mod autostart;
 mod commands;
+mod batch;
 mod connectivity;
 mod events;
 mod latency;
@@ -98,6 +99,8 @@ pub fn run() {
       commands::toggle_devtools,
       commands::open_repository,
       commands::start_recording,
+      batch::pick_batch_audio,
+      batch::transcribe_batch_audio,
       commands::stop_recording,
       commands::pause_recording,
       commands::resume_recording,

@@ -38,6 +38,19 @@ async function openApp(options) {
     body: ''
   }))
   await page.addInitScript((input) => {
+    if (input.webSpeech) {
+      window.SpeechRecognition = class {
+        start() {
+          window.webRecognition = this
+          queueMicrotask(() => this.onstart?.())
+        }
+        stop() {
+          this.onresult?.({ resultIndex: 1, results: [null, { isFinal: true, 0: { transcript: 'Last browser words', confidence: 0.9 } }] })
+          queueMicrotask(() => this.onend?.())
+        }
+        abort() { window.webAborted = true }
+      }
+    }
     const noSubscription = () => () => {}
     const stoppedStatus = { running: false, paused: false }
     let currentStatus = input.running
@@ -51,6 +64,8 @@ async function openApp(options) {
     }
     window.settingsSaveError = input.saveSettingsError
     window.directoryPickerResult = input.directoryPickerResult ?? null
+    window.batchPickerResult = input.batchPickerResult ?? null
+    window.batchResult = input.batchResult ?? []
     window.transcriptApi = {
       toggleDevtools: async () => {
         if (input.devtoolsError) throw new Error(input.devtoolsError)
@@ -64,16 +79,30 @@ async function openApp(options) {
         }
         return snapshot
       },
-      start: async () => {
+      start: async (provider, mode) => {
         window.lastStartCalled = true
+        window.lastStartProvider = provider
+        window.lastStartMode = mode
         return window.emitStatus({ running: true, paused: false, startedAt: new Date().toISOString() })
       },
       stop: async () => {
         window.lastStopCalled = true
         // Rust emits stopped even if shutting down the sidecar fails.
-        window.emitStatus(stoppedStatus)
+        const nextStatus = input.stopRecordingPath ? { ...stoppedStatus, recordingPath: input.stopRecordingPath } : stoppedStatus
+        window.emitStatus(nextStatus)
         if (input.stopError) throw input.stopError
-        return stoppedStatus
+        return nextStatus
+      },
+      pickBatchAudio: async () => {
+        window.batchPickerCalls = (window.batchPickerCalls ?? 0) + 1
+        if (window.batchPickerError) throw window.batchPickerError
+        return window.batchPickerResult
+      },
+      transcribeBatchAudio: async (path, provider, model) => {
+        window.batchCalls ??= []
+        window.batchCalls.push({ path, provider, model })
+        if (window.batchError) throw window.batchError
+        return window.batchResult
       },
       pause: async () => { window.lastPauseCalled = true; return window.emitStatus({ ...currentStatus, paused: true }) },
       resume: async () => { window.lastResumeCalled = true; return window.emitStatus({ ...currentStatus, paused: false }) },
@@ -612,6 +641,211 @@ test('settings offers a single save button in the footer that persists config an
   }
 })
 
+test('native model selection applies the matrix and saves without Azure credentials', async () => {
+  const page = await openApp({ configState: { exists: false, path: 'test-config', config: null }, webSpeech: true })
+  try {
+    const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
+    const model = dialog.getByLabel('Transcription model')
+    assert.deepEqual(await model.locator('option').allTextContents(), [
+      'Azure Speech (standard)', 'Azure MAI Transcribe (Preview)', 'Windows SAPI (Experimental)', 'Windows AI Speech (Experimental)', 'Web Speech API (Experimental)',
+      'Azure Speech (standard) — Batch', 'Azure MAI Transcribe (Preview) — Batch', 'Windows SAPI (Experimental) — Batch', 'Windows AI Speech (Experimental) — Batch'
+    ])
+    await model.selectOption('windows-sapi')
+    assert.equal(await dialog.getByLabel('Endpoint', { exact: true }).isDisabled(), true)
+    assert.equal(await dialog.getByLabel('Speech Key').isDisabled(), true)
+    assert.equal(await dialog.getByLabel('Host', { exact: true }).isDisabled(), true)
+    assert.equal(await dialog.getByLabel('Primary language').isEnabled(), true)
+    assert.equal(await dialog.getByLabel('Audio stream mode').isDisabled(), true)
+    assert.equal(await dialog.getByLabel('Speaker recognition', { exact: true }).isDisabled(), true)
+    assert.equal(await dialog.getByLabel('Enable interim results').isDisabled(), true)
+    assert.equal(await dialog.getByLabel('Start transcription automatically').isEnabled(), true)
+    await model.selectOption('web-speech')
+    assert.equal(await dialog.getByLabel('Start transcription automatically').isDisabled(), true)
+    assert.equal(await dialog.getByLabel('Enable interim results').isEnabled(), true)
+    await dialog.getByRole('button', { name: 'Check model availability' }).click()
+    const availability = page.getByRole('dialog', { name: 'Model availability' })
+    await availability.getByText('Model check passed').waitFor()
+    assert.equal(await page.evaluate(() => window.lastConnectivityPayload), undefined)
+    await availability.getByRole('button', { name: 'Close dialog', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    assert.equal(await page.evaluate(() => window.lastSavedSettings.transcription.provider), 'web-speech')
+    assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
+    assert.equal(await page.getByLabel('Transcribe speaker loopback').isDisabled(), true)
+    assert.equal(await page.getByLabel('Microphone', { exact: true }).isDisabled(), true)
+  } finally { await page.close() }
+})
+
+test('Windows AI Speech checks native availability and saves without Azure credentials', async () => {
+  const detail = 'Requires the experimental packaged Windows AI Speech build.'
+  const page = await openApp({ configState: { exists: false, path: 'test-config', config: null },
+    connectivityResult: { reachable: false, speechReachable: false, probeUrl: '', latencyMs: 2, error: detail,
+      steps: [{ step: 'Windows AI Speech', status: 'error', detail }] } })
+  try {
+    const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
+    await dialog.getByLabel('Transcription model').selectOption('windows-ai-speech')
+    for (const label of ['Speech Key', 'Audio stream mode', 'Speaker recognition', 'Enable interim results', 'Start transcription automatically']) {
+      assert.ok(await dialog.getByLabel(label).isDisabled(), label)
+    }
+    const language = dialog.getByRole('combobox', { name: 'Primary language' })
+    assert.ok(await language.isDisabled())
+    assert.equal(await language.inputValue(), '')
+    await dialog.getByRole('button', { name: 'Check model availability' }).click()
+    const availability = page.getByRole('dialog', { name: 'Model availability' })
+    await availability.getByRole('alert').filter({ hasText: detail }).waitFor()
+    assert.deepEqual(await page.evaluate(() => window.lastConnectivityPayload), { provider: 'windows-ai-speech' })
+    await availability.getByRole('button', { name: 'Close dialog', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    assert.equal(await page.evaluate(() => window.lastSavedSettings.transcription.provider), 'windows-ai-speech')
+    assert.equal(await page.evaluate(() => window.lastSavedConfig), undefined)
+    assert.ok(await page.getByLabel('Transcribe speaker loopback').isDisabled())
+  } finally { await page.close() }
+})
+
+test('Web Speech starts without Azure, drains finals on quit and does not call the sidecar stop', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: null },
+    transcription: { provider: 'web-speech', webInterimResults: true }, webSpeech: true })
+  try {
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
+    await page.getByRole('button', { name: 'Stop', exact: true }).waitFor()
+    assert.equal(await page.getByRole('button', { name: 'Pause', exact: true }).isDisabled(), true)
+    assert.deepEqual(await page.evaluate(() => [window.lastStartProvider, window.webRecognition.lang, window.webRecognition.interimResults]), ['web-speech', 'de-DE', true])
+    assert.equal(await page.evaluate(() => window.lastStartMode), 'live')
+    assert.equal(await page.getByRole('region', { name: 'Batch transcription' }).count(), 0)
+    await page.evaluate(() => {
+      window.emitStatus({ running: false })
+      window.emitQuitExport('web-quit')
+    })
+    await page.waitForFunction(() => window.quitExportReplies?.length === 1)
+    assert.match(await page.evaluate(() => window.lastSavedMarkdown), /Last browser words/)
+    assert.deepEqual(await page.evaluate(() => window.quitExportReplies), [{ requestId: 'web-quit', error: null }])
+    assert.equal(await page.evaluate(() => window.lastStopCalled), undefined)
+  } finally { await page.close() }
+})
+
+test('Batch model choices expose capture capabilities and can save unconfigured Azure MAI for local recording', async () => {
+  const manifest = 'D:/recordings/latest/recording.json'
+  const page = await openApp({ configState: { exists: false, path: 'test-config', config: null }, transcription: { mode: 'batch' }, stopRecordingPath: manifest,
+    inputs: [{ id: 'batch-mic', name: 'Batch mic', isDefault: false }], outputs: [{ id: 'batch-speaker', name: 'Batch speaker', isDefault: false }] })
+  try {
+    assert.equal(await page.getByRole('dialog', { name: 'Settings' }).count(), 0)
+    await page.getByRole('button', { name: 'Start recording', exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Open settings dialog' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Settings' })
+    const model = dialog.getByLabel('Transcription model')
+    for (const choice of ['standard-batch', 'windows-sapi-batch', 'windows-ai-speech-batch', 'mai-transcribe-2-streaming-batch']) {
+      await model.selectOption(choice)
+      assert.ok(await dialog.getByLabel('Start recording automatically').isEnabled(), choice)
+      assert.ok(await dialog.getByLabel('Stop recording automatically').isEnabled(), choice)
+      assert.ok(await dialog.getByLabel('Enable interim results').isDisabled(), choice)
+      assert.ok(await dialog.getByLabel('Audio stream mode').isDisabled(), choice)
+      assert.equal(await dialog.getByLabel('Endpoint', { exact: true }).isEnabled(), !choice.startsWith('windows-'))
+      assert.equal(await dialog.getByLabel('Speaker recognition', { exact: true }).isEnabled(), !choice.startsWith('windows-'))
+    }
+    await dialog.getByLabel('Endpoint', { exact: true }).fill('https://speech-example.cognitiveservices.azure.com')
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    assert.deepEqual(await page.evaluate(() => window.lastSavedSettings.transcription), { mode: 'batch', mic: true, speaker: true, audioMode: 'dual-mono' })
+    assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), {
+      model: 'mai-transcribe-2-streaming', endpoint: 'https://speech-example.cognitiveservices.azure.com', region: '', speechKey: '', interimResults: true
+    })
+    await page.getByLabel('Microphone', { exact: true }).selectOption('batch-mic')
+    await page.getByLabel('Speaker Loopback', { exact: true }).selectOption('batch-speaker')
+    assert.ok(await page.getByLabel('Record microphone', { exact: true }).isChecked())
+    assert.ok(await page.getByLabel('Record speaker loopback', { exact: true }).isChecked())
+    await page.getByRole('button', { name: 'Start recording', exact: true }).click()
+    const stop = page.getByRole('button', { name: 'Stop recording', exact: true })
+    await stop.waitFor()
+    assert.equal(await page.getByRole('button', { name: 'Pause', exact: true }).count(), 0)
+    assert.equal(await page.getByRole('region', { name: 'Batch transcription' }).count(), 0)
+    assert.deepEqual(await page.evaluate(() => [window.lastStartProvider, window.lastStartMode, window.lastSavedSettings.devices]), [
+      'azure', 'batch', { micId: 'batch-mic', speakerLoopbackId: 'batch-speaker' }
+    ])
+    await stop.click()
+    await page.getByText(`Selected audio: ${manifest}`, { exact: true }).waitFor()
+    assert.equal(await page.evaluate(() => window.batchCalls), undefined)
+    await page.getByRole('button', { name: 'Transcribe', exact: true }).click()
+    await page.getByRole('alert').getByText(/Configure the Azure endpoint, region and speech key/).waitFor()
+    assert.equal(await page.evaluate(() => window.batchCalls), undefined)
+  } finally { await page.close() }
+})
+
+const batchFinal = { id: 'batch-test', sessionId: 'batch-session', source: 'mic', speaker: '', timestampIso: '2026-11-26T11:11:00Z', text: 'Batch final text', state: 'final' }
+
+test('Batch WAV import requires explicit Azure upload consent and uses existing Markdown export', async () => {
+  const wav = 'D:/audio/interview.wav'
+  const model = 'mai-transcribe-2-streaming'
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: { ...validConfig, model } },
+    transcription: { mode: 'batch' }, batchPickerResult: wav, batchResult: [batchFinal, { ...batchFinal, id: 'partial', text: 'Do not show', state: 'interim' }] })
+  try {
+    const pick = page.getByRole('button', { name: 'Import WAV or choose recording', exact: true })
+    const transcribe = page.getByRole('button', { name: 'Transcribe', exact: true })
+    await pick.waitFor()
+    assert.equal(await transcribe.isDisabled(), true)
+    await pick.click()
+    const selected = page.getByText(`Selected audio: ${wav}`, { exact: true })
+    await selected.waitFor()
+    assert.equal(await page.evaluate(() => window.batchCalls), undefined)
+    await page.evaluate(() => { window.batchPickerResult = null })
+    await pick.click()
+    assert.equal(await selected.isVisible(), true)
+    page.once('dialog', prompt => {
+      assert.match(prompt.message(), /Send the selected audio to Azure/)
+      assert.ok(prompt.message().includes(wav))
+      return prompt.dismiss()
+    })
+    await transcribe.click()
+    assert.equal(await page.evaluate(() => window.batchCalls), undefined)
+    page.once('dialog', prompt => prompt.accept())
+    await transcribe.click()
+    await page.getByText('Batch final text', { exact: true }).waitFor()
+    await page.getByText('Transcript saved: D:/Notes/transcript-2026-11-11-22-05-00.md', { exact: true }).waitFor()
+    assert.deepEqual(await page.evaluate(() => window.batchCalls), [{ path: wav, provider: 'azure', model }])
+    assert.match(await page.evaluate(() => window.lastSavedMarkdown), /Mic: Batch final text/)
+    assert.equal(await page.getByText('Do not show', { exact: true }).count(), 0)
+    await page.getByRole('button', { name: 'Copy transcript' }).click()
+    assert.equal(await page.evaluate(() => window.lastCopiedSegments[0].text), batchFinal.text)
+    await page.evaluate(() => { window.batchError = 'Speech resource denied the request' })
+    page.once('dialog', prompt => prompt.accept())
+    await transcribe.click()
+    await page.getByRole('alert').getByText('Speech resource denied the request', { exact: true }).waitFor()
+    assert.equal(await selected.isVisible(), true)
+    assert.equal(await page.getByText('Batch final text', { exact: true }).isVisible(), true)
+    assert.equal(await page.evaluate(() => window.transcriptWrites), 1)
+  } finally { await page.close() }
+})
+
+test('Batch automatic capture status exposes the manifest without invoking or exporting until native transcription', async () => {
+  const manifest = 'D:/recordings/auto/recording.json'
+  const page = await openApp({ configState: { exists: false, path: 'test-config', config: null },
+    transcription: { provider: 'windows-ai-speech', mode: 'batch' }, transcript: { markdownExport: { enabled: false } }, batchResult: [batchFinal] })
+  try {
+    await page.getByRole('button', { name: 'Start recording', exact: true }).waitFor()
+    await page.evaluate(() => {
+      window.emitMeetingDetected({ processName: 'teams', processId: 1, signal: 'mic' })
+      window.emitStatus({ running: true, startedAt: new Date().toISOString() })
+    })
+    await page.getByRole('button', { name: 'Stop recording', exact: true }).waitFor()
+    await page.getByText('Meeting detected (teams). Local recording starts automatically.', { exact: true }).waitFor()
+    await page.evaluate(recordingPath => window.emitStatus({ running: false, recordingPath }), manifest)
+    await page.getByText(`Selected audio: ${manifest}`, { exact: true }).waitFor()
+    assert.equal(await page.evaluate(() => window.lastStartCalled ?? window.batchCalls ?? window.transcriptWrites), undefined)
+    await page.getByRole('button', { name: 'Transcribe', exact: true }).click()
+    await page.getByText('Batch final text', { exact: true }).waitFor()
+    assert.deepEqual(await page.evaluate(() => window.batchCalls), [{ path: manifest, provider: 'windows-ai-speech', model: undefined }])
+    assert.equal(await page.evaluate(() => window.transcriptWrites), undefined)
+    await reopenSettings(page)
+    const dialog = page.getByRole('dialog', { name: 'Settings' })
+    await dialog.getByLabel('Transcription model').selectOption('web-speech')
+    assert.ok(await dialog.getByLabel('Start transcription automatically').isDisabled())
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    assert.equal(await page.evaluate(() => window.lastSavedSettings.transcription.mode), undefined)
+    assert.equal(await page.getByRole('region', { name: 'Batch transcription' }).count(), 0)
+  } finally { await page.close() }
+})
+
 test('MAI selection tests the unsaved draft and preserves Standard controls when switching back', async () => {
   const model = 'mai-transcribe-2-streaming'
   const page = await openApp({
@@ -1101,17 +1335,79 @@ test('stereo hypotheses survive channel metadata changes without duplicating or 
   } finally { await page.close() }
 })
 
+test('only adjacent finals with an identified speaker from the same source and session merge', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.waitForFunction(() => typeof window.emitSegment === 'function')
+    await page.evaluate(() => {
+      const base = { sessionId: 'meeting', source: 'mic', speaker: 'Guest-1', speakerIdentified: true,
+        state: 'final', timestampIso: new Date().toISOString() }
+      const events = [
+        { text: 'First.' },
+        { text: 'Other source in progress.', source: 'speaker', state: 'interim' },
+        { text: 'Continued.' },
+        { text: 'Unknown one.', speaker: 'Unknown', speakerIdentified: false },
+        { text: 'Unknown two.', speaker: 'unknown', speakerIdentified: false },
+        { text: 'Same ID after unknown.' },
+        { text: 'Same ID different source.', source: 'speaker' },
+        { text: 'Same ID different session.', source: 'speaker', sessionId: 'next-sdk-session' }
+      ]
+      events.forEach((event, index) => window.emitSegment({ ...base, ...event, id: `group-${index}` }))
+    })
+    await page.getByText('Same ID different session.', { exact: true }).waitFor()
+    assert.deepEqual(await page.locator('.segment.final .segment-text').allTextContents(), [
+      'First. Continued.', 'Unknown one.', 'Unknown two.', 'Same ID after unknown.',
+      'Same ID different source.', 'Same ID different session.'
+    ])
+    assert.equal(await page.locator('.segment.final').nth(1).locator('.speaker-badge').innerText(), 'Mic')
+  } finally { await page.close() }
+})
+
+test('more than 500 unattributed finals stay distinct in the UI, clipboard and Markdown', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
+  try {
+    await page.waitForFunction(() => typeof window.emitSegment === 'function')
+    await page.evaluate(() => {
+      for (let index = 0; index < 525; index++) {
+        const mic = index === 0
+        window.emitSegment({ id: `long-${index}`, sessionId: 'long-meeting', source: mic ? 'mic' : 'speaker',
+          speaker: mic ? 'self' : 'guest', speakerIdentified: mic ? undefined : false, state: 'final',
+          text: `Long meeting row ${index}.`, timestampIso: new Date(1795000000000 + index * 1000).toISOString() })
+      }
+    })
+    const rows = page.locator('.segment.final')
+    await page.getByText('Long meeting row 524.', { exact: true }).waitFor()
+    assert.equal(await rows.count(), 525)
+    assert.equal(await rows.first().locator('.speaker-badge').innerText(), 'Mic')
+    assert.equal(await rows.last().locator('.speaker-badge').innerText(), 'Speaker Loopback')
+    assert.equal(await rows.locator('.speaker-editor button').count(), 0)
+    await page.getByRole('button', { name: 'Copy transcript', exact: true }).click()
+    await page.waitForFunction(() => !!window.lastCopiedSegments)
+    assert.deepEqual(await page.evaluate(() => window.lastCopiedSegments.map(({ id }) => id)),
+      Array.from({ length: 525 }, (_, index) => `long-${index}`))
+    await page.locator('.overflow-menu > summary').click()
+    await page.getByRole('button', { name: 'Export Markdown', exact: true }).click()
+    await page.waitForFunction(() => !!window.lastSavedMarkdown)
+    const markdown = await page.evaluate(() => window.lastSavedMarkdown)
+    assert.match(markdown, /segments: 525\nspeakers:\n  \[\]/)
+    const lines = markdown.split('\n').filter((line) => line.startsWith('- ['))
+    assert.equal(lines.length, 525)
+    assert.match(lines[0], /Mic: Long meeting row 0\.$/)
+    assert.match(lines.at(-1), /Speaker Loopback: Long meeting row 524\.$/)
+  } finally { await page.close() }
+})
+
 test('Mic speakers get independent badges, aliases, interim handling and export labels', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig } })
   try {
     await page.waitForFunction(() => typeof window.emitSegment === 'function')
     const events = [
-      { source: 'mic', speaker: 'Guest-1', text: 'Mic first voice.', state: 'final' },
-      { source: 'mic', speaker: 'Guest-2', text: 'Mic second voice.', state: 'final' },
-      { source: 'speaker', speaker: 'Guest-1', text: 'Speaker first voice.', state: 'final' },
+      { source: 'mic', speaker: 'Guest-1', speakerIdentified: true, text: 'Mic first voice.', state: 'final' },
+      { source: 'mic', speaker: 'Guest-2', speakerIdentified: true, text: 'Mic second voice.', state: 'final' },
+      { source: 'speaker', speaker: 'Guest-1', speakerIdentified: true, text: 'Speaker first voice.', state: 'final' },
       { source: 'mic', speaker: 'unknown', text: 'Provisionally unknown.', state: 'interim' },
-      { source: 'mic', speaker: 'Guest-1', text: 'Provisionally the first voice.', state: 'interim' },
-      { source: 'mic', speaker: 'Guest-2', text: 'Mic corrected second voice.', state: 'final' }
+      { source: 'mic', speaker: 'Guest-1', speakerIdentified: true, text: 'Provisionally the first voice.', state: 'interim' },
+      { source: 'mic', speaker: 'Guest-2', speakerIdentified: true, text: 'Mic corrected second voice.', state: 'final' }
     ]
     for (const [index, event] of events.entries()) {
       await page.evaluate((segment) => window.emitSegment(segment), { ...event, id: `segment-${index}`, language: 'de-DE', timestampIso: new Date(2026, 10, 9, 13, 0, index).toISOString() })
@@ -1171,8 +1467,8 @@ test('the same SDK id in two sessions stays two separate speakers with separate 
   try {
     await page.waitForFunction(() => typeof window.emitSegment === 'function')
     const events = [
-      { source: 'mic', speaker: 'Guest-1', sessionId: 's1', text: 'First session.', state: 'final' },
-      { source: 'mic', speaker: 'Guest-1', sessionId: 's2', text: 'Second session.', state: 'final' }
+      { source: 'mic', speaker: 'Guest-1', speakerIdentified: true, sessionId: 's1', text: 'First session.', state: 'final' },
+      { source: 'mic', speaker: 'Guest-1', speakerIdentified: true, sessionId: 's2', text: 'Second session.', state: 'final' }
     ]
     for (const [index, event] of events.entries()) {
       await page.evaluate((segment) => window.emitSegment(segment), { ...event, id: `segment-${index}`, language: 'de-DE', timestampIso: new Date(2026, 10, 13, 10, 0, index).toISOString() })
@@ -1320,7 +1616,7 @@ async function emitSegments(page, count = 2) {
   await page.evaluate((length) => {
     for (let index = 0; index < length; index++) {
       window.emitSegment({ id: `console-${index}`, sessionId: 'console-session', source: index % 2 ? 'speaker' : 'mic',
-        speaker: 'Guest-1', language: 'de-DE', timestampIso: new Date(2026, 10, 16, 14, 34, 42).toISOString(),
+        speaker: 'Guest-1', speakerIdentified: true, language: 'de-DE', timestampIso: new Date(2026, 10, 16, 14, 34, 42).toISOString(),
         text: `Transcript ${index}: discussion and next steps.`, state: 'final' })
     }
   }, count)
@@ -1342,7 +1638,7 @@ test('Quit export includes late finals and aliases and reports write failure bef
     await input.fill('Anita')
     await input.press('Enter')
     await page.evaluate(() => {
-      window.emitSegment({ id: 'shutdown-final', sessionId: 'console-session', source: 'mic', speaker: 'Guest-1',
+      window.emitSegment({ id: 'shutdown-final', sessionId: 'console-session', source: 'mic', speaker: 'Guest-1', speakerIdentified: true,
         timestampIso: '2026-11-16T14:34:45Z', text: 'Final words during shutdown.', state: 'final' })
       window.emitStatus({ running: false, paused: false })
       window.emitQuitExport('first')
@@ -1390,7 +1686,7 @@ test('Quit export does not write a file for an interim-only session', async () =
   try {
     await page.waitForFunction(() => typeof window.emitQuitExport === 'function')
     await page.evaluate(() => {
-      window.emitSegment({ id: 'interim', sessionId: 'console-session', source: 'mic', speaker: 'Guest-1',
+      window.emitSegment({ id: 'interim', sessionId: 'console-session', source: 'mic', speaker: 'Guest-1', speakerIdentified: true,
         timestampIso: '2026-11-16T14:34:45Z', text: 'Unconfirmed words.', state: 'interim' })
       window.emitStatus({ running: false, paused: false })
       window.emitQuitExport('empty')
@@ -1583,7 +1879,7 @@ test('a delayed Clear response cannot erase a newer session even after it stops'
     await start.click()
     const text = 'Final segment of the newer session.'
     await page.evaluate(value => window.emitSegment({ id: 'new-final', sessionId: 'new-session', source: 'mic',
-      speaker: 'Guest-1', language: 'de-DE', timestampIso: new Date().toISOString(), text: value, state: 'final' }), text)
+      speaker: 'Guest-1', speakerIdentified: true, language: 'de-DE', timestampIso: new Date().toISOString(), text: value, state: 'final' }), text)
     await page.getByText(text, { exact: true }).waitFor()
     assert.deepEqual(await page.locator('.segment-text').allTextContents(), [text])
     await page.getByRole('button', { name: 'Speaker mapping show', exact: true }).click()
@@ -1667,7 +1963,7 @@ test('Follow appears only after manual scrolling and resumes automatic following
     await list.evaluate((element) => { element.scrollTop = 100 })
     await page.getByRole('button', { name: 'Follow', exact: true }).waitFor()
     const scrollTop = await list.evaluate((element) => element.scrollTop)
-    await page.evaluate(() => window.emitSegment({ id: 'after-scroll', sessionId: 'console-session', source: 'mic', speaker: 'Guest-2', text: 'New entry', state: 'final', timestampIso: new Date().toISOString() }))
+    await page.evaluate(() => window.emitSegment({ id: 'after-scroll', sessionId: 'console-session', source: 'mic', speaker: 'Guest-2', speakerIdentified: true, text: 'New entry', state: 'final', timestampIso: new Date().toISOString() }))
     await page.locator('.segment').nth(80).waitFor()
     assert.equal(await list.evaluate((element) => element.scrollTop), scrollTop)
     await page.getByRole('button', { name: 'Follow', exact: true }).click()

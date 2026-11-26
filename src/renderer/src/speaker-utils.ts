@@ -1,5 +1,14 @@
 import type { TranscriptSegment } from '@shared/transcript-contract'
 
+export function hasIdentifiedSpeaker(segment: TranscriptSegment): boolean {
+  const speaker = segment.speaker.trim().toLowerCase()
+  return segment.speakerIdentified === true && speaker !== '' && speaker !== 'unknown'
+}
+
+export function formatTranscriptSource(source: TranscriptSegment['source']): string {
+  return source === 'mic' ? 'Mic' : source === 'speaker' ? 'Speaker Loopback' : ''
+}
+
 export function getSpeakerKey(segment: Pick<TranscriptSegment, 'source' | 'speaker'>): string {
   return `${segment.source}:${segment.speaker.trim() || 'unknown'}`
 }

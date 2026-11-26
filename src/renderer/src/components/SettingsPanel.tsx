@@ -1,4 +1,5 @@
 import { isAzureSpeechModel, type UserSettings } from '@shared/config-contract'
+import { selectedSpeechChoice, SPEECH_MODELS, speechFeatures, type SpeechChoice } from '@shared/speech-models'
 import type { ConfigDraft } from '../config-utils'
 import { Icon } from './Icon'
 
@@ -37,8 +38,12 @@ export function SettingsPanel(props: SettingsPanelProps) {
   } = props
   const hasBothSources = settings.transcription.mic && settings.transcription.speaker
 
-  const useMaiModel = configDraft.model === 'mai-transcribe-2-streaming'
-  const stereo = !useMaiModel && hasBothSources && settings.transcription.audioMode === 'stereo'
+  const choice = selectedSpeechChoice(settings.transcription, configDraft.model)
+  const features = speechFeatures(choice)
+  const { model, mode } = features
+  const batch = mode === 'batch'
+  const stereo = features.stereo && hasBothSources && settings.transcription.audioMode === 'stereo'
+  const optionalLid = features.optionalLanguageDetection && !stereo
 
   return (
     <>
@@ -83,29 +88,29 @@ export function SettingsPanel(props: SettingsPanelProps) {
     <section className="panel settings">
       <div className="panel-header"><h2>Transcription</h2></div>
       <div className="settings-block">
-          <label className="checkbox-field" title="Start transcription automatically when a meeting is detected">
+          <label className="checkbox-field" title={batch ? 'Start local recording automatically when a meeting is detected' : 'Start transcription automatically when a meeting is detected'}>
             <input
               type="checkbox"
-              checked={settings.autoStart.enabled}
+              checked={features.autoStart && settings.autoStart.enabled}
               onChange={(event) => {
                 const enabled = event.currentTarget.checked
                 setSettings((prev) => ({ ...prev, autoStart: { ...prev.autoStart, enabled } }))
               }}
-              disabled={statusRunning}
+              disabled={statusRunning || !features.autoStart}
             />
-            <span>Start transcription automatically</span>
+            <span>{batch ? 'Start recording automatically' : 'Start transcription automatically'}</span>
           </label>
-          <label className="checkbox-field" title="Stop an automatically started transcription when its meeting ends">
+          <label className="checkbox-field" title={batch ? 'Stop an automatically started recording when its meeting ends' : 'Stop an automatically started transcription when its meeting ends'}>
             <input
               type="checkbox"
-              checked={settings.autoStart.autoStop}
+              checked={features.autoStart && settings.autoStart.autoStop}
               onChange={(event) => {
                 const autoStop = event.currentTarget.checked
                 setSettings((prev) => ({ ...prev, autoStart: { ...prev.autoStart, autoStop } }))
               }}
-              disabled={statusRunning || !settings.autoStart.enabled}
+              disabled={statusRunning || !features.autoStart || !settings.autoStart.enabled}
             />
-            <span>Stop transcription automatically</span>
+            <span>{batch ? 'Stop recording automatically' : 'Stop transcription automatically'}</span>
           </label>
           <label className="checkbox-field" title="Save the transcript automatically as Markdown">
             <input
@@ -154,61 +159,72 @@ export function SettingsPanel(props: SettingsPanelProps) {
     <section className="panel settings">
       <div className="panel-header"><h2>Speech recognition</h2></div>
       <div className="settings-block">
-          <label className="speech-model-field" title="Choose the Azure Speech model for the next transcription">
+          <label className="speech-model-field" title="Choose the speech recognition model for the next transcription">
             <span className="field-caption">Transcription model</span>
             <select
-              value={configDraft.model}
+              value={choice}
               onChange={(event) => {
-                const model = event.currentTarget.value
-                if (isAzureSpeechModel(model)) setConfigDraft((prev) => ({ ...prev, model }))
+                const { model: next, mode: nextMode } = SPEECH_MODELS[event.currentTarget.value as SpeechChoice]
+                if (isAzureSpeechModel(next)) setConfigDraft((prev) => ({ ...prev, model: next }))
+                setSettings((prev) => {
+                  const { provider: _provider, mode: _mode, ...sources } = prev.transcription
+                  return { ...prev, transcription: {
+                    ...sources,
+                    ...(isAzureSpeechModel(next) ? {} : { provider: next }),
+                    ...(nextMode === 'batch' ? { mode: 'batch' } : {})
+                  } }
+                })
               }}
               disabled={statusRunning}
             >
-              <option value="standard">Azure Speech (standard)</option>
-              <option value="mai-transcribe-2-streaming">MAI Transcribe (Preview)</option>
+              {model === 'unsupported' && <option value="unsupported" disabled>Unsupported model</option>}
+              {Object.entries(SPEECH_MODELS).map(([id, choice]) => <option key={id} value={id}>{choice.label}</option>)}
             </select>
           </label>
           <label className="audio-mode-field" title="Choose one stereo session or separate mono sessions for the next transcription.">
             <span className="field-caption">Audio stream mode</span>
-            <select value={useMaiModel ? 'dual-mono' : settings.transcription.audioMode} disabled={statusRunning || useMaiModel}
+            <select value={features.stereo ? settings.transcription.audioMode : 'dual-mono'} disabled={statusRunning || !features.stereo}
               aria-describedby="audio-stream-mode-hint"
               onChange={(event) => {
                 const audioMode = event.currentTarget.value === 'stereo' ? 'stereo' : 'dual-mono'
                 setSettings((prev) => ({ ...prev, transcription: { ...prev.transcription, audioMode } }))
               }}>
-              <option value="dual-mono">Mono (separate sessions per audio device)</option>
-              <option value="stereo" disabled={useMaiModel}>Stereo (one session)</option>
+              <option value="dual-mono">{batch ? 'Mono (one file per audio device)' : features.speakerLoopback ? 'Mono (separate sessions per audio device)' : 'Mono (default microphone)'}</option>
+              <option value="stereo" disabled={!features.stereo}>Stereo (one session)</option>
             </select>
           </label>
-          <label className="language-field" title={useMaiModel ? 'MAI Transcribe detects the language automatically' : 'Choose the fixed language, or a candidate for automatic language detection'}>
+          <label className="language-field" title={features.language === 'managed' ? 'The Windows model controls recognition language' : features.language === 'automatic' ? 'This model detects the language automatically' : 'Choose the primary recognition language'}>
             <span className="field-caption"><Icon name="flag" />Primary language</span>
-            <select value={settings.language} disabled={statusRunning || useMaiModel}
+            <select value={features.language === 'managed' ? '' : settings.language} disabled={statusRunning || features.language !== 'selectable'}
               onChange={(event) => {
                 const language = event.currentTarget.value
                 setSettings((prev) => ({ ...prev, language }))
               }}>
-              {!languageOptions.some((option) => option.value === settings.language) && (
+              {features.language === 'managed' && <option value="">Managed by Windows</option>}
+              {!(model === 'windows-sapi' && settings.language === 'en-GB') && !languageOptions.some((option) => option.value === settings.language) && (
                 <option value={settings.language}>{settings.language}</option>
               )}
               {languageOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
+                <option key={option.value} value={option.value}>{option.value === 'en-US' && model === 'windows-sapi' ? 'English (United States)' : option.label}</option>
               ))}
+              {model === 'windows-sapi' && <option value="en-GB">English (United Kingdom)</option>}
             </select>
           </label>
-          <label className="checkbox-field" title={useMaiModel
-            ? 'MAI Transcribe always detects the language automatically'
-            : stereo ? 'Stereo uses the primary language' : 'Detect language changes between utterances'}>
-            <input type="checkbox" checked={useMaiModel || (!stereo && settings.autoLanguageDetection)}
-              disabled={statusRunning || useMaiModel || stereo}
+          <label className="checkbox-field" title={features.language === 'automatic'
+            ? 'This model always detects the language automatically'
+            : features.language === 'managed' ? 'Not configurable for this model'
+              : optionalLid ? 'Detect language changes between utterances' : 'This mode uses the primary language'}>
+            <input type="checkbox" checked={features.language === 'automatic' || (optionalLid && settings.autoLanguageDetection)}
+              disabled={statusRunning || !optionalLid}
               onChange={(event) => {
                 const autoLanguageDetection = event.currentTarget.checked
                 setSettings((prev) => ({ ...prev, autoLanguageDetection }))
               }} />
             <span>Automatic language detection</span>
           </label>
-          <label className="checkbox-field" title={useMaiModel ? 'Speaker recognition is unavailable with MAI Transcribe' : 'Distinguish speakers on both enabled audio sources'}>
-            <input type="checkbox" checked={!useMaiModel && settings.diarization}
-              disabled={statusRunning || useMaiModel}
+          <label className="checkbox-field" title={features.diarization ? 'Distinguish speakers on active audio sources' : 'Speaker recognition is unavailable with this model'}>
+            <input type="checkbox" checked={features.diarization && settings.diarization}
+              disabled={statusRunning || !features.diarization}
               onChange={(event) => {
                 const diarization = event.currentTarget.checked
                 setSettings((prev) => ({ ...prev, diarization }))
@@ -218,20 +234,27 @@ export function SettingsPanel(props: SettingsPanelProps) {
           <label className="checkbox-field" title={stereo ? 'Provisional stereo text may appear without a source label' : 'Show provisional text while speech is being recognized'}>
             <input
               type="checkbox"
-              checked={configDraft.interimResults}
+              checked={features.interim && (features.azure ? configDraft.interimResults : settings.transcription.webInterimResults === true)}
               onChange={(event) => {
                 const interimResults = event.currentTarget.checked
-                setConfigDraft((prev) => ({ ...prev, interimResults }))
+                if (features.azure) setConfigDraft((prev) => ({ ...prev, interimResults }))
+                else setSettings((prev) => ({ ...prev, transcription: { ...prev.transcription, webInterimResults: interimResults || undefined } }))
               }}
-              disabled={statusRunning}
+              disabled={statusRunning || !features.interim}
             />
             <span>Enable interim results</span>
           </label>
           <p className="meta full-field" id="audio-stream-mode-hint">
-            Mono uses one Azure session per enabled source. Stereo uses one session for both sources and
-            keeps them on separate channels. Interim results may appear without a source label.
-            With one source enabled, audio stays mono.
-            {useMaiModel && ' MAI uses mono only and does not support speaker recognition in Meeting Notes.'}
+            {batch && 'Batch records each enabled audio source locally. After stopping, select a recording or WAV and transcribe it explicitly. '}
+            {batch && features.azure && 'Azure credentials are only required for transcription, which sends the selected audio to Azure. '}
+            {!batch && features.azure && 'Mono uses one Azure session per enabled source. Stereo uses one session for both sources and keeps them on separate channels. Interim results may appear without a source label. With one source enabled, audio stays mono.'}
+            {!batch && model === 'mai-transcribe-2-streaming' && ' Live MAI uses mono only and does not support speaker recognition in Meeting Notes.'}
+            {model === 'windows-sapi' && 'Uses an installed Windows desktop dictation engine for the selected language. No Azure credentials are used.'}
+            {model === 'windows-ai-speech' && (batch
+              ? 'Local recording works without the Windows model. On-device transcription requires MSIX package identity and a ready Windows model; it is unavailable in the standard portable build.'
+              : 'On-device recognition from the default microphone. Not available in the standard portable build. Requires MSIX package identity and a ready Windows model. No Azure credentials or automatic downloads.')}
+            {model === 'web-speech' && 'Manual start uses the default microphone. WebView2 may send microphone audio to its online speech service. Availability depends on WebView2, permissions and policy. No Azure credentials are used.'}
+            {model === 'unsupported' && 'Select a supported model before starting transcription.'}
           </p>
       </div>
     </section>

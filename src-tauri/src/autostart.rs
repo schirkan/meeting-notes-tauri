@@ -57,6 +57,10 @@ pub enum DetectionEvent {
 #[derive(Default)]
 pub struct RecordingLifecycle {
     pub auto_origin: Option<MeetingDetectedPayload>,
+    pub web_speech: bool,
+    pub sapi: bool,
+    pub windows_ai_speech: bool,
+    pub batch_manifest: Option<std::path::PathBuf>,
 }
 
 impl RecordingLifecycle {

@@ -12,19 +12,19 @@ Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1
 
 ---
 
-## Stand der Specs (Abgleich 25.11.2026)
+## Stand der Specs (Abgleich 26.11.2026)
 
 Die Checkboxen wurden gegen den **Code** geprueft, nicht gegen den Spec-Status:
 jeder abgehakte Punkt traegt den Beleg im Klartext (`Beleg: …`), jeder offene
-Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **43 Specs** als
-`umgesetzt` bzw. `teils umgesetzt` markiert, **33 offene Punkte in 21 Specs**.
+Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **46 Specs** als
+`umgesetzt` bzw. `teils umgesetzt` markiert, **39 offene Punkte in 24 Specs**.
 Vorher waren ueber 70 Checkboxen offen, obwohl die Funktion ueberwiegend fertig
 und verifiziert war - die Specs sind jetzt mit dem Stand der Implementierung
 deckungsgleich.
 
 _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 
-### Offen und braucht deinen Rechner (18 Punkte)
+### Offen und braucht deinen Rechner (23 Punkte)
 
 | Spec | Punkt |
 |---|---|
@@ -46,8 +46,13 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-522 | Spike belegt MAI-Mono-Modell, Standard-Stereo-Kanalresultate und Ziel-Proxy. |
 | T-522 | Meter und Kostenvorteil ausserhalb der Promo sind fuer die Zielnutzung belegt. |
 | T-522 | Live-Qualitaet, Lifecycle und Portable-Abnahme sind dokumentiert. |
+| T-524 | 64-Bit-Engine fuer Deutsch und Englisch, Mic und Loopback einzeln sowie getrennt bei gleichzei… |
+| T-524 | Mindestens 30 Minuten Referenzgespraech inkl. Ueberlappung und Pause/Resume/Stop/Quit messen;… |
+| T-524 | Clean-Machine-Nachweis am getrimmten Portable-ZIP: kein Azure-Konto oder Key, dokumentierte Wi… |
+| T-525 | Reales Mikrofon und Loopback zusammen aufnehmen; Synchronitaet und automatisches Stoppen am Me… |
+| T-525 | Expliziten Upload mit Azure Standard und MAI und Dateierkennung mit Windows AI Speech pruefen. |
 
-### Offen als bewusste Entscheidung (15 Punkte)
+### Offen als bewusste Entscheidung (16 Punkte)
 
 | Spec | Punkt | Warum offen |
 |---|---|---|
@@ -66,6 +71,7 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-513 | Der Fenster-/Applikations-Fallback (Stufe 2) ist gebaut, falls Stufe… | laut Entscheidung vom 2026-11-18 erst umsetzen, **wenn** die Session-Erkennung in der Praxis nicht trägt. |
 | T-520 | UI, IPC und Export bewahren getrennte Quellen; Sprachgrenzen sind sic… | Sprache und Quellenlabels bei einer Live-Aufnahme mit MAI-Mono muessen noch abgenommen werden. |
 | T-520 | Preview ist nur nach Kosten-, Qualitaets-, Proxy- und Portable-Freiga… | Freigabekriterien und Messung siehe T-522. |
+| T-523 | Laufzeitnachweis fuer die experimentellen Modelle auf Windows x64. | SAPI-Engines, Quellenisolation und Dauerlauf, echtes WebView2-Mikrofon/Netz und paketierter Windows-AI-Speech-Lauf auf einem Syst… |
 
 ### Nächste Schritte auf deinem Rechner (die 11 offenen Punkte)
 
@@ -339,6 +345,8 @@ generierte Uebersicht im Abschnitt **Stand der Specs** fasst offene Punkte zusam
 - [T-520: MAI-Transcribe-2-Streaming – optionales Feature](./specs/T-520-mai-transcribe-streaming-feature.md)
 - [T-521: MAI-Transcribe-2-Streaming – Mehrkanal im Sidecar](./specs/T-521-mai-transcribe-mehrkanal-sidecar.md)
 - [T-522: MAI-Transcribe-2-Streaming – Machbarkeit, Kosten und Abnahme](./specs/T-522-mai-transcribe-machbarkeit-kosten-abnahme.md)
+- [T-523: Windows SAPI und Web Speech API als STT-Modelle](./specs/T-523-native-windows-stt-provider.md)
+- [T-524: Windows-Spracherkennung ohne Azure-Zugangsdaten - API-Auswahl und Abnahme](./specs/T-524-native-windows-stt-machbarkeit.md)
 
 ### Orchestrierung und Persistenz
 - [T-300: Tauri-Main](./specs/T-300-tauri-main-als-orchestrator.md)

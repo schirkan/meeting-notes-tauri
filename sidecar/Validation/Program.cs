@@ -32,6 +32,29 @@ void Check(bool condition, string description)
     assertions++;
 }
 Dictionary<string, string?> Parse(params string[] args) => ArgsParser.Parse(args);
+if (args.Contains("--batch-only"))
+{
+    await BatchAudioValidation.RunAsync(Check);
+    await BatchProviderValidation.RunAsync(sidecar, start =>
+    {
+        ProbeSelfContained(start);
+        foreach (var variable in variables) start.Environment.Remove(variable);
+    }, Check, args.Contains("--batch-synthetic"));
+    Console.WriteLine($"PASS: {assertions} batch assertions (synthetic WAV and no Azure requests or audio devices).");
+    return;
+}
+if (args.Contains("--sapi-only"))
+{
+    SapiValidation.Run(Check);
+    await SapiValidation.RunBinaryAsync(sidecar, start =>
+    {
+        ProbeSelfContained(start);
+        foreach (var variable in variables) start.Environment.Remove(variable);
+    }, Check);
+    if (args.Contains("--sapi-synthetic")) await SapiValidation.RunSyntheticAsync(Check);
+    Console.WriteLine($"PASS: {assertions} Windows SAPI assertions (no audio devices or online calls).");
+    return;
+}
 if (args.Contains("--loopback-hardware"))
 {
     var start = new ProcessStartInfo(sidecar) { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
@@ -79,6 +102,7 @@ MeetingDetectionValidation.Run(Check);
 DiarizationValidation.Run(Check);
 TranscriptionValidation.Run(Check);
 ResamplingValidation.Run(Check);
+SapiValidation.Run(Check);
 await ShutdownValidation.RunAsync(Check);
 await StereoValidation.RunAsync(Check);
 if (args.Contains("--diarization-only"))
@@ -89,6 +113,8 @@ if (args.Contains("--diarization-only"))
 try
 {
     foreach (var variable in variables) Environment.SetEnvironmentVariable(variable, null);
+    await BatchAudioValidation.RunAsync(Check);
+    await BatchProviderValidation.RunAsync(sidecar, ProbeSelfContained, Check, synthetic: false);
     if (sidecarArg >= 0)
     {
         File.WriteAllText(probeDeps, "{");

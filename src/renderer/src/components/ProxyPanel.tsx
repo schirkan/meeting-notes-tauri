@@ -2,10 +2,11 @@ import type { ConfigDraft } from '../config-utils'
 
 type ProxyPanelProps = {
   configDraft: ConfigDraft
+  disabled: boolean
   setConfigDraft: React.Dispatch<React.SetStateAction<ConfigDraft>>
 }
 
-export function ProxyPanel({ configDraft, setConfigDraft }: ProxyPanelProps) {
+export function ProxyPanel({ configDraft, setConfigDraft, disabled }: ProxyPanelProps) {
 
   return (
     <section className="panel settings">
@@ -13,12 +14,13 @@ export function ProxyPanel({ configDraft, setConfigDraft }: ProxyPanelProps) {
         <h2>Proxy</h2>
       </div>
 
-      <div className="settings-block proxy-settings-grid">
+      <div className="settings-block proxy-settings-grid" aria-disabled={disabled}>
         <label title="Enter the proxy server hostname or IP address. Leave blank for a direct connection.">
           Host
           <input
             type="text"
             value={configDraft.proxyHost}
+            disabled={disabled}
             onChange={(event) => setConfigDraft((prev) => ({ ...prev, proxyHost: event.target.value }))}
           />
         </label>
@@ -30,6 +32,7 @@ export function ProxyPanel({ configDraft, setConfigDraft }: ProxyPanelProps) {
             min={1}
             max={65535}
             value={configDraft.proxyPort}
+            disabled={disabled}
             onChange={(event) => setConfigDraft((prev) => ({ ...prev, proxyPort: event.target.value }))}
           />
         </label>
@@ -39,6 +42,7 @@ export function ProxyPanel({ configDraft, setConfigDraft }: ProxyPanelProps) {
           <input
             type="text"
             value={configDraft.proxyUsername}
+            disabled={disabled}
             onChange={(event) => setConfigDraft((prev) => ({ ...prev, proxyUsername: event.target.value }))}
           />
         </label>
@@ -48,6 +52,7 @@ export function ProxyPanel({ configDraft, setConfigDraft }: ProxyPanelProps) {
           <input
             type="password"
             value={configDraft.proxyPassword}
+            disabled={disabled}
             onChange={(event) => setConfigDraft((prev) => ({ ...prev, proxyPassword: event.target.value }))}
           />
         </label>

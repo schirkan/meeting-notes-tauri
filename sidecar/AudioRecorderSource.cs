@@ -41,6 +41,7 @@ internal sealed class AudioRecorderSource : IDisposable
     private bool _engineMode;
     private bool _disposed;
     private bool _resamplerDiscontinuity;
+    internal event Action<Exception>? CaptureFailed;
 
     private AudioRecorderSource(
         MMDevice device,
@@ -245,16 +246,16 @@ internal sealed class AudioRecorderSource : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.Error("SIDECAR_UNAVAILABLE", $"Recording error ({_label}): {ex.Message}");
+            if (CaptureFailed is { } onFailure) onFailure(ex);
+            else Logger.Error("SIDECAR_UNAVAILABLE", $"Recording error ({_label}): {ex.Message}");
         }
     }
 
     private void OnRecordingStopped(object? sender, StoppedEventArgs e)
     {
         if (e.Exception is null) return;
-        Logger.Error(
-            "SIDECAR_UNAVAILABLE",
-            $"The recording ({_label}) was aborted: {e.Exception.Message}");
+        if (CaptureFailed is { } onFailure) onFailure(e.Exception);
+        else Logger.Error("SIDECAR_UNAVAILABLE", $"The recording ({_label}) was aborted: {e.Exception.Message}");
     }
 
     private static WasapiRecorder BuildRecorder(

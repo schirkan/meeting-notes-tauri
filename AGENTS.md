@@ -22,9 +22,10 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
 
 ## Aktueller Produktstand
 
-- **Meeting Notes**, veroeffentlichte Version **0.1.7**, ist eine portable Windows-11-x64-Anwendung
-  fuer Live-Transkripte mit Azure Speech. Implementierung vorhanden; offene
-  Live-/Hardware-/Zielsystem-Abnahmen sind in den Specs ausgewiesen.
+- **Meeting Notes**, veroeffentlichte Version **0.1.9**, ist eine portable Windows-11-x64-Anwendung
+  fuer Live-Transkripte. Azure ist Standard; Windows SAPI, Windows AI Speech (separater MSIX-Laborpfad)
+  und Web Speech API sind experimentell, nicht veroeffentlicht. Modellmatrix und offene Abnahmen: [T-523](./specs/T-523-native-windows-stt-provider.md).
+- Batch-Dateitranskription fuer Azure Standard/MAI, SAPI und Windows AI Speech sowie lokaler Meeting-Recorder: [T-525](./specs/T-525-batch-transkription-und-lokale-aufnahme.md), noch nicht veroeffentlicht.
 - Die gesamte Oberflaeche, alle Meldungen und die oeffentliche Doku sind
   englisch; Specs, `SPEC.md` und diese Datei bleiben intern deutsch.
   Siehe [T-516](./specs/T-516-englische-oberflaeche-und-oeffentliche-doku.md).
@@ -78,7 +79,8 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
 
 Renderer und Rust kommunizieren per `invoke`/`listen`. Rust und Sidecar nutzen
 JSON-Lines ueber stdin/stdout mit `tauri-plugin-shell`; Protokollversion **1.0.0**.
-Audio bleibt im Sidecar und geht von dort direkt an Azure, nicht ueber IPC.
+Azure und SAPI beziehen Audio im Sidecar; Web Speech nutzt das Standardmikrofon in WebView2.
+Keiner der Pfade transportiert Roh-Audio ueber IPC.
 Kein automatischer Reconnect mit neuer Azure-Sitzung. Siehe [T-201](./specs/T-201-json-lines-protokoll-tauri-zu-sidecar.md).
 
 ## Konfiguration und Distribution
@@ -144,12 +146,17 @@ Offene Abnahmen und Messverfahren: [T-500](./specs/T-500-qualitaetssicherung-und
 
 ## Workboard
 
+- Batch-Dateitranskription und lokaler Recorder: `440e6921-7d49-4702-b849-2fb43e36d1f4`.
+
 - Board `meeting-notes-tauri`: Review-Fixes und lokaler Release-Kandidat v0.1.6
   (`a9c11271-1d10-4911-a382-3b79d3aa4c36`, done).
 - Echo cancellation (Alpha): Settings, lokale Audioverarbeitung und Abnahme
   (`4f1a482b-afa7-42a3-a933-ef145302a856`, done).
 - Separate Hardware-Abnahme der Echo-Alpha
   (`455a9e0c-15af-4470-af29-28513028af63`): fachlich geschlossen, siehe [T-519](./specs/T-519-echo-cancellation-alpha-abnahme.md).
+- Modellmatrix, Windows SAPI, Windows AI Speech und Web Speech API: [T-523](./specs/T-523-native-windows-stt-provider.md),
+  [Live-Abnahme](./specs/T-524-native-windows-stt-machbarkeit.md)
+  (`6c9e26bb-b2e7-4520-85cd-0a956e52eb2b`); fruehere Recherche `4c5653ae-dd2f-4689-ac21-d4a4a2cf631d`.
 
 ## CI/CD
 

@@ -6,6 +6,9 @@ export interface AzureProxyConfig {
 }
 
 export type AzureSpeechModel = 'standard' | 'mai-transcribe-2-streaming'
+export type RecognitionProvider = 'windows-sapi' | 'windows-ai-speech' | 'web-speech' | 'unsupported'
+export type SpeechModel = Exclude<RecognitionProvider, 'unsupported'> | AzureSpeechModel
+export type TranscriptionMode = 'live' | 'batch'
 
 export interface AzureConfig {
   model?: AzureSpeechModel
@@ -20,6 +23,11 @@ export interface AzureConfig {
  * Which audio sources are transcribed, independently of speaker recognition.
  */
 export interface TranscriptionSettings {
+  /** Omit for Azure; existing azure.model remains the Azure preference. */
+  provider?: RecognitionProvider
+  /** Omitted for live transcription. */
+  mode?: TranscriptionMode | 'unsupported'
+  webInterimResults?: boolean
   mic: boolean
   speaker: boolean
   /** Alpha opt-in; only effective when both sources are active. */
@@ -106,7 +114,7 @@ export function isValidBcp47Language(input: unknown): input is string {
 
 type UserSettingsInput = Partial<Omit<UserSettings, 'devices' | 'transcription' | 'diarization' | 'transcript' | 'autoStart' | 'window'>> & {
   devices?: Partial<UserSettings['devices']> | null
-  transcription?: Partial<TranscriptionSettings> | null
+  transcription?: (Partial<Omit<TranscriptionSettings, 'provider' | 'mode'>> & { provider?: unknown; mode?: unknown }) | null
   diarization?: boolean | { mic?: boolean; speaker?: boolean } | null
   transcript?: Partial<TranscriptSettings> & {
     markdownExport?: Partial<MarkdownExportSettings> | null
@@ -122,6 +130,12 @@ export function normalizeUserSettings(input: UserSettingsInput | null | undefine
   return {
     language: safeLanguage,
     transcription: {
+      ...(input?.transcription?.provider !== undefined && input.transcription.provider !== 'azure'
+        ? { provider: input.transcription.provider === 'windows-sapi' || input.transcription.provider === 'windows-ai-speech' || input.transcription.provider === 'web-speech'
+            ? input.transcription.provider : 'unsupported' as const } : {}),
+      ...(input?.transcription?.mode === undefined || input.transcription.mode === 'live' ? {}
+        : { mode: input.transcription.mode === 'batch' ? 'batch' as const : 'unsupported' as const }),
+      ...(input?.transcription?.webInterimResults === true ? { webInterimResults: true } : {}),
       mic:
         typeof input?.transcription?.mic === 'boolean'
           ? input.transcription.mic

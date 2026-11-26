@@ -23,6 +23,8 @@ eine andere Person und Final-Segmente wurden über die Sitzungsgrenze hinweg
 zusammengeführt.
 
 ## Done When
+Die laufende Engine meldet eine tatsaechliche Sprecherzuordnung mit `speakerIdentified: true`. Aufeinanderfolgende finale Segmente werden nur bei zwei bestaetigten Zuordnungen zur selben Sprecher-ID, Audioquelle und Sitzung zusammengefuehrt. Interim-Ergebnisse unterbrechen die Folge der Finals nicht. Ohne ID bleiben Finals getrennt, und die UI zeigt die Audioquelle statt eines editierbaren Sprechernamens. Belege: Sidecar-Test in `DiarizationValidation.cs` und UI-Test `only adjacent finals with an identified speaker from the same source and session merge`.
+
 - [x] Das Segment-Payload führt die **Session-ID** mit. Der Sidecar meldet die Beleg: sidecar/AzureSpeechService.cs (sessionId im Transcript-Payload) und src/shared/transcript-contract.ts.
   Azure-Session-ID pro Quelle (SessionStarted) im Feld `sessionId`; bis Azure
   sie meldet, wird eine eindeutige Kennung des Streams verwendet.

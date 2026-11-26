@@ -21,6 +21,9 @@ export function App() {
   const {
     configDraft,
     configState,
+    savedFeatures,
+    draftFeatures,
+    draftModel,
     debugLog,
     debugOpen,
     devices,
@@ -30,6 +33,10 @@ export function App() {
     isConfigReady,
     isLoadingInitialData,
     isStarting,
+    batchAction,
+    batchAudioPath,
+    onPickBatchAudio,
+    onTranscribeBatchAudio,
     knownSpeakers,
     onCopyTranscript,
     onExportTranscript,
@@ -50,6 +57,7 @@ export function App() {
     onTestConnectivity,
     isTestingConnectivity,
     connectivityResult,
+    connectivityKind,
     connectivityDialogOpen,
     onOpenConnectivityDialog,
     closeConnectivityDialog,
@@ -78,6 +86,10 @@ export function App() {
     closeSettingsDialog,
     dismissToast
   } = useAppState()
+  const batch = savedFeatures.mode === 'batch'
+  const busy = isLoadingInitialData || isStarting || status.running || batchAction !== null
+  const audioPanel = <AudioPanel statusRunning={batchAction !== null} batch={batch} settings={settings} devices={devices} setSettings={setIdleSettings}
+    selectDevices={savedFeatures.selectDevices} speakerLoopback={savedFeatures.speakerLoopback} />
 
   return (
     <main className="container" onContextMenu={(event) => {
@@ -95,9 +107,12 @@ export function App() {
           statusDescription={statusDescription}
           runtimeIssue={runtimeIssue}
           isStarting={isStarting}
-          startDisabled={isLoadingInitialData || !isConfigReady || isSavingSettings || settingsSaveFailed}
+          batch={batch}
+          settingsDisabled={batchAction !== null}
+          pauseSupported={savedFeatures.pause}
+          startDisabled={isLoadingInitialData || !isConfigReady || isSavingSettings || settingsSaveFailed || batchAction !== null}
           canCopyTranscript={finalCount > 0}
-          canResetTranscript={!status.running && !isStarting && segments.length > 0}
+          canResetTranscript={!busy && segments.length > 0}
           durationLabel={durationLabel}
           startedAtLabel={startedAtLabel}
           speakersOpen={speakersOpen}
@@ -126,8 +141,23 @@ export function App() {
             setSpeakerAliases={setSpeakerAliases}
             following={autoScrollEnabled}
             onFollow={onFollowTranscript}
+            idleControls={batch && !isLoadingInitialData && !status.running && !isStarting && (
+              <section className="batch-audio-controls" aria-label="Batch transcription">
+                <p className="meta">Batch mode: record locally, import a WAV or choose a completed recording’s recording.json file.</p>
+                <div className="batch-audio-actions">
+                  <button className="secondary-button" type="button" onClick={() => void onPickBatchAudio()}
+                    disabled={batchAction !== null || isSavingSettings || settingsSaveFailed}>Import WAV or choose recording</button>
+                  <button className="secondary-button" type="button" onClick={() => void onTranscribeBatchAudio()}
+                    disabled={!batchAudioPath || batchAction !== null || isSavingSettings || settingsSaveFailed}>
+                    {batchAction === 'transcribe' ? 'Transcribing…' : 'Transcribe'}
+                  </button>
+                </div>
+                {batchAudioPath && <p className="meta-path">Selected audio: {batchAudioPath}</p>}
+                {segments.length > 0 && <details><summary>Audio devices</summary>{audioPanel}</details>}
+              </section>
+            )}
             emptyContent={!isLoadingInitialData && !status.running && !isStarting && <div className="idle-audio-panel">
-              <AudioPanel statusRunning={false} settings={settings} devices={devices} setSettings={setIdleSettings} />
+              {audioPanel}
             </div>}
           />
           <aside className="console-inspector" id="console-speakers" hidden={!speakersOpen} aria-labelledby="console-speakers-title">
@@ -166,9 +196,9 @@ export function App() {
                 className="secondary-button"
                 type="button"
                 onClick={() => void onTestConnectivity()}
-                disabled={status.running || isTestingConnectivity || isSavingSettings || isChoosingDirectory || !hasAzureConnectionFields(configDraft)}
+                disabled={busy || isTestingConnectivity || isSavingSettings || isChoosingDirectory || draftModel === 'unsupported' || (draftFeatures.azure && !hasAzureConnectionFields(configDraft))}
               >
-                {isTestingConnectivity ? 'Testing …' : 'Test connection'}
+                {isTestingConnectivity ? 'Testing …' : draftFeatures.azure ? draftFeatures.mode === 'batch' ? 'Test live connection' : 'Test connection' : 'Check model availability'}
               </button>
               {(connectivityResult || isTestingConnectivity) && (
                 <button className="secondary-button" type="button" onClick={onOpenConnectivityDialog}>
@@ -179,7 +209,7 @@ export function App() {
                 className="primary-button settings-save-button"
                 type="button"
                 onClick={() => void onSaveAll()}
-                disabled={status.running || isSavingSettings || isChoosingDirectory}
+                disabled={busy || isSavingSettings || isChoosingDirectory || draftModel === 'unsupported'}
               >
                 Save
               </button>
@@ -189,7 +219,7 @@ export function App() {
         }
       >
         <SettingsPanel
-          statusRunning={status.running}
+          statusRunning={status.running || isStarting}
           configDraft={configDraft}
           setConfigDraft={setConfigDraft}
           settings={dialogSettings}
@@ -201,13 +231,17 @@ export function App() {
         <ConfigPanel
           configState={configState}
           configDraft={configDraft}
-          statusRunning={status.running}
+          statusRunning={status.running || isStarting}
+          enabled={draftFeatures.azure}
+          endpointEnabled={draftFeatures.endpoint}
+          batch={draftFeatures.mode === 'batch'}
           setConfigDraft={setConfigDraft}
         />
 
         <ProxyPanel
           configDraft={configDraft}
           setConfigDraft={setConfigDraft}
+          disabled={!draftFeatures.azure}
         />
       </SettingsDialog>
 
@@ -216,6 +250,7 @@ export function App() {
       <ConnectivityDialog
         isOpen={connectivityDialogOpen}
         isTesting={isTestingConnectivity}
+        kind={connectivityKind}
         result={connectivityResult}
         onClose={closeConnectivityDialog}
       />

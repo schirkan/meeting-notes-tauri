@@ -23,5 +23,7 @@ export const NEEDS_TARGET_MACHINE = new Set([
   'T-510-clean-machine-deployment-windows-11.md',
   'T-514-systray-und-schliessen-verhalten.md',
   'T-521-mai-transcribe-mehrkanal-sidecar.md',
-  'T-522-mai-transcribe-machbarkeit-kosten-abnahme.md'
+  'T-522-mai-transcribe-machbarkeit-kosten-abnahme.md',
+  'T-524-native-windows-stt-machbarkeit.md',
+  'T-525-batch-transkription-und-lokale-aufnahme.md'
 ])

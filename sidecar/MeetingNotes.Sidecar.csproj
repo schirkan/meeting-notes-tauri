@@ -17,6 +17,8 @@
     <AssemblyName>MeetingNotes.Sidecar</AssemblyName>
     <Version>0.1.9</Version>
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+    <!-- System.Speech uses built-in COM interop for the native SAPI stream and callbacks. -->
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
@@ -28,6 +30,26 @@
     <DebugType>none</DebugType>
   </PropertyGroup>
 
+  <!-- Local, separately packaged experiment; never part of the portable build. -->
+  <PropertyGroup Condition="'$(EnableWindowsAiSpeech)' == 'true'">
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PlatformTarget>x64</PlatformTarget>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <ApplicationManifest>WindowsAiSpeech.manifest</ApplicationManifest>
+    <WindowsAppSdkBootstrapInitialize>false</WindowsAppSdkBootstrapInitialize>
+    <WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>
+    <WindowsAppSdkUndockedRegFreeWinRTInitialize>false</WindowsAppSdkUndockedRegFreeWinRTInitialize>
+    <DefineConstants>$(DefineConstants);WINDOWS_AI_SPEECH</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(EnableWindowsAiSpeech)' == 'true'">
+    <PackageReference Include="Microsoft.WindowsAppSDK.AI" Version="2.6.6-experimental" />
+  </ItemGroup>
+
   <!-- JSON payloads and native Speech callbacks use reflection. Trim the runtime,
        but retain these assemblies and their metadata. -->
   <ItemGroup>
@@ -36,6 +58,7 @@
     <!-- Core Audio calls managed session-event callbacks through COM, not a
          statically visible call path. Preserve the WASAPI callback metadata. -->
     <TrimmerRootAssembly Include="NAudio.Wasapi" />
+    <TrimmerRootAssembly Include="System.Speech" />
   </ItemGroup>
 
   <ItemGroup>
@@ -45,6 +68,7 @@
 
   <ItemGroup>
     <PackageReference Include="NAudio" Version="3.3.0" />
+    <PackageReference Include="System.Speech" Version="10.0.15" />
     <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.53.1" />
   </ItemGroup>
 

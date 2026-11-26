@@ -322,7 +322,7 @@ mod tests {
         assert_eq!(RecordingIndicator::from_status(&state.mark_resumed()), RecordingIndicator::Recording);
         assert_eq!(RecordingIndicator::from_status(&state.mark_stopped()), RecordingIndicator::Idle);
         assert_eq!(RecordingIndicator::from_status(&events::TranscriptStatus {
-            running: false, paused: true, started_at: None,
+            running: false, paused: true, started_at: None, recording_path: None,
         }), RecordingIndicator::Idle);
     }
 

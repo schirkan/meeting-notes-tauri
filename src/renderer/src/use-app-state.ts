@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_USER_SETTINGS, normalizeUserSettings, type AppConfigState, type UserSettings } from '@shared/config-contract'
+import { DEFAULT_USER_SETTINGS, isAzureSpeechModel, normalizeUserSettings, type AppConfigState, type UserSettings } from '@shared/config-contract'
+import { selectedSpeechChoice, speechFeatures } from '@shared/speech-models'
 import type { MeetingDetected } from '@shared/transcript-contract'
 import { buildTranscriptMarkdown } from '@shared/transcript-markdown'
 import {
   formatSpeakerIdentity,
+  formatTranscriptSource,
+  hasIdentifiedSpeaker,
   getSpeakerClassForIdentity,
   getSpeakerIdentity
 } from './speaker-utils'
@@ -16,6 +19,7 @@ import {
 } from '@shared/transcript-contract'
 import { type ConfigDraft, draftToConfig, isConfigComplete, toConfigDraft } from './config-utils'
 import type { ConnectivityResult } from './components/ConnectivityDialog'
+import { canUseWebSpeech, WebSpeechSession } from './web-speech'
 
 function errorDetail(error: unknown, fallback: string): string {
   if (error instanceof Error) return error.message || fallback
@@ -46,6 +50,31 @@ const initialDevices: AudioDeviceSnapshot = {
   fetchedAtIso: new Date(0).toISOString()
 }
 
+function labelSegments(segments: TranscriptSegment[], getLabel: (identity: string) => string) {
+  return segments.map((segment) => ({
+    ...segment,
+    speakerIdentified: hasIdentifiedSpeaker(segment),
+    speaker: hasIdentifiedSpeaker(segment) ? getLabel(getSpeakerIdentity(segment)) : formatTranscriptSource(segment.source)
+  }))
+}
+
+// SDK speaker identifiers can recur across sessions. Number equal display names.
+function defaultSpeakerLabels(identities: string[]): Record<string, string> {
+  const groups = new Map<string, string[]>()
+  for (const identity of identities) {
+    const base = formatSpeakerIdentity(identity)
+    const group = groups.get(base) ?? []
+    group.push(identity)
+    groups.set(base, group)
+  }
+  return Object.fromEntries([...groups].flatMap(([base, group]) =>
+    group.map((identity, index) => [identity, group.length === 1 ? base : `${base} #${index + 1}`])))
+}
+
+function identifiedSpeakers(segments: TranscriptSegment[]) {
+  return [...new Set(segments.filter(hasIdentifiedSpeaker).map(getSpeakerIdentity))]
+}
+
 export function useAppState() {
   const [status, setStatus] = useState<TranscriptStatus>(initialStatus)
   const [segments, setSegments] = useState<TranscriptSegment[]>([])
@@ -71,6 +100,12 @@ export function useAppState() {
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false)
   const [debugOpen, setDebugOpen] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
+  const [batchAudioPath, setBatchAudioPath] = useState<string | null>(null)
+  const [batchAction, setBatchAction] = useState<'pick' | 'transcribe' | null>(null)
+  const batchPendingRef = useRef(false)
+  const startPendingRef = useRef(false)
+  const webSpeechRef = useRef<WebSpeechSession | null>(null)
+  const segmentReceiverRef = useRef<(segment: TranscriptSegment) => void>(() => {})
   const [meetingDetected, setMeetingDetected] = useState<MeetingDetected | null>(null)
   const [configState, setConfigState] = useState<AppConfigState | null>(null)
   const [configDraft, setConfigDraft] = useState<ConfigDraft>(() => toConfigDraft(null))
@@ -91,7 +126,7 @@ export function useAppState() {
     recordingGenerationRef.current++
     setSessionStartedAt(startedAt)
     // A first paused status describes a session already in progress, even before getStatus resolves.
-    if (!resetTranscript || (previousStart === null && nextStatus.paused)) return
+    if (!resetTranscript || (previousStart === null && nextStatus.paused) || settingsRef.current.transcription.mode === 'batch') return
     setSegments([])
     setSpeakerAliases({})
     autoScrollEnabledRef.current = true
@@ -144,25 +179,32 @@ export function useAppState() {
       if (disposed || receivedLiveStatus) return
       // Adopt an existing session without clearing any segments already received.
       observeRecordingStart(nextStatus, false)
+      if (!nextStatus.running && nextStatus.recordingPath) setBatchAudioPath(nextStatus.recordingPath)
       setStatus(nextStatus)
     })
 
+    const settingsLoad = transcriptApi.getSettings()
     const configLoad = transcriptApi.getConfig()
-      .then((nextConfig) => {
+      .then(async (nextConfig) => {
+        const nextSettings = await settingsLoad.catch(() => null)
         if (disposed) return
         setConfigState(nextConfig)
         setConfigDraft(toConfigDraft(nextConfig.config))
-        if (!nextConfig.exists || !isConfigComplete(nextConfig.config)) {
+        const transcription = normalizeUserSettings(nextSettings).transcription
+        const model = selectedSpeechChoice(transcription, nextConfig.config?.model)
+        if (model === 'unsupported' || (!transcription.provider && transcription.mode !== 'batch' && (!nextConfig.exists || !isConfigComplete(nextConfig.config)))) {
           setSettingsDialogOpen(true)
           setToast({
-            message: 'Azure configuration is missing or incomplete. Please complete it in the settings and save.',
+            message: model === 'unsupported' ? 'The saved transcription model is unsupported. Choose another in Settings.' : 'Azure configuration is missing or incomplete. Please complete it in the settings and save.',
             variant: 'error',
             persistent: true
           })
         }
       })
-      .catch(() => {
-        if (disposed) return
+      .catch(async () => {
+        const nextSettings = await settingsLoad.catch(() => null)
+        const transcription = normalizeUserSettings(nextSettings).transcription
+        if (disposed || transcription.provider || transcription.mode === 'batch') return
         setSettingsDialogOpen(true)
         setToast({
           message: 'The Azure configuration could not be loaded. Please check it in the settings and save.',
@@ -172,7 +214,7 @@ export function useAppState() {
       })
 
     void Promise.all([
-      transcriptApi.getSettings(),
+      settingsLoad,
       transcriptApi.getDevices(),
       transcriptApi.getDebugLog(),
       configLoad,
@@ -197,15 +239,8 @@ export function useAppState() {
         if (!disposed) setIsLoadingInitialData(false)
       })
 
-    const unsubSegment = transcriptApi.onSegment((segment) => {
+    segmentReceiverRef.current = (segment) => {
       setSegments((prev) => {
-        // Die Identitaet enthaelt die Azure-Sitzung (T-507): "Guest-1" aus
-        // zwei Sitzungen sind verschiedene Personen. Deshalb wird nur
-        // innerhalb derselben Identitaet zusammengefuehrt.
-        const identity = getSpeakerIdentity(segment)
-        const sameSpeakerKey = (entry: TranscriptSegment) =>
-          getSpeakerIdentity(entry) === identity
-
         const sameUtterance = (entry: TranscriptSegment) =>
           entry.sessionId === segment.sessionId && entry.utteranceOffsetTicks === segment.utteranceOffsetTicks
         const hasOffset = segment.utteranceOffsetTicks != null
@@ -225,35 +260,26 @@ export function useAppState() {
           return entry.source !== segment.source && entry.source !== '' && segment.source !== ''
         })
 
-        if (segment.state === 'final') {
-          const previousFinalIndex = [...withoutInterimForSource]
-            .reverse()
-            .findIndex((entry) => sameSpeakerKey(entry) && entry.state === 'final')
-
-          if (previousFinalIndex >= 0) {
-            const actualIndex = withoutInterimForSource.length - 1 - previousFinalIndex
-            const previousFinal = withoutInterimForSource[actualIndex]
-
-            if (actualIndex === withoutInterimForSource.length - 1) {
-              const mergedFinal: TranscriptSegment = {
-                ...segment,
-                id: previousFinal.id,
-                text: `${previousFinal.text} ${segment.text}`.trim(),
-                timestampIso: segment.timestampIso
-              }
-
-              return withoutInterimForSource
-                .map((entry, index) => (index === actualIndex ? mergedFinal : entry))
-                .slice(-500)
+        if (segment.state === 'final' && segment.sessionId && hasIdentifiedSpeaker(segment)) {
+          let index = withoutInterimForSource.length - 1
+          while (index >= 0 && withoutInterimForSource[index].state === 'interim') index--
+          const previous = withoutInterimForSource[index]
+          // Only adjacent finals from an identified speaker, source and session (T-507).
+          if (previous && hasIdentifiedSpeaker(previous) && getSpeakerIdentity(previous) === getSpeakerIdentity(segment)) {
+            withoutInterimForSource[index] = {
+              ...segment,
+              id: previous.id,
+              text: `${previous.text} ${segment.text}`.trim()
             }
+            return withoutInterimForSource
           }
-
-          return [...withoutInterimForSource, segment].slice(-500)
         }
 
-        return [...withoutInterimForSource, segment].slice(-500)
+        withoutInterimForSource.push(segment)
+        return withoutInterimForSource
       })
-    })
+    }
+    const unsubSegment = transcriptApi.onSegment((segment) => segmentReceiverRef.current(segment))
 
     const unsubError = transcriptApi.onError((error) => {
       setLastError(error)
@@ -266,12 +292,27 @@ export function useAppState() {
 
     const unsubStatus = transcriptApi.onStatus((nextStatus) => {
       receivedLiveStatus = true
+      if (webSpeechRef.current && (startPendingRef.current || !nextStatus.running)) return
       observeRecordingStart(nextStatus)
+      if (!nextStatus.running && nextStatus.recordingPath) setBatchAudioPath(nextStatus.recordingPath)
       setNow(Date.now())
       setStatus(nextStatus)
     })
 
-    const unsubQuitExport = transcriptApi.onQuitExport(setQuitExportRequest)
+    const unsubQuitExport = transcriptApi.onQuitExport((requestId) => {
+      const web = webSpeechRef.current
+      if (!web) { setQuitExportRequest(requestId); return }
+      void web.stop().then(() => {
+        if (webSpeechRef.current === web) webSpeechRef.current = null
+        setStatus((previous) => ({ ...previous, running: false, paused: false }))
+        setQuitExportRequest(requestId)
+      }, (error: unknown) => {
+        web.abort()
+        if (webSpeechRef.current === web) webSpeechRef.current = null
+        setStatus((previous) => ({ ...previous, running: false, paused: false }))
+        void transcriptApi.completeQuitExport(requestId, errorDetail(error, 'Web Speech did not stop cleanly.')).catch(() => {})
+      })
+    })
 
     const unsubDebugLog = transcriptApi.onDebugLog((entry) => {
       setDebugLog((prev) => [entry, ...prev].slice(0, 300))
@@ -283,7 +324,7 @@ export function useAppState() {
       setMeetingDetected(detected)
       setToast({
         message:
-          `Meeting detected (${detected.processName}). Transcription starts automatically.`,
+          `Meeting detected (${detected.processName}). ${settingsRef.current.transcription.mode === 'batch' ? 'Local recording' : 'Transcription'} starts automatically.`,
         variant: 'info',
         persistent: false
       })
@@ -308,6 +349,7 @@ export function useAppState() {
 
     return () => {
       disposed = true
+      webSpeechRef.current?.abort()
       unsubSegment()
       unsubError()
       unsubStatus()
@@ -375,7 +417,7 @@ export function useAppState() {
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!status.running && !isSavingSettings) {
+      if (!status.running && !isSavingSettings && batchAction !== 'transcribe') {
         return undefined
       }
 
@@ -389,73 +431,46 @@ export function useAppState() {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
     }
-  }, [status.running, isSavingSettings])
+  }, [status.running, isSavingSettings, batchAction])
 
+  const savedFeatures = speechFeatures(selectedSpeechChoice(settings.transcription, configState?.config?.model))
+  const draftFeatures = speechFeatures(selectedSpeechChoice(dialogSettings.transcription, configDraft.model))
+  const { model: savedModel, mode: savedMode } = savedFeatures
+  const draftModel = draftFeatures.model
   const isConfigReady = useMemo(() => {
+    if (savedModel === 'unsupported') return false
+    if (savedMode === 'batch' || !savedFeatures.azure) return true
     if (!configState?.exists || !configState.config) {
       return false
     }
 
     return isConfigComplete(configState.config)
-  }, [configState])
+  }, [configState, savedFeatures.azure, savedModel, savedMode])
 
   const statusLabel = useMemo(() => {
     if (isStarting) return 'Starting'
     if (status.paused) return 'Paused'
-    if (status.running) return 'Running'
-    if (configState && !isConfigComplete(configState.config)) return 'Error'
+    if (status.running) return savedMode === 'batch' ? 'Recording' : 'Running'
+    if (configState && !isConfigReady) return 'Error'
     if (lastError) return 'Error'
     return 'Stopped'
-  }, [configState, isStarting, lastError, status.paused, status.running])
+  }, [configState, isConfigReady, isStarting, lastError, savedMode, status.paused, status.running])
 
   const statusDescription = useMemo(() => {
-    if (isStarting) return 'Transcription is starting ...'
+    if (isStarting) return savedMode === 'batch' ? 'Local recording is starting ...' : 'Transcription is starting ...'
     if (status.paused) return 'Transcription paused - the session stays active'
-    if (status.running) return 'Transcription active'
+    if (status.running) return savedMode === 'batch' ? 'Recording audio locally' : 'Transcription active'
     if (!isConfigReady) return 'Configuration incomplete'
     return 'Ready to start'
-  }, [isConfigReady, isStarting, status.paused, status.running])
+  }, [isConfigReady, isStarting, savedMode, status.paused, status.running])
 
   const finalCount = segments.filter((segment) => segment.state === 'final').length
   const latestSegment = segments.at(-1) ?? null
 
   // Bekannte Sprecher als sessionsichere Identitaeten. Zwei Sitzungen
   // koennen dieselbe SDK-ID vergeben — die Identitaet trennt sie.
-  const knownSpeakers = useMemo(
-    () =>
-      [
-        ...new Set(
-          segments
-            .filter((segment) => segment.speaker.trim().length > 0 && segment.speaker.trim().toLowerCase() !== 'unknown')
-            .map(getSpeakerIdentity)
-        )
-      ],
-    [segments]
-  )
-
-  // Anzeigenamen je Identitaet. Nur wenn dieselbe Anzeige in zwei Sitzungen
-  // vorkommt, wird sie nummeriert, damit die Zuordnung unterscheidbar bleibt.
-  const speakerLabels = useMemo(() => {
-    const groups = new Map<string, string[]>()
-    for (const identity of knownSpeakers) {
-      const base = formatSpeakerIdentity(identity)
-      const group = groups.get(base) ?? []
-      group.push(identity)
-      groups.set(base, group)
-    }
-
-    const labels: Record<string, string> = {}
-    for (const [base, group] of groups) {
-      if (group.length === 1) {
-        labels[group[0]] = base
-        continue
-      }
-      group.forEach((identity, index) => {
-        labels[identity] = `${base} #${index + 1}`
-      })
-    }
-    return labels
-  }, [knownSpeakers])
+  const knownSpeakers = useMemo(() => identifiedSpeakers(segments), [segments])
+  const speakerLabels = useMemo(() => defaultSpeakerLabels(knownSpeakers), [knownSpeakers])
 
   const startedAtLabel = useMemo(() => {
     const startedAt = status.startedAt ?? sessionStartedAt
@@ -517,31 +532,87 @@ export function useAppState() {
   }, [now, sessionStartedAt, status.paused, status.running, status.startedAt])
 
   const onStart = async () => {
+    if (startPendingRef.current || batchPendingRef.current) return
+    startPendingRef.current = true
     setIsStarting(true)
+    let web: WebSpeechSession | null = null
+    let reservedWeb = false
     try {
       await settingsSaveQueueRef.current
       if (settingsSaveErrorRef.current) throw new Error(settingsSaveErrorRef.current)
       setLastError(null)
-      const next = await window.transcriptApi.start()
+      const provider = settingsRef.current.transcription.provider
+      const mode = settingsRef.current.transcription.mode ?? 'live'
+      if (provider === 'unsupported' || mode === 'unsupported' || (provider === 'web-speech' && mode === 'batch')) throw new Error('Choose a supported transcription model in Settings.')
+      const pendingSegments: TranscriptSegment[] = []
+      let webStarted = false
+      if (provider === 'web-speech') {
+        if (!canUseWebSpeech()) throw new Error('Web Speech API is unavailable in this WebView2 runtime. Check the Windows installation and policies.')
+        web = new WebSpeechSession({
+          language: settingsRef.current.language,
+          interimResults: settingsRef.current.transcription.webInterimResults,
+          onSegment: (segment) => {
+            if (webSpeechRef.current !== web) return
+            if (!webStarted) pendingSegments.push(segment)
+            else segmentReceiverRef.current(segment)
+          },
+          onEnded: (error) => {
+            if (webSpeechRef.current !== web) return
+            webSpeechRef.current = null
+            setStatus((previous) => ({ ...previous, running: false, paused: false }))
+            void window.transcriptApi.stop().catch(() => {})
+            if (error) {
+              setLastError({ code: 'WEB_SPEECH_ENDED', message: error })
+              setToast({ message: error, variant: 'error', persistent: true })
+            }
+          },
+        })
+        webSpeechRef.current = web
+      }
+      const next = await window.transcriptApi.start(provider ?? 'azure', mode)
+      if (web) {
+        reservedWeb = true
+        if (webSpeechRef.current !== web) return
+        await web.start()
+        if (webSpeechRef.current !== web) return
+      }
       // The native start event resets the transcript before the first segment.
       observeRecordingStart(next)
+      webStarted = true
+      pendingSegments.forEach(segmentReceiverRef.current)
       setNow(Date.now())
       setStatus(next)
-      setToast({ message: 'New transcript started.', variant: 'info', persistent: false })
+      setToast({ message: mode === 'batch' ? 'Recording audio locally.' : 'New transcript started.', variant: 'info', persistent: false })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Start failed.'
+      if (web) {
+        web.abort()
+        if (webSpeechRef.current !== web) return
+        webSpeechRef.current = null
+        if (reservedWeb) await window.transcriptApi.stop().catch(() => {})
+      }
+      const message = errorDetail(error, 'Start failed.')
       setLastError({ code: 'UI_START_FAILED', message })
       setToast({ message: `UI_START_FAILED: ${message}`, variant: 'error', persistent: true })
     } finally {
+      startPendingRef.current = false
       setIsStarting(false)
     }
   }
 
   const onStop = async () => {
+    const web = webSpeechRef.current
+    let webError: unknown
     try {
+      if (web) {
+        try { await web.stop() } catch (error) { web.abort(); webError = error }
+        if (webSpeechRef.current !== web) return
+        webSpeechRef.current = null
+      }
       const next = await window.transcriptApi.stop()
+      if (!next.running && next.recordingPath) setBatchAudioPath(next.recordingPath)
       setNow(Date.now())
       setStatus(next)
+      if (webError) throw webError
     } catch (error) {
       const message = errorDetail(error, 'Stop failed.')
       setLastError({ code: 'UI_STOP_FAILED', message })
@@ -555,7 +626,7 @@ export function useAppState() {
     try {
       const next = await window.transcriptApi.pause()
       setNow(Date.now())
-      setStatus(next)
+      if (savedModel !== 'windows-sapi') setStatus(next)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Pause failed.'
       setLastError({ code: 'UI_PAUSE_FAILED', message })
@@ -567,7 +638,7 @@ export function useAppState() {
     try {
       const next = await window.transcriptApi.resume()
       setNow(Date.now())
-      setStatus(next)
+      if (savedModel !== 'windows-sapi') setStatus(next)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Resume failed.'
       setLastError({ code: 'UI_RESUME_FAILED', message })
@@ -585,7 +656,7 @@ export function useAppState() {
   }
 
   const onResetTranscript = async () => {
-    if (status.running || isStarting) return
+    if (status.running || isStarting || batchPendingRef.current) return
     const shouldReset = window.confirm('Really reset the transcript, start time and duration?')
     if (!shouldReset) {
       return
@@ -651,12 +722,29 @@ export function useAppState() {
   // automatischen Oeffnen nach einem Start ohne Konfiguration) die
   // Sprache-/Geraete-Auswahl nicht verwerft.
   const onSaveAll = async () => {
-    if (isSavingSettings) return
+    if (isSavingSettings || isStarting || batchPendingRef.current || draftModel === 'unsupported') return
     setIsSavingSettings(true)
     const snapshot = dialogSettings
     const revision = settingsSaveRevisionRef.current
     const save = settingsSaveQueueRef.current.then(async () => {
       const errors: string[] = []
+      const switchingToAzure = draftFeatures.azure && !!settingsRef.current.transcription.provider
+      const saveAzure = async () => {
+        const savedState = await window.transcriptApi.saveConfig(draftToConfig(configDraft, { allowIncomplete: draftFeatures.mode === 'batch' }))
+        setConfigState(savedState)
+        setConfigDraft(toConfigDraft(savedState.config))
+      }
+      // Do not activate Azure before the incoming Azure draft has been saved.
+      if (switchingToAzure) {
+        try { await saveAzure() }
+        catch (error) {
+          const message = errorDetail(error, 'The Azure configuration could not be saved.')
+          setIsSavingSettings(false)
+          setSettingsHint(message)
+          setToast({ message, variant: 'error', persistent: true })
+          return
+        }
+      }
 
       try {
         const saved = await window.transcriptApi.saveSettings(snapshot)
@@ -678,10 +766,8 @@ export function useAppState() {
       }
 
       try {
-        const payload = draftToConfig(configDraft)
-        const savedState = await window.transcriptApi.saveConfig(payload)
-        setConfigState(savedState)
-        setConfigDraft(toConfigDraft(savedState.config))
+        if (draftFeatures.azure && !switchingToAzure) await saveAzure()
+        else if (!draftFeatures.azure) setConfigDraft(toConfigDraft(configState?.config ?? null))
       } catch (error) {
         errors.push(errorDetail(error, 'The Azure configuration could not be saved.'))
       }
@@ -725,26 +811,43 @@ export function useAppState() {
   const [connectivityResult, setConnectivityResult] = useState<ConnectivityResult | null>(null)
   const [isTestingConnectivity, setIsTestingConnectivity] = useState(false)
   const [connectivityDialogOpen, setConnectivityDialogOpen] = useState(false)
+  const [connectivityKind, setConnectivityKind] = useState<'azure' | 'native' | 'web'>('azure')
 
   const onTestConnectivity = async () => {
-    if (isTestingConnectivity) return
+    if (isTestingConnectivity || isStarting || batchPendingRef.current || draftModel === 'unsupported') return
     setSettingsDialogOpen(false)
     setConnectivityDialogOpen(true)
     setConnectivityResult(null)
     setToast(null)
     setIsTestingConnectivity(true)
+    setConnectivityKind(draftFeatures.test)
     const startedAt = Date.now()
     let requestSubmitted = false
     try {
+      if (draftFeatures.test === 'web') {
+        const ready = canUseWebSpeech()
+        setConnectivityResult({
+          reachable: ready, speechReachable: ready, latencyMs: Date.now() - startedAt, probeUrl: '', testedAtIso: new Date().toISOString(),
+          steps: [{ step: 'Web Speech API', status: ready ? 'ok' : 'error', detail: ready
+            ? 'API exposed by WebView2. Microphone permission and online recognition were not tested.'
+            : 'The API is not exposed by this WebView2 runtime.' }],
+        })
+        return
+      }
       // Aktuelle Draft-Werte (auch ungespeicherte Änderungen) testen.
-      const payload = {
+      // Azure connectivity probes use the live SDK, not the batch API.
+      const liveFeatures = isAzureSpeechModel(draftModel) ? speechFeatures(draftModel) : draftFeatures
+      const { mode: _mode, ...liveTranscription } = dialogSettings.transcription
+      const payload = draftFeatures.test === 'native'
+        ? { provider: draftModel, ...(draftModel === 'windows-sapi' ? { language: dialogSettings.language } : {}) }
+        : {
         ...draftToConfig(configDraft),
         language: dialogSettings.language,
         autoLanguageDetection: dialogSettings.autoLanguageDetection,
-        transcription: configDraft.model === 'mai-transcribe-2-streaming'
-          ? { ...dialogSettings.transcription, audioMode: 'dual-mono' as const }
-          : dialogSettings.transcription,
-        diarization: configDraft.model === 'standard' && dialogSettings.diarization
+        transcription: !liveFeatures.stereo
+          ? { ...liveTranscription, audioMode: 'dual-mono' as const }
+          : liveTranscription,
+        diarization: liveFeatures.diarization && dialogSettings.diarization
       }
       requestSubmitted = true
       const result = await window.transcriptApi.testAzureConnectivity(payload)
@@ -826,14 +929,7 @@ export function useAppState() {
   }
 
   // Segmente mit Anzeigenamen (Alias), wie sie im UI und im Export erscheinen.
-  const labeledSegments = useMemo(
-    () =>
-      segments.map((segment) => ({
-        ...segment,
-        speaker: getSpeakerLabel(getSpeakerIdentity(segment))
-      })),
-    [segments, speakerAliases, speakerLabels]
-  )
+  const labeledSegments = useMemo(() => labelSegments(segments, getSpeakerLabel), [segments, speakerAliases, speakerLabels])
 
   // Spiegel fuer den Export: der Export-Snapshot muss auch dann gueltig
   // sein, wenn direkt nach dem Stop ein neues Transkript startet.
@@ -875,7 +971,63 @@ export function useAppState() {
     }
   }
 
-  // Automatisch speichern, sobald die Aufnahme endet.
+  const canUseBatchAudio = () => savedMode === 'batch' && !status.running && !startPendingRef.current && !batchPendingRef.current && !isSavingSettings && !settingsSaveFailed
+
+  const onPickBatchAudio = async () => {
+    if (!canUseBatchAudio()) return
+    batchPendingRef.current = true
+    setBatchAction('pick')
+    try {
+      const path = await window.transcriptApi.pickBatchAudio()
+      if (path !== null) setBatchAudioPath(path)
+    } catch (error) {
+      setToast({ message: errorDetail(error, 'The audio file could not be selected.'), variant: 'error', persistent: true })
+    } finally {
+      batchPendingRef.current = false
+      setBatchAction(null)
+    }
+  }
+
+  const onTranscribeBatchAudio = async () => {
+    if (!canUseBatchAudio() || !batchAudioPath || savedModel === 'unsupported' || savedModel === 'web-speech') return
+    const provider = savedModel === 'windows-sapi' || savedModel === 'windows-ai-speech' ? savedModel : 'azure'
+    const model = isAzureSpeechModel(savedModel) ? savedModel : undefined
+    if (model) {
+      if (!isConfigComplete(configState?.config ?? null, true)) {
+        setToast({ message: 'Configure the Azure endpoint, region and speech key in Settings before transcribing. Local recording does not require credentials.', variant: 'error', persistent: true })
+        return
+      }
+      if (!window.confirm(`Send the selected audio to Azure for transcription with ${savedFeatures.label}?\n\n${batchAudioPath}`)) return
+    }
+    const generation = recordingGenerationRef.current
+    batchPendingRef.current = true
+    setBatchAction('transcribe')
+    setToast(null)
+    try {
+      const result = await window.transcriptApi.transcribeBatchAudio(batchAudioPath, provider, model)
+      const finals = result.filter((segment) => segment.state === 'final' && segment.text.trim())
+      if (!finals.length) throw new Error('No speech was recognized. The selected audio and previous transcript are unchanged.')
+      if (recordingGenerationRef.current !== generation) throw new Error('A recording started while transcription was in progress. The selected audio is still available.')
+      setSegments(finals)
+      setSpeakerAliases({})
+      autoScrollEnabledRef.current = true
+      setAutoScrollEnabled(true)
+      setLastError(null)
+      if (settingsRef.current.transcript.markdownExport.enabled) {
+        const labels = defaultSpeakerLabels(identifiedSpeakers(finals))
+        await saveTranscriptWithToast(labelSegments(finals, (identity) => labels[identity]))
+      } else {
+        setToast({ message: 'Batch transcript ready.', variant: 'info', persistent: false })
+      }
+    } catch (error) {
+      setToast({ message: errorDetail(error, 'The selected audio could not be transcribed.'), variant: 'error', persistent: true })
+    } finally {
+      batchPendingRef.current = false
+      setBatchAction(null)
+    }
+  }
+
+  // Automatisch speichern, sobald die Live-Aufnahme endet.
   //
   // Der Export wird erst ausgeloest, wenn die Aufnahme endet, und dann
   // kurz verzoe gert: Final-Segmente, die nach dem Status-Event
@@ -893,7 +1045,7 @@ export function useAppState() {
 
   useEffect(() => {
     if (status.running) {
-      sessionActiveRef.current = true
+      sessionActiveRef.current = savedMode === 'live'
       return
     }
     if (sessionActiveRef.current) {
@@ -905,7 +1057,7 @@ export function useAppState() {
         : null
       setSaveRequest((value) => value + 1)
     }
-  }, [status.running])
+  }, [status.running, savedMode])
 
   // Nachlaufende Final-Segmente der beendeten Sitzung gehoeren noch ins
   // Dokument. Sobald ein neues Transkript laeuft, bleibt der Snapshot.
@@ -969,6 +1121,9 @@ export function useAppState() {
     onOpenRepository,
     configDraft,
     configState,
+    savedFeatures,
+    draftFeatures,
+    draftModel,
     debugLog,
     debugOpen,
     devices,
@@ -978,6 +1133,10 @@ export function useAppState() {
     isConfigReady,
     isLoadingInitialData,
     isStarting,
+    batchAction,
+    batchAudioPath,
+    onPickBatchAudio,
+    onTranscribeBatchAudio,
     knownSpeakers,
     lastError,
     latestSegment,
@@ -1006,6 +1165,7 @@ export function useAppState() {
     onTestConnectivity,
     isTestingConnectivity,
     connectivityResult,
+    connectivityKind,
     connectivityDialogOpen,
     onOpenConnectivityDialog: () => {
       setSettingsDialogOpen(false)

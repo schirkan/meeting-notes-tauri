@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject, type ReactNode } from 'react'
 import type { TranscriptSegment } from '@shared/transcript-contract'
-import { getSpeakerClassForIdentity, getSpeakerIdentity } from '../speaker-utils'
+import { formatTranscriptSource, getSpeakerClassForIdentity, getSpeakerIdentity, hasIdentifiedSpeaker } from '../speaker-utils'
 import { Icon } from './Icon'
 
 type TranscriptPanelProps = {
@@ -11,13 +11,15 @@ type TranscriptPanelProps = {
   setSpeakerAliases: React.Dispatch<React.SetStateAction<Record<string, string>>>
   following: boolean
   onFollow: () => void
+  idleControls?: ReactNode
   emptyContent?: ReactNode
 }
 
 function TranscriptRow({ segment, getSpeakerLabel, speakerAliases, setSpeakerAliases }: Pick<TranscriptPanelProps,
   'getSpeakerLabel' | 'speakerAliases' | 'setSpeakerAliases'> & { segment: TranscriptSegment }) {
   const identity = getSpeakerIdentity(segment)
-  const label = getSpeakerLabel(identity)
+  const identified = hasIdentifiedSpeaker(segment)
+  const label = identified ? getSpeakerLabel(identity) : formatTranscriptSource(segment.source)
   const [editing, setEditing] = useState(false)
   const originalAlias = useRef<string | undefined>(undefined)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -39,7 +41,7 @@ function TranscriptRow({ segment, getSpeakerLabel, speakerAliases, setSpeakerAli
   return (
     <li className={`segment ${segment.state}`}>
       <div className="segment-heading">
-        {(segment.source || segment.speaker) && <div className={`speaker-editor speaker-tone ${getSpeakerClassForIdentity(identity)}`}>
+        {identified ? <div className={`speaker-editor speaker-tone ${getSpeakerClassForIdentity(identity)}`}>
           <button ref={buttonRef} className="speaker-badge" type="button" hidden={editing} title={`Change speaker name: ${label}`}
             onClick={() => { originalAlias.current = speakerAliases[identity]; setAlias(label); setEditing(true) }}>{label}</button>
           {editing && <input ref={inputRef} aria-label="Speaker name" value={speakerAliases[identity] ?? ''}
@@ -48,7 +50,7 @@ function TranscriptRow({ segment, getSpeakerLabel, speakerAliases, setSpeakerAli
               if (event.key === 'Escape') { event.preventDefault(); setAlias(originalAlias.current); finish() }
               if (event.key === 'Enter') { event.preventDefault(); finish() }
             }} />}
-        </div>}
+        </div> : label && <div className="speaker-editor speaker-tone"><span className="speaker-badge">{label}</span></div>}
         <span className="segment-meta">{new Date(segment.timestampIso).toLocaleTimeString('en-US')}{segment.language && ` | ${segment.language}`}</span>
       </div>
       <div className="segment-text">{segment.text}</div>
@@ -59,6 +61,7 @@ function TranscriptRow({ segment, getSpeakerLabel, speakerAliases, setSpeakerAli
 export function TranscriptPanel(props: TranscriptPanelProps) {
   return (
     <section className="console-transcript transcript-panel" aria-label="Transcript">
+      {props.idleControls}
       {props.segments.length > 0 && <div className="console-column-labels"><span>TIME / SPEAKER</span><span>TRANSCRIPT</span></div>}
       {props.segments.length === 0 && (props.emptyContent ?? <p className="empty">No data yet.</p>)}
       <ul ref={props.transcriptListRef} className="transcript-list" tabIndex={0} aria-label="Transcript entries">

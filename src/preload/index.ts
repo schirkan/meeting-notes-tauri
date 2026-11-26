@@ -73,7 +73,10 @@ function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
 const api: TranscriptApi = {
   toggleDevtools: () => invoke<void>(TAURI_COMMANDS.toggleDevtools),
   openRepository: () => invoke<void>(TAURI_COMMANDS.openRepository),
-  start: () => invoke<TranscriptStatus>(TAURI_COMMANDS.startRecording),
+  start: (expectedProvider, expectedMode) => invoke<TranscriptStatus>(TAURI_COMMANDS.startRecording, { expectedProvider, expectedMode }),
+  pickBatchAudio: () => invoke<string | null>(TAURI_COMMANDS.pickBatchAudio),
+  transcribeBatchAudio: (path, expectedProvider, expectedModel) =>
+    invoke<TranscriptSegment[]>(TAURI_COMMANDS.transcribeBatchAudio, { path, expectedProvider, expectedModel }),
   stop: () => invoke<TranscriptStatus>(TAURI_COMMANDS.stopRecording),
   pause: () => invoke<TranscriptStatus>(TAURI_COMMANDS.pauseRecording),
   resume: () => invoke<TranscriptStatus>(TAURI_COMMANDS.resumeRecording),

@@ -112,6 +112,19 @@ static async Task<int> RunDetectionModeAsync(Dictionary<string, string?> argsMap
 }
 
 var argsMap = ArgsParser.Parse(args);
+if (argsMap.ContainsKey("--record-batch"))
+    return await BatchAudioRecorder.RunAsync(argsMap);
+// Keep readiness and recording on a separate path: no Azure configuration,
+// environment credentials, SDK calls, or fallback for this provider.
+if (argsMap.ContainsKey("--test-windows-ai-speech"))
+    return await WindowsAiSpeech.ProbeAsync(argsMap.GetValueOrDefault("--language"));
+if (!argsMap.ContainsKey("--transcribe-batch") && argsMap.GetValueOrDefault("--recognition-provider") == "windows-ai-speech")
+    return await WindowsAiSpeech.RunAsync(argsMap);
+if (argsMap.ContainsKey("--test-sapi"))
+    return await WindowsSapi.ProbeAsync(argsMap.GetValueOrDefault("--language") ?? "de-DE");
+if (!argsMap.ContainsKey("--transcribe-batch") && argsMap.GetValueOrDefault("--recognition-provider") == "windows-sapi")
+    return await WindowsSapi.RunAsync(argsMap);
+
 Logger.ConfigureSecrets(
     argsMap.GetValueOrDefault("--speech-key"),
     argsMap.GetValueOrDefault("--proxy-username"),
@@ -119,6 +132,9 @@ Logger.ConfigureSecrets(
     Environment.GetEnvironmentVariable("MEETING_NOTES_SPEECH_KEY"),
     Environment.GetEnvironmentVariable("MEETING_NOTES_PROXY_USERNAME"),
     Environment.GetEnvironmentVariable("MEETING_NOTES_PROXY_PASSWORD"));
+
+if (argsMap.ContainsKey("--transcribe-batch"))
+    return await BatchTranscription.RunAsync(argsMap);
 
 if (argsMap.ContainsKey("--test-connectivity"))
 {
@@ -152,6 +168,11 @@ Logger.Event("handshake", new
     sidecar_version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0",
     capabilities = new[] { "transcription", "diarization", "pause", "resume", "markdown_export" }
 });
+if (argsMap.GetValueOrDefault("--recognition-provider") is not (null or "azure"))
+{
+    Logger.Error("SIDECAR_START_FAILED", "Unsupported --recognition-provider; expected azure, windows-sapi, or windows-ai-speech.");
+    return 11;
+}
 
 DiarizationSettings diarization;
 try

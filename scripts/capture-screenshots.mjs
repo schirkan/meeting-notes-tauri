@@ -103,12 +103,12 @@ const connectivityResult = {
 function dummySegments() {
   const at = (second) => new Date(2026, 10, 18, 9, 13, second).toISOString()
   return [
-    { id: 's1', sessionId: 'demo-session', source: 'mic', speaker: 'Guest-1', language: 'en-US', timestampIso: at(1), text: 'Good morning, everyone. Today we are reviewing the transcript.', state: 'final' },
-    { id: 's2', sessionId: 'demo-session', source: 'speaker', speaker: 'Guest-2', language: 'en-US', timestampIso: at(6), text: 'Thank you. System audio capture is already producing useful sentences.', state: 'final' },
-    { id: 's3', sessionId: 'demo-session', source: 'mic', speaker: 'Guest-1', language: 'en-US', timestampIso: at(11), text: 'Speaker separation assigns the mic and the system output separately.', state: 'final' },
-    { id: 's4', sessionId: 'demo-session', source: 'speaker', speaker: 'Guest-2', language: 'en-US', timestampIso: at(16), text: 'Then we will export Markdown with frontmatter when we finish.', state: 'final' },
-    { id: 's5', sessionId: 'demo-session', source: 'mic', speaker: 'Guest-1', language: 'en-US', timestampIso: at(21), text: 'Exactly, with timestamps and speaker names.', state: 'final' },
-    { id: 's6', sessionId: 'demo-session', source: 'speaker', speaker: 'Guest-2', language: 'en-US', timestampIso: at(24), text: 'I am noting the open questions for the next', state: 'interim' }
+    { id: 's1', sessionId: 'demo-session', source: 'mic', speaker: 'Guest-1', speakerIdentified: true, language: 'en-US', timestampIso: at(1), text: 'Good morning, everyone. Today we are reviewing the transcript.', state: 'final' },
+    { id: 's2', sessionId: 'demo-session', source: 'speaker', speaker: 'Guest-2', speakerIdentified: true, language: 'en-US', timestampIso: at(6), text: 'Thank you. System audio capture is already producing useful sentences.', state: 'final' },
+    { id: 's3', sessionId: 'demo-session', source: 'mic', speaker: 'Guest-1', speakerIdentified: true, language: 'en-US', timestampIso: at(11), text: 'Speaker separation assigns the mic and the system output separately.', state: 'final' },
+    { id: 's4', sessionId: 'demo-session', source: 'speaker', speaker: 'Guest-2', speakerIdentified: true, language: 'en-US', timestampIso: at(16), text: 'Then we will export Markdown with frontmatter when we finish.', state: 'final' },
+    { id: 's5', sessionId: 'demo-session', source: 'mic', speaker: 'Guest-1', speakerIdentified: true, language: 'en-US', timestampIso: at(21), text: 'Exactly, with timestamps and speaker names.', state: 'final' },
+    { id: 's6', sessionId: 'demo-session', source: 'speaker', speaker: 'Guest-2', speakerIdentified: true, language: 'en-US', timestampIso: at(24), text: 'I am noting the open questions for the next', state: 'interim' }
   ]
 }
 

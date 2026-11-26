@@ -6,29 +6,32 @@ export type ConnectivityResult = TransportResult & { testedAtIso: string }
 type ConnectivityDialogProps = {
   isOpen: boolean
   isTesting: boolean
+  kind: 'azure' | 'native' | 'web'
   result: ConnectivityResult | null
   onClose: () => void
 }
 
-export function ConnectivityDialog({ isOpen, isTesting, result, onClose }: ConnectivityDialogProps) {
+export function ConnectivityDialog({ isOpen, isTesting, kind, result, onClose }: ConnectivityDialogProps) {
   const requestFailed = result?.steps.some((step) => step.step === 'IPC / Start diagnostics' || step.step === 'Check configuration')
   const httpsStatus = requestFailed || result?.httpsReachable === undefined ? 'not checked' : result.httpsReachable ? 'reachable' : 'failed'
   return (
-    <SettingsDialog isOpen={isOpen} onClose={onClose} title="Connection test">
+    <SettingsDialog isOpen={isOpen} onClose={onClose} title={kind === 'azure' ? 'Connection test' : 'Model availability'}>
       <div className="connectivity-dialog-content">
         <p role="status">
-          {isTesting ? 'Connection test running … (up to 45 seconds for Speech/WSS)' : result?.reachable
+          {kind !== 'azure' ? isTesting ? 'Checking model availability …' : result?.reachable ? 'Model check passed' : 'Model check failed'
+            : isTesting ? 'Connection test running … (up to 45 seconds for Speech/WSS)' : result?.reachable
             ? result.httpsReachable ? 'HTTPS and Speech/WSS reachable' : 'Speech/WSS reachable'
             : 'Connection test failed'}
         </p>
         <p className="connectivity-result-meta">
-          Validates TLS certificates on the tested connections. No audio is captured.
+          {kind === 'azure' ? 'Validates TLS certificates on the tested connections. No audio is captured.'
+            : 'No microphone, network recognition or audio is tested.'}
         </p>
         {result && (
           <>
-            <p>
+            {kind === 'azure' && <p>
               HTTPS: {httpsStatus} · Speech/WSS: {requestFailed ? 'not checked' : result.speechReachable ? 'reachable' : 'failed'}
-            </p>
+            </p>}
             {result.httpStatus && <p>HTTP {result.httpStatus} {result.httpStatusText}</p>}
             <p className="connectivity-result-meta">
               {result.probeUrl && <>{result.probeUrl}<br /></>}

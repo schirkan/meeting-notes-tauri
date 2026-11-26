@@ -26,7 +26,7 @@ export function toConfigDraft(config: AzureConfig | null): ConfigDraft {
   }
 }
 
-export function draftToConfig(draft: ConfigDraft): AzureConfig {
+export function draftToConfig(draft: ConfigDraft, { allowIncomplete = false } = {}): AzureConfig {
   const endpoint = draft.endpoint.trim()
   const region = draft.region.trim()
   const speechKey = draft.speechKey.trim()
@@ -37,7 +37,7 @@ export function draftToConfig(draft: ConfigDraft): AzureConfig {
   }
   const config: AzureConfig = { endpoint, region, speechKey, interimResults: draft.interimResults }
   if (model !== 'standard') config.model = model
-  if (!hasAzureConnectionFields(config)) {
+  if (!allowIncomplete && !hasAzureConnectionFields(config)) {
     throw new Error(model === 'standard'
       ? 'Please fill in endpoint, region and speech key.'
       : 'Please fill in region and speech key.')
@@ -67,8 +67,8 @@ export function draftToConfig(draft: ConfigDraft): AzureConfig {
   }
 }
 
-export function isConfigComplete(config: AzureConfig | null): boolean {
-  if (!config || !hasAzureConnectionFields(config)) return false
+export function isConfigComplete(config: AzureConfig | null, requireEndpoint = false): boolean {
+  if (!config || !hasAzureConnectionFields(config) || (requireEndpoint && !config.endpoint.trim())) return false
 
   if (!config.proxy) {
     return true

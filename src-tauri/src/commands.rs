@@ -110,12 +110,14 @@ impl CaptureStartGate {
 pub async fn start_recording(
     app: AppHandle,
     state: State<'_, AppState>,
+    expected_provider: Option<String>,
+    expected_mode: Option<String>,
 ) -> Result<events::TranscriptStatus, String> {
     let gate = app.state::<CaptureStartGate>();
     let _capture = gate.lock().await;
     let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
     let mut lifecycle = lifecycle.lock().await;
-    start_recording_with_origin(&app, &state, &mut lifecycle, None).await
+    start_recording_with_origin(&app, &state, &mut lifecycle, None, expected_provider.as_deref(), expected_mode.as_deref()).await
 }
 
 pub(crate) async fn start_recording_for_meeting(
@@ -132,7 +134,7 @@ pub(crate) async fn start_recording_for_meeting(
     let Ok(mut lifecycle) = lifecycle.try_lock() else {
         return Ok(false);
     };
-    start_recording_with_origin(app, &app.state::<AppState>(), &mut lifecycle, Some(origin)).await?;
+    start_recording_with_origin(app, &app.state::<AppState>(), &mut lifecycle, Some(origin), None, None).await?;
     Ok(true)
 }
 
@@ -141,6 +143,8 @@ async fn start_recording_with_origin(
     state: &AppState,
     lifecycle: &mut crate::autostart::RecordingLifecycle,
     origin: Option<crate::autostart::MeetingDetectedPayload>,
+    expected_provider: Option<&str>,
+    expected_mode: Option<&str>,
 ) -> Result<events::TranscriptStatus, String> {
     if app.state::<crate::tray::WindowBehavior>().protects_transcript() {
         return Err("Finish quitting before starting a new transcription.".into());
@@ -150,33 +154,49 @@ async fn start_recording_with_origin(
     }
     lifecycle.auto_origin = None;
     // Manual and automatic starts use one persisted snapshot for this sidecar.
+    lifecycle.web_speech = false;
+    lifecycle.sapi = false;
+    lifecycle.windows_ai_speech = false;
+    lifecycle.batch_manifest = None;
     let settings::AppConfig { azure, user } = settings::load_app_config().await.map_err(|e| e.to_string())?;
+    if expected_provider.is_some_and(|expected| expected != user.transcription.provider.as_str())
+        || expected_mode.is_some_and(|expected| expected != user.transcription.mode.as_str()) {
+        return Err("The saved transcription model changed. Reopen Settings before starting.".into());
+    }
     if origin.is_some() && !user.auto_start.enabled {
         return Err("Automatic transcription start is disabled.".into());
     }
     push_and_emit_debug(app, state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "start_recording called.");
 
-    let azure = azure.ok_or("The Azure configuration is missing or invalid. Check the transcription model and connection settings.")?;
-    azure.check_connection_fields()?;
-    let speech_endpoint = (azure.model == settings::AzureSpeechModel::Standard).then_some(azure.endpoint);
-
-    let options = SidecarOptions {
-        sample_rate: 16_000,
-        transcription: user.transcription.clone(),
-        diarization: user.diarization,
-        auto_language_detection: user.auto_language_detection,
-        interim_results: azure.interim_results,
-        language: Some(user.language.clone()),
-        speech_key: Some(azure.speech_key),
-        speech_region: Some(azure.region),
-        speech_model: azure.model,
-        speech_endpoint,
-        proxy: azure.proxy,
-        mic_device_id: user.devices.mic_id.clone(),
-        speaker_device_id: user.devices.speaker_loopback_id.clone(),
+    let batch = user.transcription.mode == settings::TranscriptionMode::Batch;
+    if user.transcription.mode == settings::TranscriptionMode::Unsupported
+        || (batch && !user.transcription.provider.supports_batch()) {
+        return Err("The saved provider does not support the selected transcription mode.".into());
+    }
+    if !batch && user.transcription.provider == settings::RecognitionProvider::WebSpeech {
+        if origin.is_some() { return Err("Web Speech API allows manual microphone start only.".into()); }
+        lifecycle.web_speech = true;
+        let status = state.mark_started();
+        events::emit_status(app, &status);
+        return Ok(status);
+    }
+    if !batch && origin.is_some() && user.transcription.provider == settings::RecognitionProvider::WindowsAiSpeech {
+        return Err("Windows AI Speech allows manual microphone start only.".into());
+    }
+    let (handle, use_sapi, use_windows_ai_speech) = if batch {
+        let root = crate::batch::recordings_directory(app)?;
+        tokio::fs::create_dir_all(&root).await.map_err(|err| format!("Cannot open recording folder: {err}"))?;
+        let directory = root.join(format!("{}-{}", chrono::Local::now().format("%Y%m%d-%H%M%S"), uuid::Uuid::new_v4()));
+        let handle = sidecar::start_batch_recorder(app, &user, &directory).map_err(|e| e.to_string())?;
+        lifecycle.batch_manifest = Some(directory.join("recording.json"));
+        (handle, false, false)
+    } else {
+        let options = recording_options(azure, user)?;
+        let use_sapi = options.use_sapi;
+        let use_ai = options.transcription.provider == settings::RecognitionProvider::WindowsAiSpeech;
+        let handle = sidecar::start(app, options).await.map_err(|e| e.to_string())?;
+        (handle, use_sapi, use_ai)
     };
-
-    let handle = sidecar::start(app, options).await.map_err(|e| e.to_string())?;
 
     // Cache the live handle so stop_recording can reach it. Das passiert vor
     // dem Start des Forwarders: der Handshake (T-201) wird ueber den Cache
@@ -197,6 +217,8 @@ async fn start_recording_with_origin(
     }
 
     lifecycle.auto_origin = origin;
+    lifecycle.sapi = use_sapi;
+    lifecycle.windows_ai_speech = use_windows_ai_speech;
     let status = state.mark_started();
     events::emit_status(app, &status);
     if let Some(origin) = lifecycle.auto_origin.as_ref() {
@@ -212,6 +234,59 @@ async fn start_recording_with_origin(
     Ok(status)
 }
 
+fn recording_options(azure: Option<AzureConfig>, user: settings::UserSettings) -> Result<SidecarOptions, String> {
+    let mut options = SidecarOptions {
+        sample_rate: 16_000,
+        use_sapi: false,
+        transcription: user.transcription,
+        diarization: false,
+        auto_language_detection: false,
+        interim_results: false,
+        language: Some(user.language),
+        speech_key: None,
+        speech_region: None,
+        speech_model: settings::AzureSpeechModel::Standard,
+        speech_endpoint: None,
+        proxy: None,
+        mic_device_id: user.devices.mic_id,
+        speaker_device_id: user.devices.speaker_loopback_id,
+    };
+    match options.transcription.provider {
+        settings::RecognitionProvider::WindowsSapi => {
+            options.use_sapi = true;
+            options.transcription.audio_mode = settings::AudioMode::DualMono;
+        }
+        settings::RecognitionProvider::WindowsAiSpeech => {
+            options.transcription.mic = true;
+            options.transcription.speaker = false;
+            options.transcription.audio_mode = settings::AudioMode::DualMono;
+            options.mic_device_id = None;
+            options.speaker_device_id = None;
+            options.language = None;
+        }
+        settings::RecognitionProvider::Azure => {
+            let azure = azure.ok_or("The Azure configuration is missing or invalid. Check the transcription model and connection settings.")?;
+            azure.check_connection_fields()?;
+            options.diarization = user.diarization;
+            options.auto_language_detection = user.auto_language_detection;
+            options.interim_results = azure.interim_results;
+            options.speech_key = Some(azure.speech_key);
+            options.speech_region = Some(azure.region);
+            options.speech_model = azure.model;
+            options.speech_endpoint = (azure.model == settings::AzureSpeechModel::Standard).then_some(azure.endpoint);
+            options.proxy = azure.proxy;
+        }
+        _ => return Err("The saved transcription model is unsupported. Choose a model in Settings.".into()),
+    }
+    Ok(options)
+}
+
+fn finish_web_recording(app: &AppHandle, state: &AppState) -> events::TranscriptStatus {
+    let status = state.mark_stopped_with_error(None);
+    events::emit_status(app, &status);
+    status
+}
+
 #[tauri::command]
 pub async fn stop_recording(
     app: AppHandle,
@@ -224,14 +299,19 @@ pub async fn stop_recording(
         return Err("Finish or cancel quitting before stopping transcription.".into());
     }
     lifecycle.auto_origin = None;
-    stop_recording_inner(&app, &state, false).await
+    if std::mem::take(&mut lifecycle.web_speech) { return Ok(finish_web_recording(&app, &state)); }
+    stop_recording_inner(&app, &state, false, lifecycle.batch_manifest.take()).await
 }
 
 pub async fn stop_recording_for_quit(app: &AppHandle) -> Result<events::TranscriptStatus, String> {
     let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
     let mut lifecycle = lifecycle.lock().await;
     lifecycle.auto_origin = None;
-    stop_recording_inner(app, &app.state::<AppState>(), true).await
+    if std::mem::take(&mut lifecycle.web_speech) {
+        // The renderer drains browser finals on the subsequent quit-export request.
+        return Ok(finish_web_recording(app, &app.state::<AppState>()));
+    }
+    stop_recording_inner(app, &app.state::<AppState>(), true, lifecycle.batch_manifest.take()).await
 }
 
 /// Only the process that automatically started this recording can end it.
@@ -260,13 +340,14 @@ pub async fn stop_recording_for_meeting(
         return Ok(false);
     }
     lifecycle.auto_origin = None;
-    stop_recording_inner(app, &state, false).await.map(|_| true)
+    stop_recording_inner(app, &state, false, lifecycle.batch_manifest.take()).await.map(|_| true)
 }
 
 async fn stop_recording_inner(
     app: &AppHandle,
     state: &AppState,
     for_quit: bool,
+    batch_manifest: Option<std::path::PathBuf>,
 ) -> Result<events::TranscriptStatus, String> {
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "stop_recording called.");
 
@@ -312,11 +393,16 @@ async fn stop_recording_inner(
     };
 
     // Quit already presents its own failure; only remember errors it has not seen.
+    let result = result.and_then(|()| match batch_manifest {
+        Some(path) if path.is_file() => Ok(Some(path.to_string_lossy().into_owned())),
+        Some(_) => Err("The audio recording did not finalize.".into()),
+        None => Ok(None),
+    });
     let stop_error = if for_quit { None } else { result.as_ref().err().cloned() };
-    let status = state.mark_stopped_with_error(stop_error);
+    let status = state.finish_recording(stop_error, result.as_ref().ok().and_then(|path| path.clone()));
     push_and_emit_debug(app, state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status changed: stopped.");
     events::emit_status(app, &status);
-    result.map(|()| status)
+    result.map(|_| status)
 }
 
 fn require_running_recording(state: &AppState) -> Result<(), String> {
@@ -327,6 +413,42 @@ fn require_running_recording(state: &AppState) -> Result<(), String> {
 #[cfg(test)]
 mod lifecycle_tests {
     use super::*;
+
+    #[test]
+    fn sapi_options_never_forward_azure_credentials_or_stereo() {
+        let mut user = settings::default_user_settings();
+        user.transcription.provider = settings::RecognitionProvider::WindowsSapi;
+        user.transcription.audio_mode = settings::AudioMode::Stereo;
+        let azure = serde_json::from_value(serde_json::json!({
+            "endpoint":"https://example.test", "region":"westeurope", "speechKey":"unused-test-value",
+            "interimResults":true, "proxy":{"host":"proxy.example.test","port":8080}
+        })).unwrap();
+        let opts = recording_options(Some(azure), user.clone()).unwrap();
+        assert!(opts.use_sapi && opts.transcription.mic && opts.transcription.speaker);
+        assert_eq!(opts.transcription.audio_mode, settings::AudioMode::DualMono);
+        assert!(opts.speech_key.is_none() && opts.speech_endpoint.is_none() && opts.speech_region.is_none() && opts.proxy.is_none());
+        assert!(!opts.diarization && !opts.auto_language_detection && !opts.interim_results);
+        assert!(recording_options(None, user.clone()).is_ok());
+        user.transcription.provider = settings::RecognitionProvider::Unsupported;
+        assert!(recording_options(None, user).is_err());
+    }
+
+    #[test]
+    fn windows_ai_speech_options_only_enable_default_mic_and_no_azure_credentials() {
+        let user: settings::UserSettings = serde_json::from_value(serde_json::json!({
+            "transcription": {"provider":"windows-ai-speech", "mic":false, "speaker":true, "audioMode":"stereo"},
+            "devices":{"micId":"other-mic","speakerLoopbackId":"other-loopback"},
+            "language":"en-GB"
+        })).unwrap();
+        assert_eq!(serde_json::to_value(&user).unwrap()["transcription"]["provider"], "windows-ai-speech");
+        let opts = recording_options(None, user).unwrap();
+        assert_eq!(opts.transcription.provider, settings::RecognitionProvider::WindowsAiSpeech);
+        assert!(!opts.use_sapi && opts.transcription.mic && !opts.transcription.speaker);
+        assert_eq!(opts.transcription.audio_mode, settings::AudioMode::DualMono);
+        assert!(opts.language.is_none() && opts.mic_device_id.is_none() && opts.speaker_device_id.is_none());
+        assert!(opts.speech_key.is_none() && opts.speech_region.is_none() && opts.speech_endpoint.is_none() && opts.proxy.is_none());
+        assert!(!opts.diarization && !opts.auto_language_detection && !opts.interim_results);
+    }
 
     #[tokio::test]
     async fn pause_waiting_for_automatic_stop_cannot_revive_the_recording() {
@@ -392,6 +514,8 @@ pub async fn pause_recording(
     let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
     let _lifecycle = lifecycle.lock().await;
     require_running_recording(&state)?;
+    if _lifecycle.batch_manifest.is_some() { return Err("Batch audio recording does not support pause.".into()); }
+    if _lifecycle.windows_ai_speech { return Err("Windows AI Speech does not support pause.".into()); }
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "pause_recording called.");
 
     let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
@@ -425,6 +549,8 @@ pub async fn pause_recording(
         return Err("No sidecar is running.".into());
     }
 
+    // SAPI acknowledges only after closing its capture and discarding buffered audio.
+    if _lifecycle.sapi { return Ok(state.snapshot_status()); }
     let status = state.mark_paused();
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status changed: paused.");
     events::emit_status(&app, &status);
@@ -440,6 +566,8 @@ pub async fn resume_recording(
     let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
     let _lifecycle = lifecycle.lock().await;
     require_running_recording(&state)?;
+    if _lifecycle.batch_manifest.is_some() { return Err("Batch audio recording does not support resume.".into()); }
+    if _lifecycle.windows_ai_speech { return Err("Windows AI Speech does not support resume.".into()); }
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "resume_recording called.");
 
     let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
@@ -473,6 +601,7 @@ pub async fn resume_recording(
         return Err("No sidecar is running.".into());
     }
 
+    if _lifecycle.sapi { return Ok(state.snapshot_status()); }
     let status = state.mark_resumed();
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status changed: resumed.");
     events::emit_status(&app, &status);
@@ -549,7 +678,7 @@ pub async fn clear_debug_log(
 
 // ---------- devices ----------
 
-fn background_command(program: &std::ffi::OsStr) -> std::process::Command {
+pub(crate) fn background_command(program: &std::ffi::OsStr) -> std::process::Command {
     let mut command = std::process::Command::new(program);
     command.stdout(std::process::Stdio::piped());
     command.stderr(std::process::Stdio::piped());
@@ -914,6 +1043,15 @@ pub async fn test_azure_connectivity(
         }
     }
     let value = payload.unwrap_or(serde_json::Value::Null);
+    if let Some(provider) = value.get("provider") {
+        let (flag, event, label) = match provider.as_str() {
+            Some("windows-sapi") => ("--test-sapi", "sapi_probe", "Windows SAPI"),
+            Some("windows-ai-speech") => ("--test-windows-ai-speech", "windows_ai_speech_probe", "Windows AI Speech"),
+            _ => return Err("This model does not use the native connection test.".into()),
+        };
+        let language = (flag == "--test-sapi").then(|| value.get("language").and_then(|v| v.as_str()).unwrap_or("de-DE"));
+        return test_native_readiness(&app, flag, event, label, language).await;
+    }
     let config: AzureConfig = serde_json::from_value(value.clone())
         .map_err(|_| "Invalid Azure configuration. Check the model, region, speech key, endpoint and proxy.")?;
     config.check_connection_fields()?;
@@ -993,6 +1131,32 @@ pub async fn test_azure_connectivity(
 }
 
 // ---------- clipboard ----------
+
+async fn test_native_readiness(app: &AppHandle, flag: &str, event_type: &str, label: &str, language: Option<&str>) -> Result<connectivity::ConnectivityResult, String> {
+    let start = std::time::Instant::now();
+    let path = sidecar::resolve_sidecar_path(app).map_err(|e| e.to_string())?;
+    let mut command = tokio::process::Command::from(background_command(path.as_os_str()));
+    command.arg(flag);
+    if let Some(language) = language { command.args(["--language", language]); }
+    command.env_remove("MEETING_NOTES_SPEECH_KEY");
+    command.kill_on_drop(true);
+    let output = tokio::time::timeout(std::time::Duration::from_secs(12), command.output()).await
+        .map_err(|_| format!("{label} did not report availability within 12 seconds."))?
+        .map_err(|e| format!("The {label} check could not start: {e}"))?;
+    let payload = String::from_utf8_lossy(&output.stdout).lines().find_map(|line| {
+        let event: serde_json::Value = serde_json::from_str(line).ok()?;
+        (event.get("type")?.as_str()? == event_type).then(|| event.get("payload").cloned()).flatten()
+    }).ok_or_else(|| format!("{label} did not report availability."))?;
+    let ready = payload.get("ready").and_then(|v| v.as_bool()) == Some(true) && output.status.success();
+    let detail = payload.get("detail").and_then(|v| v.as_str()).map(str::to_string)
+        .unwrap_or_else(|| format!("{label} availability could not be determined."));
+    Ok(connectivity::ConnectivityResult {
+        probe_url: String::new(), reachable: ready, https_reachable: None, speech_reachable: ready,
+        http_status: None, http_status_text: None, latency_ms: start.elapsed().as_millis() as u64,
+        error: (!ready).then(|| detail.clone()),
+        steps: vec![connectivity::Step { step: label.into(), status: if ready { connectivity::StepStatus::Ok } else { connectivity::StepStatus::Error }, detail }],
+    })
+}
 //
 // Clipboard copy is done in the renderer via `navigator.clipboard`
 // (WebView2 supports it natively) — the Rust side has no clipboard

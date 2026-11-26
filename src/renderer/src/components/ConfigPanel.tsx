@@ -5,6 +5,9 @@ type ConfigPanelProps = {
   configState: AppConfigState | null
   configDraft: ConfigDraft
   statusRunning: boolean
+  enabled: boolean
+  endpointEnabled: boolean
+  batch: boolean
   setConfigDraft: React.Dispatch<React.SetStateAction<ConfigDraft>>
 }
 
@@ -12,11 +15,9 @@ export function ConfigPanel(props: ConfigPanelProps) {
   const {
     configState,
     configDraft,
-    statusRunning,
+    statusRunning, enabled, endpointEnabled, batch,
     setConfigDraft
   } = props
-
-  const isMai = configDraft.model === 'mai-transcribe-2-streaming'
 
   return (
     <section className="panel settings">
@@ -24,21 +25,22 @@ export function ConfigPanel(props: ConfigPanelProps) {
         <h2>Azure</h2>
       </div>
 
-      {!configState?.config && (
+      {enabled && !configState?.config && (
         <div className="settings-inline-hint">
-          No valid Azure configuration found. Please enter and save one now.
+          {batch ? 'Local recording does not require Azure credentials. Enter them before transcribing with Azure.'
+            : 'No valid Azure configuration found. Please enter and save one now.'}
         </div>
       )}
 
       <div className="settings-block">
-        <label className="full-field" title="Enter the HTTPS endpoint of your Azure Speech resource">
+        <label className="full-field" title={batch ? 'Enter the HTTPS origin of your Azure Speech resource without an API path' : 'Enter the HTTPS endpoint of your Azure Speech resource'}>
           Endpoint
           <input
             type="text"
             value={configDraft.endpoint}
             onChange={(event) => setConfigDraft((prev) => ({ ...prev, endpoint: event.target.value }))}
-            placeholder="https://..."
-            disabled={statusRunning || isMai}
+            placeholder={batch ? 'https://<resource>.cognitiveservices.azure.com' : 'https://...'}
+            disabled={statusRunning || !endpointEnabled}
           />
         </label>
 
@@ -49,7 +51,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
             value={configDraft.region}
             onChange={(event) => setConfigDraft((prev) => ({ ...prev, region: event.target.value }))}
             placeholder="westeurope"
-            disabled={statusRunning}
+            disabled={statusRunning || !enabled}
           />
         </label>
 
@@ -60,7 +62,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
             value={configDraft.speechKey}
             onChange={(event) => setConfigDraft((prev) => ({ ...prev, speechKey: event.target.value }))}
             placeholder="Azure Speech Key"
-            disabled={statusRunning}
+            disabled={statusRunning || !enabled}
           />
         </label>
       </div>

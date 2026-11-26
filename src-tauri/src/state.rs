@@ -25,6 +25,7 @@ struct AppStateInner {
     paused: bool,
     started_at: Option<String>,
     stop_error: Option<String>,
+    recording_path: Option<String>,
     debug_log: Vec<DebugLogEntry>,
     /// T-201: Zahl der fehlerhaften JSON-Zeilen aus dem Sidecar.
     malformed_lines: u64,
@@ -94,6 +95,7 @@ impl AppState {
             running: inner.running,
             paused: inner.paused,
             started_at: inner.started_at.clone(),
+            recording_path: inner.recording_path.clone(),
         }
     }
 
@@ -104,10 +106,12 @@ impl AppState {
         let started_at = Utc::now().to_rfc3339();
         inner.started_at = Some(started_at.clone());
         inner.stop_error = None;
+        inner.recording_path = None;
         TranscriptStatus {
             running: true,
             paused: false,
             started_at: Some(started_at),
+            recording_path: None,
         }
     }
 
@@ -121,6 +125,7 @@ impl AppState {
             running: true,
             paused: true,
             started_at: inner.started_at.clone(),
+            recording_path: None,
         }
     }
 
@@ -133,6 +138,7 @@ impl AppState {
             running: true,
             paused: false,
             started_at: inner.started_at.clone(),
+            recording_path: None,
         }
     }
 
@@ -149,16 +155,22 @@ impl AppState {
     }
 
     pub fn mark_stopped_with_error(&self, error: Option<String>) -> TranscriptStatus {
+        self.finish_recording(error, None)
+    }
+
+    pub fn finish_recording(&self, error: Option<String>, recording_path: Option<String>) -> TranscriptStatus {
         let mut inner = self.inner.lock().expect("AppState mutex poisoned");
         if error.is_some() { inner.stop_error = error; }
         inner.running = false;
         inner.paused = false;
         inner.started_at = None;
         inner.handshake_version = None;
+        inner.recording_path = recording_path.clone();
         TranscriptStatus {
             running: false,
             paused: false,
             started_at: None,
+            recording_path,
         }
     }
 
