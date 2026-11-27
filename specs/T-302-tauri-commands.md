@@ -12,6 +12,7 @@ Vollständige Tauri-Command-API definieren, die der React-Renderer aufrufen kann
 - [x] Commands sind in Rust mit `#[tauri::command]` deklariert: Beleg: src-tauri/src/commands.rs (alle Commands mit #[tauri::command]) und src-tauri/src/lib.rs (Registrierung).
   - `start_recording() -> Result<TranscriptStatus, String>`
   - `stop_recording() -> Result<TranscriptStatus, String>`
+  - `pick_batch_audio`, `inspect_batch_audio` und `transcribe_batch_audio` waehlen eine WAV aus, liefern Zeitinformationen bzw. transkribieren die zugeordneten Spuren mit Dateioptionen. Beleg: [batch.rs](../src-tauri/src/batch.rs); Ablauf in [T-525](./T-525-batch-transkription-und-lokale-aufnahme.md).
   - `reset_transcript() -> Result<(), String>`
   - `get_status() -> Result<TranscriptStatus, String>`
   - `get_debug_log() -> Result<Vec<DebugLogEntry>, String>`
@@ -26,9 +27,9 @@ Vollständige Tauri-Command-API definieren, die der React-Renderer aufrufen kann
   - `toggle_devtools(window: WebviewWindow)` fuer F12 und den Menuepunkt **Dev-Tools (F12)**, auch im Release-/Portable-Build (Window wird von Tauri injiziert; Renderer-Aufruf ohne Argumente).
   - `open_repository(app: AppHandle) -> Result<(), String>` oeffnet ausschliesslich `https://github.com/schirkan/meeting-notes-tauri` im Systembrowser; kein URL-Argument aus dem Renderer. Neue native Abnahme siehe [T-402](./T-402-ui-komponenten-portieren.md).
 - [x] `AppConfigState` enthält `exists`, `path` und optional `config`; `get_app_config` und `save_fixed_config` liefern den tatsächlichen Backend-Dateipfad. Beleg: src/preload/index.ts (AppConfigState), scripts/clean-sidecar.mjs (exists), scripts/dist-portable.mjs (config) (geprueft).
-- [x] `ConnectivityResult` unterscheidet `httpsReachable` und `speechReachable`; `reachable` verlangt beide. Rückgabe und zusätzliches `transcript:connectivity-result`-Event enthalten alle Schritte erst nach Abschluss. Beleg: sidecar/SpeechConnectivityDiagnostic.cs (ConnectivityResult), src/preload/index.ts (httpsReachable), src/preload/index.ts (speechReachable) (geprueft).
+- [x] `ConnectivityResult` unterscheidet `httpsReachable` und `speechReachable`; `reachable` verlangt die fuer das Modell vorgesehenen Pruefungen. Rueckgabe und `transcript:connectivity-result` enthalten die Schritte nach Abschluss. Beleg: [T-304](./T-304-connectivity-diagnose-in-rust.md) und [tauri-contract.ts](../src/shared/tauri-contract.ts).
 - [x] **Kein** `copy_transcript`-Command mehr — Clipboard-Copy lebt im Preload via `navigator.clipboard.writeText` (siehe `DECISIONS.md → AD-010`). Beleg: src/preload/index.ts (navigator.clipboard.writeText) (geprueft).
-- [x] Alle Commands sind in einer zentralen `commands.rs` registriert. Beleg: src-tauri/src/commands.rs (geprueft).
+- [x] Commands sind zentral im Tauri-Builder registriert; Datei-Commands liegen in `batch.rs`. Beleg: [lib.rs](../src-tauri/src/lib.rs) (`generate_handler!`).
 - [x] Preload-Bridge im Renderer hat typisierte Wrapper-Funktionen für jeden Command (`src/preload/index.ts`, `TranscriptApi` in `src/shared/transcript-contract.ts`). Beleg: src/preload/index.ts, scripts/test-smoke.mjs (TranscriptApi), src/shared/transcript-contract.ts (geprueft).
 
 ## Approach

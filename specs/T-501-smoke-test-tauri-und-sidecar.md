@@ -24,7 +24,7 @@ Smoke-Test, der die gesamte Tauri-Variante inkl. Sidecar-Spawn und Speech-Pipeli
   5. Transcript-Contract hat alle benötigten TS-Typen.
   6. Exit-Codes summieren und Skript-Exit-Code setzen.
 - [x] Skript ist im `package.json` als `npm run test:smoke` registriert. Beleg: package.json, package.json (run) (geprueft).
-- [ ] Voller End-to-End-Test mit WebDriver + App-Start + `start_recording()`/Event-Wait - **offen**: WebDriver-Setup für Tauri 2 ist aufwendig; die headless Smoke-Stufen 1–5 decken die kritischen Artefakt-Invarianten ab.
+- [ ] Reproduzierbarer WebDriver-End-to-End-Test mit App-Start, `start_recording()` und Warten auf Events. - **offen**: Der Nutzer bestaetigte am 28.11.2026 den Ablauf fuer das Azure Speech SDK. Ein WebDriver-Skript oder ein Laufprotokoll fuer die Automatisierung liegt im Repository nicht vor.
 
 ## Zusätzliche lokale Validierung (2026-11-09)
 - `npm run test:smoke` nach letztem Portable-Rebuild erfolgreich, alle **25** SHA256-Summen (1 App-EXE + 23 Sidecar-Dateien + 1 Config-Template) stimmen.

@@ -25,7 +25,7 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
 - **Meeting Notes**, veroeffentlichte Version **0.1.9**, ist eine portable Windows-11-x64-Anwendung
   fuer Live-Transkripte. Azure ist Standard; Windows SAPI
   und Web Speech API sind experimentell, nicht veroeffentlicht. Modellmatrix und offene Abnahmen: [T-523](./specs/T-523-native-windows-stt-provider.md).
-- Batch-Dateitranskription und lokaler Meeting-Recorder speichern zwei zeitlich ausgerichtete WAV-Quellen ohne Begleitdatei und befuellen nach erfolgreichem Stop den Datei-Dialog: [T-525](./specs/T-525-batch-transkription-und-lokale-aufnahme.md), noch nicht veroeffentlicht.
+- Die neue Startseite trennt Live-/lokale Aufnahme von Dateitranskription. Lokale Aufnahme speichert eine oder zwei zeitlich ausgerichtete WAV-Spuren ohne Begleitdatei und befuellt nach erfolgreichem Stop den Dateibereich. Datei-Modelloptionen und Azure-Dateiendpunkt sind getrennt von Live: [T-525](./specs/T-525-batch-transkription-und-lokale-aufnahme.md), noch nicht veroeffentlicht.
 - Die gesamte Oberflaeche, alle Meldungen und die oeffentliche Doku sind
   englisch; Specs, `SPEC.md` und diese Datei bleiben intern deutsch.
   Siehe [T-516](./specs/T-516-englische-oberflaeche-und-oeffentliche-doku.md).
@@ -38,8 +38,9 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
 - Automatischer Start beobachtet lokale Core-Audio-Sessions erlaubter Prozesse,
   ohne Kalender. Seit v0.1.5 umfasst die Standardliste `teams` und `ms-teams`;
   der Detektor beobachtet alle beim Start aktiven Audio-Endpunkte.
-  Auto-Start und Auto-Stop sind im Praxistest bestaetigt; die Podcast-Gegenprobe
-  ist offen. Auto-Stop betrifft nur die passend automatisch gestartete Aufnahme.
+  Auto-Start und Auto-Stop sind im Praxistest bestaetigt, ebenso die Teams-Erkennung;
+  Podcast-Gegenprobe und der geplante Auto-Stop nach Stille sind offen. Der bestehende
+  Auto-Stop bei Session-Ende betrifft nur die passend automatisch gestartete Aufnahme.
   `user.autoStart.enabled` und `user.autoStart.autoStop` sind standardmaessig aktiv;
   gespeichertes `false` bleibt erhalten. Die Erkennung ist eine Heuristik.
   Siehe [T-513](./specs/T-513-automatische-meeting-erkennung-und-auto-start.md).
@@ -50,8 +51,8 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
   bei Pause gelb, nach Stop wieder in Originalfarbe.
   Siehe [T-514](./specs/T-514-systray-und-schliessen-verhalten.md).
 - Einstellungen stehen auf einer scrollenden Seite ohne Tabs oder Bereichsnavigation:
-  **General**, **Transcription**, **Speech recognition**, **Azure**, **Proxy**. Die Quellenauswahl steht nur
-  im Leerzustand der Startseite und werden sofort gespeichert. Der Dialog hat
+  **General**, **Transcription**, **Azure**, **Proxy**. Quellen und Live-Modelloptionen
+  stehen auf der Startseite und werden sofort gespeichert. Der Dialog hat
   einen temporaeren Store, initialen Speichern-Fokus und fragt beim Schliessen
   nach ungespeicherten Aenderungen. Nur **Save** persistiert den Dialog-Draft.
   **Test connection**, letzte Ergebnisse und **Save** liegen im Footer.
@@ -97,6 +98,8 @@ Kein automatischer Reconnect mit neuer Azure-Sitzung. Siehe [T-201](./specs/T-20
   komprimiert und konservativ getrimmt; Zielsystem braucht WebView2, keine
   separate .NET-Installation. Siehe [T-504](./specs/T-504-portable-build.md)
   und [T-512](./specs/T-512-sidecar-targetframeworks-und-single-file.md).
+  Start, Settings, Config neben der EXE und Diagnosefehler sind auf frischem Windows 11
+  manuell abgenommen ([T-510](./specs/T-510-clean-machine-deployment-windows-11.md)).
 - Builds fuer Veroeffentlichungen laufen nur bei `v*`-Tags oder manuellem
   Release-Workflow, **nicht** bei normalen Pushes oder Pull Requests.
   Siehe [T-515](./specs/T-515-github-actions-pipeline-und-release.md).
@@ -137,7 +140,6 @@ Offene Abnahmen und Messverfahren: [T-500](./specs/T-500-qualitaetssicherung-und
 ## Git
 
 - **Repo-Typ:** bestehendes GitHub-Repository (geklont).
-- **Pfad:** `C:\Users\Admin\.openclaw\workspace\projects\meeting-notes-tauri`.
 - **Remote:** `origin` = https://github.com/schirkan/meeting-notes-tauri.git.
 - **Eingerichtet am:** historisches Klondatum nicht dokumentiert.
 - **`.gitignore`-Status:** vorhanden; persoenliche Config und Build-Artefakte ausgeschlossen.
@@ -166,8 +168,4 @@ Offene Abnahmen und Messverfahren: [T-500](./specs/T-500-qualitaetssicherung-und
   Push-/PR-Builds.
 - **Build/Output:** Tauri-App mit self-contained C#-Sidecar, Portable-ZIP und
   `SHA256SUMS.txt` als GitHub-Release-Assets.
-- **Letzter Lauf:** 24.11.2026, Commit `c00d50a832b58f6180b90a9cfcdcfa5e47569067`,
-  [Run 45337473666](https://github.com/schirkan/meeting-notes-tauri/actions/runs/45337473666), **success**.
-- **Release:** [v0.1.7](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.7),
-  Download-/Hash-/Versions-/Deployment-Nachweis in [T-515](./specs/T-515-github-actions-pipeline-und-release.md#release-v017-24112026).
-  Damals 108 Node- und 53 Rust-Tests bestanden.
+- **Release-Belege:** [T-515](./specs/T-515-github-actions-pipeline-und-release.md#release-v019-25112026).

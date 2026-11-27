@@ -1,7 +1,7 @@
 # T-201: JSON-Lines-Protokoll zwischen Tauri-Main und C#-Sidecar (via stdin/stdout)
 
 ## Kontext
-Status: teils umgesetzt (1 Punkt offen)
+Status: umgesetzt
 Priorität: high
 Abhängigkeiten: T-200
 
@@ -23,7 +23,8 @@ Das bestehende Binär-Frame-Protokoll (36-B-Header + PCM-Payload + CRC) aus `../
 - [x] **C#-Seite:** nutzt `System.Text.Json` + `Console.Out` / `Console.In` (async mit `StreamWriter`/`StreamReader` über `Console.OpenStandardOutput()` / `Console.OpenStandardInput()`). **Keine** `NamedPipeServerStream`-Aufrufe mehr. Beleg: System.Text.Json, Console.Out mit Flush (Logger.cs) und Console.In.ReadLineAsync (Program.cs). Abweichung vom Wortlaut: nicht ueber Console.OpenStandardOutput/Input, sondern direkt ueber Console.Out/Console.In.
 - [x] **Rust-Seite:** nutzt `tauri-plugin-shell` (`Command::new_sidecar`) + `serde_json` zum Parsen der stdout-Zeilen + `CommandChild::write()` für stdin. Beleg: tauri-plugin-shell und serde_json in der Rust-Seite.
 - [x] **Newline-Flushing:** C#-Sidecar flusht stdout nach jeder JSON-Zeile (verhindert Stdio-Buffering). Tauri liest Zeile für Zeile. Beleg: Console.Out.Flush() nach jeder Zeile.
-- [ ] **Reconnects:** Tauri startet den Sidecar bei Crash automatisch neu (max. 3 Versuche, siehe `T-301`); C#-Sidecar führt nach jedem Start ein neues Handshake durch. - **offen**: bewusst nicht umgesetzt - ein Neustart des Sidecars erzeugt eine **neue Azure-Sitzung**, damit brechen die Sprecher-IDs (T-507). Ein automatischer Reconnect würde die Sprecherzuordnung einer laufenden Aufnahme still zerstören. Stattdessen wird der Crash klar gemeldet (T-300: persistenter Fehler-Toast mit Exit-Code) und die Aufnahme neu gestartet.
+
+**Nicht im Scope (Nutzerentscheid vom 28.11.2026):** Kein automatischer Sidecar-Neustart mit neuer Azure-Sitzung nach Absturz, da dabei Sprecher-IDs wechseln. Der Absturz wird angezeigt; eine neue Aufnahme wird manuell gestartet. Siehe [T-507](./T-507-pause-stop-und-sitzungsgebundene-sprecherzuordnung.md).
 - [x] Fehlertoleranz: JSON-Parser ignoriert Malformed-Lines und loggt sie im Debug-Stream (Rate-limited, max. 1/1000). Beleg: umgesetzt - der Rust-Main zählt fehlerhafte Zeilen (`AppState::note_malformed_line`); die erste wird immer geloggt, danach nur jede 1000.
 
 ## Approach

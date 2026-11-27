@@ -1,13 +1,13 @@
 # T-521: MAI-Transcribe-2-Streaming – Mehrkanal im Sidecar
 
 ## Kontext
-Status: teils umgesetzt (3 Punkte offen)
+Status: teils umgesetzt (1 Punkt offen)
 Reifegrad: lokaler Nachweis; Standard-Stereo live offen; MAI-Stereo nach erneut gemeldetem Fehler deaktiviert.
 Abhaengigkeiten: [T-520: Feature](./T-520-mai-transcribe-streaming-feature.md), [T-522: SDK-Nachweis](./T-522-mai-transcribe-machbarkeit-kosten-abnahme.md), [T-204: Speech SDK](./T-204-azure-speech-sdk-integration-im-sidecar.md), [T-201: JSON-Lines](./T-201-json-lines-protokoll-tauri-zu-sidecar.md), [T-507: Sitzungsidentitaet](./T-507-pause-stop-und-sitzungsgebundene-sprecherzuordnung.md)
 
 ## Implementierung
 
-**Settings → Speech recognition → Audio stream mode** bietet
+**Record a meeting → Transcribe live → Audio stream mode** auf der Startseite bietet
 **Mono (separate sessions per audio device)** als Standardwert und
 **Stereo (one session)** nur fuer Azure Speech Standard.
 MAI ignoriert die gespeicherte Stereo-Praeferenz; die Sidecar-CLI weist
@@ -60,5 +60,5 @@ Erkennung oder Kanalzuordnung.
 ## Done When
 - [x] PCM-Reihenfolge, Versatz, fehlende Samples, Puffergrenzen, Pause/Resume, Drain und strikte Final-Kanalpruefung sind lokal getestet. Beleg: `npm run test:sidecar` mit 608 bestandenen Assertions; Stichproben zu Media Foundation und Nicht-Standard-Audioendpunkt blieben offen. Typecheck und 42 Config-Tests bestanden.
 - [ ] Hardwarelauf belegt Zeitanker, Resampling-Fallback, Drift und gleichzeitige Sprache. - **offen**: Synthetische PCM-Tests ersetzen keine WASAPI-Hardwaremessung.
-- [ ] Live-Azure belegt je eine Sitzung, korrekte Finals und Standard-Sprecher-IDs fuer beide Standard-Recognizer sowie Interim-Zuordnung. - **offen**: Azure-Ressource und geeignete Credentials fehlen in der Testumgebung.
-- [ ] Live-Lifecycle und Diagnose decken Pause/Resume, Sitzungsende, Stop/Quit und letzte Finals bei Proxy/Direktverbindung ab. - **offen**: Live-Azure und getrimmter Portable-Build stehen aus; lokaler Virenscanner blockiert den MSBuild-Taskhost fuer Trimming.
+- [x] Azure Standard live mit beiden Recognizer-Typen geprueft: je eine Sitzung, korrekte Finals, Sprecher-IDs und Interim-Zuordnung. Beleg: Nutzerabnahme vom 28.11.2026.
+- [x] Pause/Resume, Sitzungsende, Stop/Quit, letzte Finals und Diagnose im getrimmten Portable-Build mit Proxy und Direktverbindung geprueft. Beleg: Nutzerabnahme vom 28.11.2026; kein neuer automatisierter Build- oder Testlauf daraus abgeleitet.

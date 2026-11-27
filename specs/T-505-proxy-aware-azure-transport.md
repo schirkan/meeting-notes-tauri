@@ -23,7 +23,7 @@ Die native Azure-Speech-SDK nutzt die per `setProxy()` gesetzten Proxy-Propertie
 
 ## Aktueller Prüfpfad (2026-11-09)
 - Einstellungen enthalten einen eigenen Proxy-Bereich; **Verbindung testen** liegt im Azure-Bereich und testet auch ungespeicherte Werte.
-- [T-304](./T-304-connectivity-diagnose-in-rust.md) prüft parallel HTTPS über expliziten HTTP-CONNECT-Proxy und native Speech/WSS-Verbindungen für beide Recognizer. Der separate Dialog zeigt alle Ergebnisse und Fehlerdetails nach Abschluss.
+- [T-304](./T-304-connectivity-diagnose-in-rust.md) prueft bei Azure Standard parallel HTTPS ueber den expliziten HTTP-CONNECT-Proxy und Speech/WSS fuer den wirksamen Recognizer-Typ. Der separate Dialog zeigt die Ergebnisse nach Abschluss.
 - HTTP 401/403 ist HTTPS-Erreichbarkeit, keine erfolgreiche Speech-Authentifizierung. Gesamterfolg verlangt HTTPS **und** beide nativen Speech-Sitzungen.
 - HTTPS und native Windows-Speech-Zertifikatsprüfungen validieren beide aktiv gegen den System-Vertrauensspeicher. Zertifikats-/Authentifizierungs-/Allowlisting-Fehler im Zielnetz getrennt auswerten.
 - Lokaler nativer Negativtest bestätigt Diagnose und Fehleranzeige. Im Firmennetz am 2026-11-12 zusätzlich bestätigt: erfolgreicher CONNECT zu Azure, HTTPS **und** native Speech/WSS-Sitzungen erfolgreich. Das aus Node übernommene Proxy-Problem tritt im C#-Pfad nicht auf.

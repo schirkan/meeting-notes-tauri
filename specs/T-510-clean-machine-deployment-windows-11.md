@@ -1,7 +1,7 @@
 # T-510: Clean-Machine-Deployment (Windows 11, Self-contained-Sidecar, WebView2)
 
 ## Kontext
-Status: vorbereitet (2 Punkte offen; Pruefskript vorhanden und erprobt, Ausfuehrung auf dem Zielsystem steht aus)
+Status: umgesetzt
 Prioritaet: medium
 Abhaengigkeiten: T-504, T-505, T-507, T-508
 
@@ -33,10 +33,8 @@ Ein Punkt = eine Zeile im Skript-Output.
 - [x] `MeetingNotes.exe` ist eine GUI-Anwendung (PE-Subsystem 2) — **kein** Beleg: scripts/verify-deployment.ps1 (liest das PE-Subsystem der Haupt-EXE). Testnachweis: npm run verify:deployment - PASS 10 / FAIL 0 (2026-11-17).
       Konsolenfenster beim Start.
 - [x] Config-Template enthaelt einen Platzhalter statt eines echten Keys. Beleg: MeetingNotes.config.example.json (Platzhalter statt eines echten Keys); scripts/verify-deployment.ps1 prueft das. Testnachweis: npm run verify:deployment - PASS 10 / FAIL 0 (2026-11-17).
-- [ ] Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch - **offen**: Braucht die Ausfuehrung auf dem Zielsystem - das Pruefskript liegt bereit (npm run verify:deployment).
-      (ohne Azure-Config), Config-Datei entsteht direkt neben der EXE, "Verbinden
-      testen" meldet Netzwerk-/Proxy-Fehler verstaendlich.
-- [ ] Befunde sind in `T-504`, `T-500`, `SPEC.md` und `AGENTS.md` nachgezogen. - **offen**: Folgt aus der Ausfuehrung auf dem Zielsystem.
+- [x] Frisches Windows 11 mit WebView2 ohne installierte .NET-Runtime: Fenster startet, Einstellungen oeffnen automatisch ohne Azure-Config, die Config entsteht neben der EXE und die Diagnose meldet Netzwerk-/Proxyfehler verstaendlich. Beleg: manuelle Nutzerabnahme vom 28.11.2026; kein Skriptprotokoll, keine Build- oder Windows-Versionsnummer und kein Nachweis fuer experimentelle Speech-Provider oder Live-Latenz aus diesem Lauf.
+- [x] Zielsystembefunde nachgetragen. Beleg: [T-504](./T-504-portable-build.md), [T-500](./T-500-qualitaetssicherung-und-akzeptanztests.md), [SPEC.md](../SPEC.md) und [AGENTS.md](../AGENTS.md).
 
 ## Voraussetzungen mit Nachweis
 | Voraussetzung | Nachweis auf dem Zielsystem |

@@ -3,7 +3,9 @@
 Two ways to capture the Meeting Notes interface. Both sets were regenerated
 and visually checked for version **0.1.4** on **2026-11-20**, with English UI text
 and English renderer demo data. The product's default transcription language
-remains German; the renderer demo explicitly selects English.
+remains German; the renderer demo explicitly selects English. These are historical
+captures, not a visual acceptance test of the current home page, file transcription
+or live model controls.
 
 ## `native/` - the real application
 
@@ -45,7 +47,7 @@ recording requires Azure Speech credentials.
 
 ## Why only two settings images
 
-After the redesign the dialog is one compact page: the sections **General**,
+In v0.1.4 the dialog was one compact page: the sections **General**,
 **Transcription**, **Azure** and **Proxy** are stacked, and several sections
 partially fit into one image. Audio switches now live only on the start page. Four individual
 captures would therefore produce byte duplicates. Two captures - from the top

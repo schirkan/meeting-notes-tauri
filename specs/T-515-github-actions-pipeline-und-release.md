@@ -7,17 +7,17 @@ Abhaengigkeiten: T-503, T-504, T-505
 
 Bisher wurden alle Builds und Releases ausschliesslich lokal auf einem Windows-Entwicklerrechner
 erzeugt. Das Repo hatte keinen `.github`-Ordner, also weder eine CI-Pipeline noch einen
-automatischen Release-Pfad. Jede Veroeffentlichung war damit ein manueller,
+automatischen Release-Pfad vor dieser Aufgabe. Jede Veroeffentlichung war damit ein manueller,
 nicht reproduzierbarer Schritt auf einem einzigen Rechner.
 
 **Entscheidung:** Es gibt bewusst **keinen** automatischen Build bei Push oder Pull
-Request. Der einzige Workflow startet bei einem Release-Tag. Ein Push auf `main` loest
+Request. Der einzige Workflow startet bei einem Release-Tag oder manuell fuer ein bestehendes Tag. Ein Push auf `main` loest
 keinen Build aus - Builds entstehen nur, wenn eine Veroeffentlichung tatsaechlich
 veroeffentlicht werden soll.
 
 ## Done When
-- [x] **Kein automatischer Build bei Push oder Pull Request** - der Workflow startet ausschliesslich bei einem Release-Tag. Beleg: `.github/workflows/release.yml`, Trigger `on.push.tags: v*` plus `workflow_dispatch` (manuell). Der einzige Workflow im Repo ist `release.yml`.
-- [x] Release-Workflow baut aus dem Tag heraus die Portable-Distribution und veroeffentlicht sie als GitHub-Release mit ZIP-Asset. Beleg: `.github/workflows/release.yml`, Job `release`; ZIP-Name `MeetingNotes-v<version>-win-x64.zip`, zusaetzlich `SHA256SUMS.txt`. Testnachweis: `npm run typecheck`, `npm run test:unit`, `npm run check:specs`, `npm run tauri -- build --no-bundle`, `npm run dist:portable`, `npm run test:smoke`, `npm run verify:deployment`.
+- [x] **Kein automatischer Build bei normalen Branch-Pushes oder Pull Requests**. Beleg: `.github/workflows/release.yml`, Trigger `on.push.tags: v*` plus `workflow_dispatch` (manuell). Der einzige Workflow im Repo ist `release.yml`.
+- [x] Release-Workflow baut aus dem Tag heraus die Portable-Distribution und veroeffentlicht sie als GitHub-Release mit ZIP-Asset. Beleg: `.github/workflows/release.yml`, Job `release`; ZIP-Name `MeetingNotes-v<version>-win-x64.zip`, zusaetzlich `SHA256SUMS.txt`. Runner-Schritte: `npm run typecheck`, `npm run test:unit`, `npm run tauri -- build --no-bundle`, `npm run dist:portable`, `npm run test:smoke`, `npm run verify:deployment`.
 - [x] Der Workflow laesst sich auch manuell fuer ein bestehendes Tag ausloesen (`workflow_dispatch` mit `tag`-Input), damit ein Release nachgeholt werden kann, ohne das Tag zu verschieben. Beleg: `.github/workflows/release.yml`, `workflow_dispatch.inputs.tag`; vorhandenes Release wird per `gh release upload --clobber` ersetzt statt ein zweites anzulegen.
 - [x] Das fehlende Release **v0.1.2** ist veroeffentlicht und als ZIP herunterladbar. Beleg: GitHub-Release `v0.1.2` (https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.2, veroeffentlicht 19.11.2026) mit Asset `MeetingNotes-v0.1.2-win-x64.zip` (16.469.792 Bytes, SHA256 `c917e8a89cebe100cbad570f0f98a9ad5b3c218dafd8716185b362477ae949f2`) plus `SHA256SUMS.txt` im `sha256sum`-Format. Das ZIP wurde vom Release-Workflow aus dem Tag-Stand `e3781c1` gebaut; der Asset-Digest von GitHub und der selbst berechnete Hash des heruntergeladenen ZIP stimmen ueberein, die 3 enthaltenen Dateien sind gegen die archivinterne `SHA256SUMS` verifiziert (**3/3 OK**), `MeetingNotes.exe` ProductVersion 0.1.2, `MeetingNotes.Sidecar.exe` FileVersion 0.1.2.0, entpackt **31,17 MB / 4 Dateien**.
 - [x] Das Tag `v0.1.2` wurde vor der Veroeffentlichung auf den Commit mit der Release-Pipeline verschoben. Beleg: `git ls-remote --tags origin` zeigt `refs/tags/v0.1.2` auf `e3781c1`. Grund: Der erste Pipeline-Lauf scheiterte an `Get-FileHash` (das Utility-Modul fehlt auf Build-Runnern); der Fix liegt in `scripts/verify-deployment.ps1`. **Der Produktcode ist zwischen dem alten Tag-Stand `5b8d876` und `e3781c1` identisch** (`git diff --stat 5b8d876 v0.1.2 -- src src-tauri/src src-tauri/tauri.conf.json sidecar` ist leer) - es wurden nur Doku, Specs, Screenshots, Build-Skripte und die Pipeline geaendert. Der Tag enthaelt damit auch die korrigierte Workflow-Fassung (`SHA256SUMS.txt` statt `.zip`, kein `--target`), sodass ein Nachlauf des Releases korrekt arbeitet.
@@ -131,8 +131,15 @@ Download-Deployment PASS 9 / FAIL 0.
 
 Lokal: 9 Verifikationsschritte, 108 Node- und 53 Rust-Tests; 582 C#-Assertions
 gegen Quellen, 595 mit gebautem Sidecar. Die Echo-Wirksamkeit wurde mit
-synthetischem PCM geprueft; [T-519](./T-519-echo-cancellation-alpha-abnahme.md)
-bleibt als Hardware- und Live-Azure-Abnahme offen.
+synthetischem PCM geprueft. Die damalige Hardware- und Live-Azure-Abnahme
+wurde mit der Entfernung der Alpha gegenstandslos ([T-519](./T-519-echo-cancellation-alpha-abnahme.md)).
+
+### Release v0.1.9 (25.11.2026)
+
+[Workflow-Run 45659115487](https://github.com/schirkan/meeting-notes-tauri/actions/runs/45659115487)
+war fuer Tag-Commit `529800a` erfolgreich. GitHub fuehrt [v0.1.9](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.9)
+als veroeffentlicht. Das belegt den Pipeline-Erfolg, nicht eine erneute lokale
+Download-, Hardware- oder Live-Azure-Abnahme.
 
 ### Weitere Nachweise
 

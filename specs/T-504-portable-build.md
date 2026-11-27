@@ -1,7 +1,7 @@
 # T-504: Portable Build (Windows, unsigniert)
 
 ## Kontext
-Status: teils umgesetzt (1 Punkt offen)
+Status: umgesetzt
 Priorität: high
 Abhängigkeiten: T-503
 
@@ -18,7 +18,7 @@ buendelt seine .NET-Runtime und seine Abhaengigkeiten.
   - [x] `MeetingNotes.exe` (App, unsigniert)
   - [x] `MeetingNotes.Sidecar.exe` (self-contained, komprimiertes/getrimmtes Single-File, direkt neben der App)
   - [x] `MeetingNotes.config.example.json` — die Config-Vorlage wird mitgeliefert; keine persönlichen Configs oder Credentials.
-- [ ] Portable Build auf einem **frischen** Windows-11-System ohne .NET-Installation mit WebView2 validiert. Bisherige native Tests erfolgten nur auf dem lokalen Entwicklungsrechner. **Verfahren und Nachweisschritte: [T-510](./T-510-clean-machine-deployment-windows-11.md)** (Vorbereitung, Ausfuehrung offen). - **offen**: Braucht ein frisches Windows-11-Zielsystem (T-510) - die lokale Pruefung laeuft auf dem Entwicklerrechner.
+- [x] Portable-Build auf frischem Windows 11 mit WebView2 ohne installierte .NET-Runtime validiert. Beleg: manuelle Nutzerabnahme vom 28.11.2026; Umfang und Grenzen siehe [T-510](./T-510-clean-machine-deployment-windows-11.md).
 - [x] SHA256SUMS-Datei wird erzeugt und geprüft: **3 Summen** fuer App-EXE, Sidecar-EXE und Config-Template; **4 Dateien** inklusive SHA256SUMS. Beleg: scripts/dist-portable.mjs; Testnachweis: portable build packages consistently named files without a sidecar directory.
 - [x] Bundle-Größe wird im Build-Output geloggt (App-EXE / Sidecar / Config-Template / SHA256SUMS / Gesamt). Beleg: scripts/dist-portable.mjs (Ausgabe: Tauri-EXE, Sidecar, Config-Template, SHA256SUMS, Gesamtgroesse).
 

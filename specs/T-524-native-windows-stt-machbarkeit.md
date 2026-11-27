@@ -44,11 +44,10 @@ Qualitaet und Portable-Eignung; Offline ist ein Bonus.
   `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--disable-features=msSpeechRecognitionServiceUseCetoService`
   nach einem vollstaendigen Neustart gemeldet ([Teams-Bericht](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5724#issuecomment-6454841679)).
   Ein anderer Bericht bestaetigt die Option fuer WebView2 153; die Erkennung
-  bleibt dabei online. Fuer Meeting Notes nur als diagnosebezogenen A/B-Test
-  mit frischem App-/WebView2-Prozess und auf den Testprozess begrenzter
-  Umgebung einplanen. Nicht als Produktstandard oder Benutzer-Umgebungsvariable
-  setzen: Ein persistenter Wert kann auch andere WebView2-Apps betreffen.
-  Erfolgreiche Erkennung und Track-Routing in Meeting Notes bleiben unbewiesen.
+  bleibt dabei online. Der lokale A/B-Test in Meeting Notes war am 28.11.2026
+  mit dem Schalter erfolgreich. Die [Tauri-Konfiguration](../src-tauri/tauri.conf.json)
+  begrenzt die Einstellung auf das App-WebView. Die Wry-Standardargumente bleiben
+  erhalten; es werden keine Benutzer- oder Systemvariablen gesetzt.
 - Folgetest ohne Produktintegration: zunaechst ein freigegebener Test-Track in
   Edge Stable, dann derselbe Track in WebView2 der portablen App. Positivtest
   mit unterscheidbarem Track und Mikrofon, damit ein ignoriertes Argument
@@ -99,7 +98,7 @@ T-523 integriert Windows SAPI und die Web Speech API experimentell. Lokaler Side
 
 ## Done When
 - [ ] 64-Bit-Engine fuer Deutsch und Englisch, Mic und Loopback einzeln sowie getrennt bei gleichzeitiger Aktivitaet nachgewiesen. - **offen**: Zielrechner mit passenden Sprachkomponenten und Audio-Endpunkten erforderlich.
-- [ ] Mindestens 30 Minuten Referenzgespraech inkl. Ueberlappung und Pause/Resume/Stop/Quit messen; WER, p50/p95 bis Final, CPU, RAM und Verlust erfassen. - **offen**: Messung und Qualitaetsschwelle vor Preview-Freigabe festlegen; keine Azure-Paritaet behaupten.
+- [ ] Mindestens 30 Minuten Referenzgespraech fuer die experimentellen Modelle inkl. Ueberlappung und Pause/Resume/Stop/Quit messen; WER, P50/P95 bis Final, CPU, RAM und Verluste erfassen. - **offen**: Der Nutzer testete am 28.11.2026 60 Minuten mit Azure Speech und bewertete die Qualitaet als gut bzw. ausreichend fuer eine KI-Zusammenfassung. Das ist ein qualitativer Azure-Referenzwert, kein Dauerlauf oder Messnachweis fuer SAPI oder Web Speech.
 - [ ] Clean-Machine-Nachweis am getrimmten Portable-ZIP: kein Azure-Konto oder Key, dokumentierte Windows-Komponenten und Online-Anforderungen; fehlende Engine, Netz oder Policy liefert klare Meldung. - **offen**: portable Laufzeit auf einem sauberen Zielrechner inklusive Browser-WebView2-Verhalten pruefen.
 
 ## Quellen (25.11.2026)

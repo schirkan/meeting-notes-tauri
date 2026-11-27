@@ -1,7 +1,7 @@
 # T-401: Tauri-Preload-Bridge (typed invoke + listen)
 
 ## Kontext
-Status: teils umgesetzt (1 Punkt offen)
+Status: umgesetzt
 Priorität: high
 Abhängigkeiten: T-102, T-302, T-303
 
@@ -15,7 +15,7 @@ Typisierte Bridge zwischen React-Renderer und Tauri-Rust-Main, die Electron-IPC-
 - [x] TypeScript-Strict-Mode ist aktiv (`tsc --noEmit` läuft im `npm run build`-Skript), alle Wrapper sind vollständig typisiert. Beleg: package.json (run) (geprueft).
 - [x] Single-source-of-truth: Command- und Event-Namen werden über `src/shared/tauri-contract.ts` geteilt; `transcript-contract.ts` definiert die Datentypen. Beleg: src/shared/tauri-contract.ts, src/shared/transcript-contract.ts (geprueft).
 - [x] About-Repository und DevTools-Toggle sind als `openRepository(): Promise<void>` und `toggleDevtools(): Promise<void>` typisiert; Komponenten importieren dafuer kein direktes `invoke`. Native Abnahme siehe [T-402](./T-402-ui-komponenten-portieren.md). Beleg: src/preload/index.ts, src/shared/transcript-contract.ts und use-app-state.ts; `npm run typecheck` erfolgreich.
-- [ ] Mock-Implementierung für Unit-Tests (siehe T-500) - **offen**: Die Unit-Tests laufen gegen die echte App (Playwright-CLI-Browserlauf), nicht gegen einen Mock.
+- [x] Renderer-Browsertests verwenden eine gemockte Bridge, getrennt von nativer IPC-Abnahme. Beleg: [startup-ui.test.mjs](../tests/startup-ui.test.mjs) setzt `window.transcriptApi` vor dem Seitenstart mit `page.addInitScript`; ebenfalls gemockt in [capture-screenshots.mjs](../scripts/capture-screenshots.mjs).
 
 ## Approach
 - Tauri-2-API: `@tauri-apps/api/core` für `invoke()`, `@tauri-apps/api/event` für `listen()`.
@@ -29,7 +29,7 @@ Typisierte Bridge zwischen React-Renderer und Tauri-Rust-Main, die Electron-IPC-
     // ...
   };
   ```
-- Tests: Mock-Implementierung in `src/preload/__mocks__/` (siehe `T-500`).
+- Tests: Mock-Injektion im Playwright-Test statt einer zweiten Preload-Implementierung.
 
 ## Log
 - 2026-06-25: Spec angelegt.

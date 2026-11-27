@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Record for later** saves microphone and speaker loopback as separate, time-aligned WAV files without sending audio to a speech service.
+- **Transcribe audio files** imports one or two WAVs with editable start times and separate model and language preferences. Azure Standard and Azure MAI require upload confirmation; Windows SAPI reads the files locally.
+- Experimental Windows SAPI and Web Speech API live models. Web Speech uses the default microphone and is manual and live-only.
+
+### Changed
+- The home page now separates meeting recording from file transcription. Audio devices and live model options are saved on the home page; **Home** preserves the previous transcript.
+- Azure file transcription can use its own Speech resource endpoint without replacing the live endpoint.
+
 ## v0.1.9 - 2026-11-25
 
 ### Breaking change

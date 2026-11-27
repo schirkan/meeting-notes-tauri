@@ -1,7 +1,7 @@
 # T-520: MAI-Transcribe-2-Streaming als optionales Feature
 
 ## Kontext
-Status: teils umgesetzt (2 Punkte offen)
+Status: teils umgesetzt (1 Punkt offen)
 Reifegrad: Opt-in Preview
 Abhaengigkeiten: [T-522: Machbarkeit und Freigabe](./T-522-mai-transcribe-machbarkeit-kosten-abnahme.md), [T-521: Audio und Sidecar](./T-521-mai-transcribe-mehrkanal-sidecar.md), [T-103: Konfiguration](./T-103-konfiguration-azure-und-user-settings.md), [T-403: Settings](./T-403-settings-dialog-mit-verbindung-testen-button.md), [T-511: Quellen](./T-511-transkriptions-quellen-auswaehlen.md)
 
@@ -22,12 +22,13 @@ WebSocket-Client. Eine unerwartet teurere zweite Cloud-Sitzung ist kein Fallback
 
 ## Verhalten und Konfiguration
 
-- Unter **Speech recognition** zwischen **Azure Speech (standard)** und **MAI Transcribe (Preview)**
+- Auf der Startseite unter **Transcription model** zwischen **Azure Speech (standard)** und **Azure MAI Transcribe (Preview)**
   waehlen. Additives Feld: `azure.model` (`standard` oder
   `mai-transcribe-2-streaming`). Fehlendes Feld bleibt Standard; unbekannten
   Wert validieren und nicht still als Standard ausfuehren. Azure-Einstellungen
-  als bestehender Draft; **Test connection** prueft diesen, nur **Save** persistiert.
-  Ein Modellwechsel gilt ab dem naechsten Start und veraendert keine laufende Sitzung.
+  bleiben im Dialog-Draft, bis **Save** geklickt wird. Die separate Live-Modellwahl
+  speichert sofort und gilt ab dem naechsten Start; **Test connection** kombiniert
+  diese Modellwahl mit den aktuellen Azure-/Proxy-Draft-Werten.
 - Bestehende Azure-Felder und Secrets beim Modellwechsel beibehalten. MAI nutzt
   die regionale SDK-Initialisierung mit Region und Key; nur Standard verwendet
   den expliziten Endpunkt. Das UI zeigt, welche Felder fuer MAI gelten. Fehlende
@@ -64,5 +65,5 @@ Kanaltrennung und Kosten sind damit nicht abgenommen.
 
 ## Done When
 - [x] Modellauswahl, Draft-Diagnose und Rueckkehr zu Standard sind ohne Migration alter Configs implementiert. Beleg: Konfigurations-Unit-Tests in `tests/config-utils.test.mjs`, Settings-/Diagnose-Regression in `tests/startup-ui.test.mjs` (Playwright Chromium mit IPC-Mock) und lokaler SDK-Konfigurationstest in `sidecar/Validation/DiarizationValidation.cs` ohne Azure-Verbindung. Rust-Tests waren durch einen verweigerten MSBuild-Taskhost beim Sidecar-Publish blockiert.
-- [ ] UI, IPC und Export bewahren getrennte Quellen; Sprachgrenzen sind sichtbar dokumentiert. - **offen**: Sprache und Quellenlabels bei einer Live-Aufnahme mit MAI-Mono muessen noch abgenommen werden.
-- [ ] Preview ist nur nach Kosten-, Qualitaets-, Proxy- und Portable-Freigabe verfuegbar. - **offen**: Freigabekriterien und Messung siehe T-522.
+- [x] Sprache und getrennte Quellenlabels bei MAI-Mono in UI, IPC und Export abgenommen. Beleg: Nutzerabnahme vom 28.11.2026.
+- [ ] Kosten-, Qualitaets-, Proxy- und Portable-Nachweise fuer die MAI-Freigabe vervollstaendigen. - **offen**: Der Nutzer hat den Freigabevorbehalt am 28.11.2026 bestaetigt. Die separat abgefragten Nachweise in [T-522](./T-522-mai-transcribe-machbarkeit-kosten-abnahme.md) bleiben offen; daraus folgt weder ein Kostenvorteil noch eine weitergehende Freigabe.

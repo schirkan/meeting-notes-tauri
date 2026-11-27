@@ -82,6 +82,6 @@ Entscheidung. Der lokale Virenscanner blockiert das Sidecar-Trimming; der
 getrimmte Portable-Build bleibt unveraendert und muss separat abgenommen werden.
 
 ## Done When
-- [ ] Spike belegt MAI-Mono-Modell, Standard-Stereo-Kanalresultate und Ziel-Proxy. - **offen**: Live-Tests mit einer geeigneten Azure-Ressource stehen aus.
+- [ ] Spike belegt MAI-Mono-Modell, Standard-Stereo-Kanalresultate und Ziel-Proxy. - **offen**: Der Nutzer hat am 28.11.2026 Teilpruefungen fuer [MAI-Mono](./T-520-mai-transcribe-streaming-feature.md) und [Standard-Stereo](./T-521-mai-transcribe-mehrkanal-sidecar.md) bestaetigt, diesen kombinierten Nachweis aber offengelassen.
 - [ ] Meter und Kostenvorteil ausserhalb der Promo sind fuer die Zielnutzung belegt. - **offen**: Vertragsdaten und Azure-Usage eines kontrollierten A/B-Laufs fehlen.
-- [ ] Live-Qualitaet, Lifecycle und Portable-Abnahme sind dokumentiert. - **offen**: Zielhardware, Live-Azure und Preview-Build stehen noch aus.
+- [ ] Live-Qualitaet, Lifecycle und Portable-Abnahme der MAI-Preview sind dokumentiert. - **offen**: Die bestaetigten Standard-Live- und Deployment-Pruefungen ersetzen die modellspezifische MAI-Abnahme auf Zielhardware nicht.

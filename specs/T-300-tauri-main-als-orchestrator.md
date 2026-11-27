@@ -1,7 +1,7 @@
 # T-300: Tauri-Main als Orchestrator
 
 ## Kontext
-Status: teils umgesetzt (Single-Instance implementiert, native Abnahme offen)
+Status: umgesetzt
 Priorität: high
 Subtasks: T-301, T-302, T-303, T-304, T-305, T-306
 Abhängigkeiten: T-101
@@ -22,7 +22,7 @@ Rust-Main-Prozess orchestriert Sidecar-Lifecycle, IPC-Bridge zum Renderer und Se
 - Logging von Anfang an strukturiert (tracing oder env_logger).
 
 ## Native Abnahme
-- [ ] Doppelstart unter Windows prüfen: Der zweite Start endet und holt das vorhandene Fenster auch aus dem Tray oder minimierten Zustand zurück. Aufnahme und Meeting-Detektor laufen unverändert in der ersten Instanz. - **offen**: Die native Prüfung benötigt einen Windows-Build. Laut Nutzer blockiert der lokale Virenscanner das Linken der App-EXE; `cargo check` scheiterte bereits am Sidecar-Publish (MSBuild: Zugriff verweigert).
+- [x] Beim Doppelstart unter Windows endet die zweite Instanz und holt das vorhandene Fenster auch aus dem Tray oder minimierten Zustand zurueck. Aufnahme und Meeting-Detektor laufen unveraendert in der ersten Instanz. Beleg: native Nutzerabnahme vom 28.11.2026.
 
 ## Log
 - 2026-11-24: Single-Instance-Plugin als erstes Tauri-Plugin registriert; ein erneuter Start aktiviert das vorhandene Fenster über denselben Pfad wie der Tray.

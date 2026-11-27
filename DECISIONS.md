@@ -1,6 +1,6 @@
 # Decisions — Meeting Notes
 
-Architekturentscheidungen für die Windows-Variante (Tauri-Container). Wird fortlaufend ergänzt, wenn weitere Fragen auftauchen.
+Architekturentscheidungen fuer die Windows-Variante. Datierten Eintraegen liegt der damalige Stand zugrunde; aktuelle Anforderungen und Abnahmen stehen im [Spec-Index](./SPEC.md#spec-index).
 
 ---
 
@@ -98,6 +98,8 @@ Architekturentscheidungen für die Windows-Variante (Tauri-Container). Wird fort
 
 ## AD-006 · Sidecar-Verteilung: framework-dependent EXE + Tauri-Resource (2026-06-25)
 
+**Historisch, abgeloest:** Heute ist der Sidecar self-contained, komprimiert und konservativ getrimmt. Der Portable-Ordner braucht WebView2, aber keine separate .NET-Runtime. Siehe [T-512](./specs/T-512-sidecar-targetframeworks-und-single-file.md).
+
 **Kontext:** Im Electron-Projekt wird der C#-Sidecar als framework-dependent EXE gebaut und als Resource mit `electron-packager` ausgeliefert. Zielsystem braucht nur die .NET Runtime.
 
 **Entscheidung:** Wir behalten dieses Modell bei. Der C#-Sidecar wird weiterhin per `dotnet publish -c Release -r win-x64 --self-contained false` gebaut und liegt unter `sidecar/publish/sidecar/`. Tauri 2 bindet das EXE über `tauri.conf.json → bundle.resources` ein.
@@ -115,7 +117,7 @@ Architekturentscheidungen für die Windows-Variante (Tauri-Container). Wird fort
 
 **Kontext:** Migration eines funktionierenden Projekts birgt das Risiko, beide Projekte gleichzeitig kaputtzumachen.
 
-**Historische Entscheidung:** Die Migration war in 4 Phasen geplant (siehe [AGENTS.md](./AGENTS.md), historischer Migrationsplan), zunächst mit einem Konsolidierungsschritt in `meeting-notes`.
+**Historische Entscheidung:** Die Migration war in 4 Phasen geplant (siehe [T-100](./specs/T-100-tauri-migration-planen-und-grundstruktu.md)), zunächst mit einem Konsolidierungsschritt in `meeting-notes`.
 
 **Fortschreibung 2026-11-09:** Implementierung und heutige Änderungen erfolgen ausschließlich in dieser Tauri-Variante. Die Electron-Referenz bleibt unverändert; der historische Phase-1-Plan ist keine Anweisung, sie zu bearbeiten.
 
@@ -511,8 +513,6 @@ Deployment-/Smoke-Proben unterscheiden den Self-contained-Build durch defekte
 Additional-Deps und ungueltige DOTNET_ROOT-Pfade von framework-dependent Builds.
 Gemessen: 14,74 MiB Sidecar / 30,22 MiB Portable.
 
-## Offene Fragen
-
 **Build-Fortschreibung 2026-11-15 (AD-009):** Der direkte `dotnet publish`-Aufruf
 bleibt in `build.rs`. Publish-Ausgaben liegen jetzt unter
 `src-tauri/target/sidecar-publish/`, .NET-Build-Ausgaben via `--artifacts-path`
@@ -663,9 +663,15 @@ neue englische Screenshots und Release 0.1.4 nach erfolgreicher Verifikation.
 
 **Entscheidung:** Ab v0.1.9 wird `user.diarization` als gemeinsamer Boolean gespeichert. Legacy-Werte werden beim Upgrade gelesen und per ODER vereinigt. Fuer aeltere Versionen wird kein Rueckschreiben oder kompatibles Zweitformat implementiert: Rollback ist nicht vorgesehen. Der Breaking Change, die Wirkung einer gemischten Alt-Einstellung und der Hinweis zur Config-Sicherung stehen im [Changelog](./CHANGELOG.md) und in [T-103](./specs/T-103-konfiguration-azure-und-user-settings.md).
 
+## AD-024 - Lokale Aufnahme und Dateitranskription trennen (2026-11-28)
+
+**Entscheidung:** Lokale Aufnahme benoetigt keinen Speech-Provider und erhaelt getrennte WAV-Spuren mit gemeinsamem Zeitanker. Dateitranskription ist ein ausdruecklicher Auftrag mit eigenen Modelloptionen und optionalem Azure-Dateiendpunkt; ein Azure-Upload braucht Bestaetigung. Live-Konfiguration und bereits gespeicherte WAVs werden dadurch nicht ersetzt. Umsetzung und offene Abnahmen: [T-525](./specs/T-525-batch-transkription-und-lokale-aufnahme.md).
+
+## Historische Entscheidungsfragen
+
 | # | Frage | Status |
 |---|---|---|
-| OQ-1 | Soll der Sidecar-EXE-Name gleich bleiben (`MeetingNotes.Sidecar.exe`) oder umbenannt werden (`MeetingNotes.AudioService.exe` o. ä.)? | offen — wird in `specs/T-201` entschieden |
+| OQ-1 | Soll der Sidecar-EXE-Name gleich bleiben (`MeetingNotes.Sidecar.exe`) oder umbenannt werden (`MeetingNotes.AudioService.exe` o. ä.)? | Der Portable-Build verwendet weiterhin `MeetingNotes.Sidecar.exe` ([T-504](./specs/T-504-portable-build.md)). |
 | OQ-2 | ~~Soll es eine **separate Named Pipe für Commands** geben oder gehen Commands via stdin an den Sidecar?~~ | **Entschieden 2026-06-25:** Named Pipe entfällt komplett. Commands gehen via stdin an den Sidecar, Events via stdout zurück. Siehe AD-008 und `specs/T-201`. |
 | OQ-3 | Wo wird das Azure-Speech-Modell konfiguriert (Default vs. Custom-Speech)? Heute gibt es dafür keine UI. | unverändert zum `meeting-notes`-Stand: keine UI |
 | OQ-4 | ~~Soll die Tauri-App macOS-/Linux-Builds vorbereiten oder hardcoded Windows-only sein?~~ | **Entschieden 2026-06-25:** Hardcoded Windows-only. macOS/Linux-Builds werden **nicht** vorbereitet — kein Cross-Compile, keine plattformneutralen Pfade in Build-/Run-Skripten, `tauri.conf.json` ohne `targets`-MacOS/Linux-Definition. |

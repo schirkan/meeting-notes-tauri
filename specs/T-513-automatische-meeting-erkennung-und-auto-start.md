@@ -1,7 +1,7 @@
 # T-513: Automatische Meeting-Erkennung und Auto-Start im Hintergrund
 
 ## Kontext
-Status: teils umgesetzt (Auto-Start und Auto-Stop im Praxistest bestätigt, Podcast-Gegenprobe offen)
+Status: teils umgesetzt (Teams im Praxistest bestaetigt; Stille-Erkennung und Podcast-Gegenprobe offen)
 Priorität: medium
 Abhängigkeiten: T-300, T-305, T-403, T-509, T-511
 
@@ -468,7 +468,7 @@ Der Kalender ist **kein** Bestandteil (Entscheidung vom 2026-11-18).
 - [x] Ohne vollstaendige Azure-Konfiguration startet die Aufnahme nicht automatisch. Beleg: src-tauri/src/lib.rs (start_recording_on_detection prueft load_azure_config, bricht ohne Konfiguration ab). Formnachweis: Code-Guard; der Settings-Default-Test ist kein Wirkungsnachweis dieses Guards.
 - [x] Die Erkennung läuft im **Sidecar** (nicht im Tauri-Main) und nimmt dabei nichts auf. Beleg: sidecar/MeetingDetector.cs (nur Session-Graph), sidecar/Program.cs (Modus `--detect-only`, Event `meeting_detected`), src-tauri/src/autostart.rs (eigener Erkennungsprozess). Testnachweis: C#-Validierung - der Detektor meldet die Capture-Sitzung eines fremden Prozesses als `meeting_detected`.
 - [x] Die Erkennung ist ereignisgesteuert, nicht per Timer. Beleg: sidecar/MeetingDetector.cs (`AudioSessionManager.OnSessionCreated`), src-tauri/src/autostart.rs (Ereignisstrom, kein Polling). Testnachweis: C#-Validierung - die Erkennung kommt als Ereignis an, nicht durch Abfragen.
-- [ ] Das Ende nutzt mehrere Signale (Stille, Session-Ende), nicht nur eines. Beleg: sidecar/MeetingDetector.cs (Session-Ende mit Aggregation und 3 s Schonfrist). - **offen**: Session-Ende ist umgesetzt, Pegel-/Stille-Erkennung hingegen nicht. Der Detektor beobachtet Session-Metadaten, keine Audiodaten.
+- [ ] Zusaetzlicher Auto-Stop bei Stille gemaess Nutzeranforderung vom 28.11.2026: Nach 5 Minuten durchgehender Stille eine Rueckfrage mit 60-Sekunden-Timer anzeigen. Nur ohne Rueckmeldung und bei weiterhin durchgehender Stille nach Ablauf automatisch stoppen. Bei erneutem Audio nicht stoppen. - **offen**: Stille-Erkennung, Rueckfrage und Timer sind nicht implementiert. Das bestehende Session-Ende arbeitet weiterhin ueber Metadaten.
 - [x] Session-Ende ist identitaetsgebunden, entprellt und stoppt keine manuellen Aufnahmen. Beleg: sidecar/MeetingSessionTracker.cs, src-tauri/src/commands.rs (RecordingLifecycle). Testnachweis: MeetingDetectionValidation (bestehende/reaktivierte Sessions, Terminal-Cleanup), C# Fremdprozess-Probe und Rust-Tests `manual_recordings_and_foreign_end_events_are_protected`, `pause_waiting_for_automatic_stop_cannot_revive_the_recording`.
 - [x] Jede automatisch gestartete Aufnahme ist für den Nutzer sichtbar und jederzeit abbrechbar. Beleg: src/renderer/src/use-app-state.ts (Toast "Meeting erkannt"), src/renderer/src/App.tsx (Start/Stop wie bisher). Testnachweis: Node-UI-Tests grün.
 - [x] Recherche-Beleg: der stärkste einzelne OS-Trigger ist das Ducking-Event (`IAudioVolumeDuckNotification`): "the system adjusts the volume of a non-communication stream when a new communication stream is opened". Beleg: learn.microsoft.com (audiopolicy/nn-audiopolicy-iaudiovolumeducknotification, coreaudio/getting-ducking-events-from-a-communication-device).
@@ -479,7 +479,7 @@ Der Kalender ist **kein** Bestandteil (Entscheidung vom 2026-11-18).
 - [x] Verifikation: Node-Tests, Rust-Tests und C#-Validierung gruen. Beleg: Typecheck, 85 Node-Tests, 41 Rust-Tests, 539 C#-Assertions gegen Quellen und 552 gegen den publizierten/getrimmten Sidecar (18.11.2026); bekannte MF-Stichprobe SKIPPED, neue Session-Proben bestanden. Testnachweis: npm run typecheck, npm run test:unit, cargo test --manifest-path src-tauri/Cargo.toml, npm run test:sidecar, npm run test:sidecar:published, npm run check:specs.
 - [x] Auto-Start und Auto-Stop funktionieren im Praxistest. Beleg: Nutzerbestaetigung vom 24.11.2026; Meeting-App, Build und Geraete wurden nicht angegeben.
 - [ ] Ein normales Podcast-Playback loest **keinen** Auto-Start aus. - **offen**: Fuer die Gegenprobe am Zielrechner liegt kein Ergebnis vor.
-- [ ] Der Fenster-/Applikations-Fallback (Stufe 2) ist gebaut, falls Stufe 1 nicht ausreicht. Beleg: EnumWindows/GetWindowTextW mit PID-Korrelation. - **offen**: laut Entscheidung vom 2026-11-18 erst umsetzen, **wenn** die Session-Erkennung in der Praxis nicht trägt.
+- [ ] Fenster-/Applikations-Fallback nur bei nachgewiesenem Bedarf ergaenzen. - **offen**: Der Nutzer bestaetigte am 28.11.2026, dass Teams funktioniert. Fuer den bestaetigten Teams-Fall ist kein Fallback noetig; daraus folgt kein Nachweis fuer andere Apps oder Teams-VDI.
 
 ## Neues Microsoft Teams (20.11.2026)
 
@@ -488,7 +488,7 @@ standardmaessig nur `teams`. `MeetingDetector` akzeptiert jetzt beide exakten
 Prozessnamen (ohne `.exe`, ohne Beachtung der Gross-/Kleinschreibung).
 `MeetingDetectionValidation` prueft beide Namen, schliesst den Updater und den
 allgemeinen WebView2-Prozess aus und sichert die benutzerdefinierte Liste ab.
-Die Live-Abnahme in einem Teams-Anruf bleibt offen.
+Die Teams-Erkennung wurde am 28.11.2026 vom Nutzer im Praxistest bestaetigt. Die nachfolgende VDI-Probe dokumentiert einen separaten historischen Fall.
 
 ### Zielsystemprobe: Teams unter Horizon (23.11.2026)
 

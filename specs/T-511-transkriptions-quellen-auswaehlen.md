@@ -11,9 +11,9 @@ nur das Mikrofon, nur der Speaker-Loopback oder beides. Bisher werden immer
 beide Quellen aufgenommen und nach Azure gesendet.
 
 Die Transkription ist dabei eine **eigene Achse neben der Diarization**:
-die Diarization entscheidet, ob für eine Quelle die Sprechererkennung
-verwendet wird; die Transkription entscheidet, ob die Quelle überhaupt
-aufgenommen wird. Beide sind unabhängig voneinander.
+die gemeinsame Diarization entscheidet bei unterstuetzten Live-Modellen, ob
+die aktiven Quellen Sprechererkennung nutzen. Die Quellenauswahl entscheidet
+separat, welche Quellen ueberhaupt aufgenommen werden.
 
 ## Datenfelder
 Zwei neue Bool-Felder unter `user.transcription` in der gemeinsamen
@@ -46,8 +46,8 @@ Config-Datei `MeetingNotes.config.json`:
       ohne Speaker-Transkription wird kein Ausgabegerät gesucht.
 - [x] Beide Quellen ausgeschaltet ist ein Fehlerfall (Exit-Code 23), weil Beleg: sidecar/Program.cs (Exit-Code 23, wenn beide Quellen ausgeschaltet sind).
       dann nichts transkribiert würde.
-- [x] Zwei Quellenschalter stehen gemeinsam mit der Geraeteauswahl nur unter **Audio devices** auf der Startseite. Die Quellen bleiben unabhaengig von der gemeinsamen Sprechererkennung unter **Speech recognition**. Beleg: [AudioPanel.tsx](../src/renderer/src/components/AudioPanel.tsx) und [T-403](./T-403-settings-dialog-mit-verbindung-testen-button.md).
-- [x] Beim Abwaehlen der letzten aktiven Quelle wird die andere automatisch aktiviert; beide Checkboxen bleiben ausserhalb einer Aufnahme bedienbar. Beleg: src/renderer/src/components/SettingsPanel.tsx (atomare Quellenauswahl). Testnachweis: Node-UI-Test "transcription sources default on, persist independently and keep the last source enabled".
+- [x] Zwei Quellenschalter stehen gemeinsam mit der Geraeteauswahl unter **Audio devices** auf der Startseite. Die Quellen bleiben unabhaengig von der gemeinsamen Sprechererkennung in den Live-Modelloptionen. Beleg: [AudioPanel.tsx](../src/renderer/src/components/AudioPanel.tsx) und [LiveModelPanel.tsx](../src/renderer/src/components/LiveModelPanel.tsx).
+- [x] Beim Abwaehlen der letzten aktiven Quelle wird die andere automatisch aktiviert. Die Quellenschalter sind ausserhalb einer Aufnahme bedienbar, sofern das Modell eine Quellenauswahl erlaubt. Beleg: [use-app-state.ts](../src/renderer/src/use-app-state.ts) und [startup-ui.test.mjs](../tests/startup-ui.test.mjs).
 - [x] Verifikation: Node-Tests, Rust-Tests und C#-Validierung grün. Beleg: npm run verify (75 Node-Tests, 31 Rust-Tests, 508 C#-Assertions) - gruen. Testnachweis: npm run verify - 75 Node-Tests, 31 Rust-Tests, 508 C#-Assertions, alle gruen.
 
 ## Umsetzung
@@ -79,8 +79,7 @@ Config-Datei `MeetingNotes.config.json`:
   („Mikrofon transkribieren“, „Speaker-Loopback transkribieren“) ueber
   `AudioSources` ausschliesslich auf der Startseite. Aenderungen speichern
   sofort; keine Kopie dieser Audiofelder im Settings-Dialog (siehe T-403). Die
-  zugehörige Geräteauswahl und die zugehörige Diarization-Checkbox sind
-  deaktiviert, wenn die Quelle nicht transkribiert wird.
+  zugehoerige Geraeteauswahl ist deaktiviert, wenn die Quelle nicht erfasst wird.
 
 ## Verifikation
 - Node-Tests: Normalisierung über alle vier Bool-Kombinationen, Legacy- und

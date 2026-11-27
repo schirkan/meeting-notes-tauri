@@ -1,9 +1,11 @@
 # Spezifikation v0.1 — Meeting Notes
 
-Stand: 19.11.2026
-Status: Implementierungsstand fortgeschrieben; Corporate-Netz-/Proxy-Akzeptanz am 2026-11-12 erfolgreich. Download und Start auf sauberem Zielsystem am 19.11.2026 manuell bestaetigt; Latenz und weitergehende Deployment-Teilpruefungen bleiben offen (T-500, T-510).
+Stand: 28.11.2026
+Status: Letzte Veroeffentlichung ist [v0.1.9](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.9). Die folgenden Anforderungen beschreiben den Entwicklungsstand; lokale WAV-Aufnahme, Dateitranskription und experimentelle Windows-Modelle sind noch nicht veroeffentlicht. Offene Abnahmen stehen in den Einzel-Specs.
 
-Aktueller Stand: **v0.1.3** mit dokumentiertem Voll-Verifikationsnachweis (`npm run verify -- --full`: **9 Schritte gruen**, zusaetzlich **47 Rust-Tests**). Auto-Aufnahme samt zugehoerigem Auto-Stop und Schliessen in den Systray sind standardmaessig aktiv; explizit gespeichertes `false` bleibt erhalten. **94 Node-Tests**, **539 C#-Assertions** gegen Quellen / **552** gegen den publizierten Sidecar. Portable-Build: Haupt-EXE 16,48 MB, Sidecar 14,89 MB, Smoke gruen, Deployment **PASS 9 / FAIL 0**. Tray-Icon, Kontextmenue, Doppelklick und X bei beiden Optionen am 19.11.2026 manuell vom Nutzer bestaetigt; Alt+F4 und Beenden waehrend einer Aufnahme bleiben offen ([T-514](./specs/T-514-systray-und-schliessen-verhalten.md)). **Neu in v0.1.3:** Settings-Dialog auf einer scrollenden Seite (Abschnitte Allgemein, Audio, Azure, Proxy als Ueberschriften, ohne Tabs und ohne Bereichsnavigation), **Verbindung testen** im Dialog-Footer, einzeln abschaltbarer Auto-Stop (`user.autoStart.autoStop`) und Tray-Farbindikator (rot bei Aufnahme, gelb bei Pause). Details: [CHANGELOG](./CHANGELOG.md).
+Nutzerabnahme vom 28.11.2026: Azure-Speech-Live-Aufnahme unter 5 s im Praxistest ([T-500](./specs/T-500-qualitaetssicherung-und-akzeptanztests.md)); P95 und der 100-Chunks-Report sind nicht nachgewiesen ([T-502](./specs/T-502-latency-messung.md)). Auf frischem Windows 11 mit WebView2 ohne installierte .NET-Runtime wurden App-Start, Settings ohne Azure-Config, Config neben der EXE und verstaendliche Netzwerk-/Proxyfehler manuell bestaetigt ([T-510](./specs/T-510-clean-machine-deployment-windows-11.md)).
+
+Historischer Nachweis fuer **v0.1.3**: Voll-Verifikation mit **9 Schritten**, **94 Node-Tests**, **47 Rust-Tests**, **539 C#-Assertions** gegen Quellen / **552** gegen den publizierten Sidecar, Smoke gruen, Deployment **PASS 9 / FAIL 0**. Die manuelle Tray-Teilabnahme vom 19.11.2026 steht in [T-514](./specs/T-514-systray-und-schliessen-verhalten.md). Weitere Release-Belege: [T-515](./specs/T-515-github-actions-pipeline-und-release.md).
 Historischer Nachweis fuer **v0.1.2**; Portable-Build **31,37 MB** (4 Dateien, 3 gepruefte Hashes; Build vom 2026-11-19, `ProductVersion` 0.1.2), `npm run verify -- --full` (**9 Schritte gruen**), Build-Smoke inklusive Sidecar-Geraeteabfrage und Deployment-Nachweis (**PASS 9 / FAIL 0**); dafuer TypeScript, **92 Node-Tests**, **44 Rust-Tests** und **539 C#-Assertions** (davon **552** gegen die publizierte, getrimmte Sidecar-EXE).
 
 Historischer Nachweis fuer **v0.1.1**; Portable-Build **30,74 MB** (4 Dateien, 3 geprüfte Hashes; Rebuild vom 2026-11-18 - flaches Layout mit `MeetingNotes.exe` und **self-contained** Single-File-Sidecar, `ProductVersion` 0.1.1) mit der EXE `MeetingNotes.exe`, dem gemeinsamen Config-Template, der unabhängigen Mic-/Speaker-Diarization und der auswählbaren Transkriptions-Quelle (`user.transcription`, Mic/Speaker/beides); `npm run verify -- --full` (**9 Schritte grün**), Build-Smoke inklusive Sidecar-Geräteabfrage und Deployment-Nachweis (**PASS 9 / FAIL 0**) erfolgreich. Dafür sind TypeScript, **85 Node-Tests**, **35 Rust-Tests** und **508 C#-Assertions** (davon **521** gegen die publizierte, getrimmte Sidecar-EXE) erfolgreich; die Node-/UI-Tests laufen im CLI-Browserlauf grün. Nicht jede ursprüngliche Audio-/Protokoll-Anforderung ist als abgenommen bestätigt; Einzelstatus siehe [Specs](./specs/).
@@ -12,74 +14,61 @@ Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1
 
 ---
 
-## Stand der Specs (Abgleich 27.11.2026)
+## Stand der Specs (Abgleich 28.11.2026)
 
 Die Checkboxen wurden gegen den **Code** geprueft, nicht gegen den Spec-Status:
 jeder abgehakte Punkt traegt den Beleg im Klartext (`Beleg: …`), jeder offene
-Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **46 Specs** als
-`umgesetzt` bzw. `teils umgesetzt` markiert, **39 offene Punkte in 24 Specs**.
+Punkt nennt den konkreten Grund (`- **offen**: …`). Ergebnis: **47 Specs** als
+`umgesetzt` bzw. `teils umgesetzt` markiert, **23 offene Punkte in 14 Specs**.
 Vorher waren ueber 70 Checkboxen offen, obwohl die Funktion ueberwiegend fertig
 und verifiziert war - die Specs sind jetzt mit dem Stand der Implementierung
 deckungsgleich.
 
 _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 
-### Offen und braucht deinen Rechner (23 Punkte)
+### Offen und braucht deinen Rechner (14 Punkte)
 
 | Spec | Punkt |
 |---|---|
-| T-205 | Diarization funktioniert für mindestens 2 Sprecher je aktivierter Quelle (manueller Live-Azure… |
-| T-500 | Latency-Messung dokumentiert < 5 s End-to-End (T-502) |
-| T-500 | Erfolgreiche Aufnahme und End-to-End-Latenz (< 5 s) mit echten Zugangsdaten — weiterhin offen… |
 | T-502 | Report `context/latency-report.md` mit P50/P95/P99 über 100 Audio-Chunks - **offen**: |
 | T-502 | Ziel: P95 < 5 s End-to-End |
-| T-504 | Portable Build auf einem **frischen** Windows-11-System ohne .NET-Installation mit WebView2 va… |
 | T-509 | Das Loopback-Verhalten ist unveraendert: Events nur waehrend tatsaechlicher |
 | T-509 | Latenz und Ausgabequalitaet sind auf echter Hardware gegen die |
-| T-510 | Auf dem **Zielsystem** ausgefuehrt: Fenster oeffnet, Einstellungen automatisch |
-| T-510 | Befunde sind in `T-504`, `T-500`, `SPEC.md` und `AGENTS.md` nachgezogen. |
 | T-514 | Native Windows-Abnahme: X/Alt+F4 mit deaktivierter Tray-Minimierung und **Quit** bei verborgen… |
 | T-514 | Native Windows-Abnahme der Taskleistenoption. |
 | T-521 | Hardwarelauf belegt Zeitanker, Resampling-Fallback, Drift und gleichzeitige Sprache. |
-| T-521 | Live-Azure belegt je eine Sitzung, korrekte Finals und Standard-Sprecher-IDs fuer beide Standa… |
-| T-521 | Live-Lifecycle und Diagnose decken Pause/Resume, Sitzungsende, Stop/Quit und letzte Finals bei… |
 | T-522 | Spike belegt MAI-Mono-Modell, Standard-Stereo-Kanalresultate und Ziel-Proxy. |
 | T-522 | Meter und Kostenvorteil ausserhalb der Promo sind fuer die Zielnutzung belegt. |
-| T-522 | Live-Qualitaet, Lifecycle und Portable-Abnahme sind dokumentiert. |
+| T-522 | Live-Qualitaet, Lifecycle und Portable-Abnahme der MAI-Preview sind dokumentiert. |
 | T-524 | 64-Bit-Engine fuer Deutsch und Englisch, Mic und Loopback einzeln sowie getrennt bei gleichzei… |
-| T-524 | Mindestens 30 Minuten Referenzgespraech inkl. Ueberlappung und Pause/Resume/Stop/Quit messen;… |
+| T-524 | Mindestens 30 Minuten Referenzgespraech fuer die experimentellen Modelle inkl. Ueberlappung un… |
 | T-524 | Clean-Machine-Nachweis am getrimmten Portable-ZIP: kein Azure-Konto oder Key, dokumentierte Wi… |
 | T-525 | Reales Mikrofon und Loopback zusammen aufnehmen; Synchronitaet und automatisches Stoppen am Me… |
-| T-525 | Expliziten Upload mit Azure Standard und MAI pruefen. |
 
-### Offen als bewusste Entscheidung (16 Punkte)
+### Offen als bewusste Entscheidung (9 Punkte)
 
 | Spec | Punkt | Warum offen |
 |---|---|---|
 | T-101 | `npm run tauri build` produziert eine MSI- oder NSIS-Installer-Datei. | Installer (MSI/NSIS) wurden bewusst nicht gebaut; der Lieferweg ist die Portable-Distribution (siehe README). |
-| T-201 | **Reconnects:** Tauri startet den Sidecar bei Crash automatisch neu (… | bewusst nicht umgesetzt - ein Neustart des Sidecars erzeugt eine **neue Azure-Sitzung**, damit brechen die Sprecher-IDs (T-507).… |
 | T-203 | Smoke-Test: 48-kHz-Stereo-Input führt zu korrektem 16-kHz-Mono-Output… | Der Stichprobentest ist implementiert (`ResamplingValidation`: 48-kHz-Stereo-Ton → 16-kHz-Mono, Länge, Pegel, Übersteuerung, Drop… |
-| T-300 | Doppelstart unter Windows prüfen: Der zweite Start endet und holt das… | Die native Prüfung benötigt einen Windows-Build. Laut Nutzer blockiert der lokale Virenscanner das Linken der App-EXE; `cargo che… |
-| T-400 | Visuelles Verhalten ist identisch zur Electron-Variante. | Bewusst nicht 1:1: die Darstellung folgt auf Nutzerwunsch dem Console-Design statt der urspruenglichen Portierung (siehe T-402).… |
-| T-401 | Mock-Implementierung für Unit-Tests (siehe T-500) | Die Unit-Tests laufen gegen die echte App (Playwright-CLI-Browserlauf), nicht gegen einen Mock. |
-| T-402 | Native About-/Repository-/DevTools-/Kontextmenue-Abnahme | Browser-Checks verwenden Mock-IPC und synthetische Contextmenu-Events, pruefen keine echten WebView2-Menues oder Systembrowser-Au… |
-| T-403 | Native WebView2-Abnahme der neuen Fokus-/Discard-/Layout-Regeln | integrierter Browser nutzt eine gemockte Bridge; CLI-UI-Lauf scheitert vor den Assertions am Edge-Start (Exit 21), Rust-Lauf am S… |
-| T-501 | Voller End-to-End-Test mit WebDriver + App-Start + `start_recording()… | WebDriver-Setup für Tauri 2 ist aufwendig; die headless Smoke-Stufen 1–5 decken die kritischen Artefakt-Invarianten ab. |
+| T-501 | Reproduzierbarer WebDriver-End-to-End-Test mit App-Start, `start_reco… | Der Nutzer bestaetigte am 28.11.2026 den Ablauf fuer das Azure Speech SDK. Ein WebDriver-Skript oder ein Laufprotokoll fuer die A… |
 | T-503 | `npm run lint` (sofern konfiguriert) ist grün | kein Lint-Setup im Projekt. |
-| T-513 | Das Ende nutzt mehrere Signale (Stille, Session-Ende), nicht nur eine… | Session-Ende ist umgesetzt, Pegel-/Stille-Erkennung hingegen nicht. Der Detektor beobachtet Session-Metadaten, keine Audiodaten. |
+| T-513 | Zusaetzlicher Auto-Stop bei Stille gemaess Nutzeranforderung vom 28.1… | Stille-Erkennung, Rueckfrage und Timer sind nicht implementiert. Das bestehende Session-Ende arbeitet weiterhin ueber Metadaten. |
 | T-513 | Ein normales Podcast-Playback loest **keinen** Auto-Start aus. | Fuer die Gegenprobe am Zielrechner liegt kein Ergebnis vor. |
-| T-513 | Der Fenster-/Applikations-Fallback (Stufe 2) ist gebaut, falls Stufe… | laut Entscheidung vom 2026-11-18 erst umsetzen, **wenn** die Session-Erkennung in der Praxis nicht trägt. |
-| T-520 | UI, IPC und Export bewahren getrennte Quellen; Sprachgrenzen sind sic… | Sprache und Quellenlabels bei einer Live-Aufnahme mit MAI-Mono muessen noch abgenommen werden. |
-| T-520 | Preview ist nur nach Kosten-, Qualitaets-, Proxy- und Portable-Freiga… | Freigabekriterien und Messung siehe T-522. |
-| T-523 | Laufzeitnachweis fuer die experimentellen Modelle auf Windows x64. | SAPI-Engines, Quellenisolation und Dauerlauf sowie echtes WebView2-Mikrofon/Netz; siehe T-524. |
+| T-513 | Fenster-/Applikations-Fallback nur bei nachgewiesenem Bedarf ergaenze… | Der Nutzer bestaetigte am 28.11.2026, dass Teams funktioniert. Fuer den bestaetigten Teams-Fall ist kein Fallback noetig; daraus… |
+| T-520 | Kosten-, Qualitaets-, Proxy- und Portable-Nachweise fuer die MAI-Frei… | Der Nutzer hat den Freigabevorbehalt am 28.11.2026 bestaetigt. Die separat abgefragten Nachweise in [T-522](./T-522-mai-transcrib… |
+| T-523 | Laufzeitnachweis fuer die experimentellen Modelle auf Windows x64. | Laut Nutzerrueckmeldung vom 28.11.2026 ist die SAPI-Qualitaet weiterhin sehr schlecht. Quellenisolation, Dauerlauf und WebView2-M… |
 
-### Nächste Schritte auf deinem Rechner (die 11 offenen Punkte)
+### Nächste Schritte auf dem Zielrechner
 
-Alles hier ist auf dieser Maschine nicht ausführbar (0 Audioeingänge, 0
-Ausgänge, keine Azure-Credentials, kein Audio-Endpoint in der Test-Sitzung). Auf deinem
-Rechner sind es sechs Schritte:
+Diese Auswahl ergaenzt die erzeugte Uebersicht. Voraussetzungen sind je nach
+Pruefung eine interaktive Windows-Sitzung, reale Audio-Endpunkte oder gueltige
+Azure-Zugangsdaten. Weitere provider- und dateispezifische Abnahmen siehe
+[T-522](./specs/T-522-mai-transcribe-machbarkeit-kosten-abnahme.md),
+[T-524](./specs/T-524-native-windows-stt-machbarkeit.md) und
+[T-525](./specs/T-525-batch-transkription-und-lokale-aufnahme.md).
 
-**1. Latenz messen (T-502, T-500)** — das Werkzeug liegt vor:
+**1. Statistischen Latenznachweis ergaenzen (T-502)** — das Werkzeug liegt vor:
 
 ```powershell
 npm run measure:latency -- --live
@@ -90,43 +79,38 @@ sammelt bis zu 100 Messzeilen und schreibt `context/latency-report.md`
 (P50/P95/P99 je Stufe, Ziel P95 < 5 s). Ohne Messung läuft stattdessen
 `npm run measure:latency -- --selftest` — das prüft nur die Statistik.
 
-**2. Diarization mit zwei Sprechern (T-205)** — App starten, Konfiguration
-eintragen, Aufnahme starten, zwei Personen nacheinander sprechen lassen. Im
-Transkript müssen `Guest-1` und `Guest-2` getrennt auftauchen; die
-Session-ID steht in `SPEC.md` unter T-507 als Grundlage.
-
-**3. Loopback-Verhalten und Ausgabequalität (T-509)** — während einer
+**2. Loopback-Verhalten und Ausgabequalität (T-509)** — während einer
 Aufnahme etwas abspielen: Es dürfen **nur** dann Speaker-Events ankommen,
 wenn tatsächlich Audio aus dem Ausgabegerät läuft. Mic und Speaker
 getrennt prüfen (`user.transcription.mic` / `.speaker`).
 
-**4. Resampler-Stichprobe (T-203)** — in einer **interaktiven** Sitzung:
+**3. Resampler-Stichprobe (T-203)** — in einer **interaktiven** Sitzung:
 
 ```powershell
 npm run test:sidecar
 ```
 
-Der Test läuft nur, wo MediaFoundation antwortet; in der interaktiven Sitzung dieses Hosts weiterhin `SKIPPED`.
+Der Test laeuft nur, wo Media Foundation antwortet. Ein `SKIPPED` gilt nicht als Abnahme.
 Auf deinem Rechner prüft er 48-kHz-Stereo → 16-kHz-Mono inklusive Länge,
 Pegel, Übersteuerung und Dropouts.
 
-**5. Deployment auf einem frischen Windows 11 (T-504, T-510)** — Ordner
+**4. Optional: Deployment-Protokoll fuer einen konkreten Build (T-510)** — Ordner
 `dist/portable` kopieren, WebView2 sicherstellen (keine .NET-Installation noetig), dann:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\verify-deployment.ps1 -PortableDir D:\Apps\MeetingNotes -LaunchApp
+powershell -ExecutionPolicy Bypass -File .\scripts\verify-deployment.ps1 -PortableDir D:\Apps\MeetingNotes -LaunchApp
 ```
 
-Das Skript prüft Windows-Build, WebView2, .NET-Runtime, alle SHA256-Summen,
+Das Skript prüft Windows-Build, WebView2, alle SHA256-Summen,
 das Fehlen einer persönlichen Config, den Sidecar und die PE-Subsysteme.
 
-**6. Pause über Azure (T-507)** — Aufnahme starten, sprechen, pausieren,
+**5. Regression: Pause über Azure (T-507)** — Aufnahme starten, sprechen, pausieren,
 weiter sprechen, stoppen. Die Sprecher-IDs müssen **über die Pause hinweg**
 stabil bleiben (das ist der eigentliche Zweck der Pause-Semantik).
 
 ## 1. Ziel
 
-Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Speaker-Output erfasst, per Azure Speech transkribiert und Transkripte in einer React-UI anzeigt — bei deutlich kleinerer Bundle-Größe als die Electron-Variante.
+Eine portable, unsignierte Windows-Anwendung fuer Live-Transkripte und lokale Audioaufnahmen. Der Entwicklungsstand ergaenzt den Standardpfad mit Azure Speech um experimentelle Live-Modelle und WAV-Dateitranskription.
 
 **Quantitative Ziele:**
 - Bundle-Größe (Windows): **≤ 30 MB** (gegenüber ~180 MB im Electron-Projekt).
@@ -146,31 +130,26 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - Zwei getrennte Erfassungspfade (wie bisher):
   - Pipeline A: Mikrofon
   - Pipeline B: primärer Speaker-Output (Loopback)
-- Loopback ist Pflichtanforderung.
-- Wenn Loopback nicht verfügbar/fehlerhaft ist: Aufnahme wird blockiert (kein Mic-only-Fallback).
-- Audio-Frames werden im C#-Sidecar direkt an die Azure-Speech-PushStream übergeben — **keine Audio-Frames über Prozessgrenzen hinweg**.
+- Mikrofon, Loopback oder beide sind waehlbar. Eine aktivierte, nicht verfuegbare Quelle wird nicht stillschweigend abgeschaltet. Web Speech beschraenkt sich auf das Windows-Standardmikrofon. Siehe [T-511](./specs/T-511-transkriptions-quellen-auswaehlen.md) und [T-523](./specs/T-523-native-windows-stt-provider.md).
+- Audio wird im Sidecar aufgenommen, ausser im Web-Speech-Pfad (WebView2). Roh-Audio wird nicht ueber IPC transportiert.
 
 ## 3.1 Technische Architektur
 
 - **App-Container:** Tauri 2 (Rust). Verantwortlich für Fenster/WebView2-Lifecycle, Sidecar-Spawn, Settings-Persistenz, UI-Bridge.
 - **Systray (T-514):** natives Tray-Icon, Kontextmenue `Anzeigen`/`Beenden`, linker Doppelklick stellt das Hauptfenster wieder her und fokussiert es. Die Iconfarbe zeigt den Aufnahmestatus: **rot** bei laufender Aufnahme, **gelb** bei Pause, zurueck auf die Originalfarbe nach Stop oder Sidecar-Crash. Die Aktualisierung laeuft ueber `tray::update_recording_indicator` bei jedem Status-Event; ein veralteter Status kann die Farbe nicht zuruecksetzen. `user.window.minimizeToTrayOnClose` (Default true ab v0.1.2) verbirgt beim Schliessen nur das Fenster; Aufnahme und Detektor bleiben unveraendert. Explizites Tray-Beenden umgeht CloseRequested und nutzt das vorhandene Sidecar-Cleanup. Gespeicherte Aenderungen gelten sofort. Bei fehlendem/unerreichbarem Tray oder Hide-Fehler bleibt regulaeres Schliessen erhalten.
-- **Meeting-Erkennung:** Der Core-Audio-Session-Graph (`OnSessionCreated` plus `OnStateChanged` in `sidecar/MeetingDetector.cs`) erkennt aktive Audio-Sessions erlaubter Meeting-Prozesse. Der separate Erkennungsprozess (`--detect-only`) laeuft ohne Audio-Capture-Stream und ohne Azure. Wenn alle Capture-/Render-Sessions des ausloesenden Prozesses 3 s inaktiv bleiben, meldet er `meeting_ended`. Nur seine automatisch gestartete Aufnahme wird ueber den normalen Stop-/Export-Pfad beendet; manuelle Aufnahmen sind geschuetzt, Start/Stop serialisiert und Detektor-Ereignisse geordnet. Auto-Start samt passendem Auto-Stop standardmaessig **an** ab v0.1.2 (`user.autoStart.enabled`); explizites false bleibt erhalten. Kein Kalenderzugriff. Session-Ende ist eine Heuristik; Live-Abnahme Teams/Zoom und Pegel-/Stille-Erkennung bleiben offen (T-513).
-- **Backend:** C#/.NET 10 als Sidecar (`MeetingNotes.Sidecar.exe`, self-contained, komprimiert und konservativ getrimmt). Verantwortlich für Audio-Capture, Audio-Resampling, Azure-Speech-Transkription, Speaker-Diarization und Event-Streaming.
-- **Frontend:** React 19 + TypeScript 6 + Vite 8 (im Tauri-Renderer-WebView2).
+- **Meeting-Erkennung:** Der separate Core-Audio-Detektor (`--detect-only`) beobachtet Audio-Sessions erlaubter Prozesse ohne Audio-Capture oder Azure. Nach 3 s Inaktivitaet aller Sessions des ausloesenden Prozesses beendet der bestehende Auto-Stop nur die zugehoerige automatisch gestartete Aufnahme. Teams wurde im Praxistest bestaetigt. Podcast-Gegenprobe und geplanter Auto-Stop nach Stille siehe [T-513](./specs/T-513-automatische-meeting-erkennung-und-auto-start.md).
+- **Backend:** C#/.NET 10 als Sidecar (`MeetingNotes.Sidecar.exe`, self-contained, komprimiert und konservativ getrimmt). Verantwortlich fuer Audio-Capture, Resampling, lokale WAV-Aufnahme, Azure Speech, Windows SAPI und Meeting-Erkennung.
+- **Frontend:** React 19 + TypeScript 7 + Vite 8 (im Tauri-Renderer-WebView2).
 - **IPC Sidecar ↔ App:** `stdin/stdout` über `tauri-plugin-shell` mit JSON-Lines (siehe `DECISIONS.md → AD-008`). Named Pipe entfällt.
 - **IPC App ↔ Renderer:** Tauri-`invoke()` für Commands + Tauri-`listen()` für Events (typed JSON).
-- **Distribution:** Gesamter Portable-Ordner. Die Sidecar-EXE buendelt die .NET-Runtime sowie verwaltete/native Abhaengigkeiten und liegt neben der Haupt-EXE. Zielsystem braucht WebView2, aber keine installierte .NET-Runtime. Aktuell 30,67 MiB / 4 Dateien; keine Installer erzeugt.
+- **Distribution:** Gesamter Portable-Ordner. Die Sidecar-EXE buendelt die .NET-Runtime sowie verwaltete/native Abhaengigkeiten und liegt neben der Haupt-EXE. Zielsystem braucht WebView2, aber keine installierte .NET-Runtime. Installer sind nicht Teil des Lieferwegs.
 
 ## 4. Transkription
-- API: Azure Speech
-- Mehrsprecher-Differenzierung (Diarization): Nice-to-have (Best Effort)
-- Recognizer-Strategie ist pro Quelle unabhängig konfigurierbar:
-  - `diarization.mic` und `diarization.speaker`: aktiviert → `ConversationTranscriber`; deaktiviert → `SpeechRecognizer`.
-  - Beide Optionen sind standardmäßig `true`, auch bei alten oder teilweise ergänzten Konfigurationen; explizites `false` bleibt erhalten.
-  - Aktiviert: SDK-Speaker-IDs in Interim-/Final-Segmenten, mit `unknown` bei noch fehlender ID. Deaktiviert: feste IDs `self` (Mic) bzw. `guest` (Speaker).
-  - Reale Mehrsprecherqualität und Continuous-LID-Verhalten bleiben getrennte Akzeptanztests; siehe [T-205](./specs/T-205-continuous-lid-und-diarization-in-c-sharp.md).
+- Live: Azure Standard als Default; MAI Preview, Windows SAPI und Web Speech mit modellspezifischen Grenzen. Modellmatrix: [T-523](./specs/T-523-native-windows-stt-provider.md).
+- `user.diarization` steuert die Live-Sprechererkennung gemeinsam fuer alle aktiven Quellen, sofern das Modell sie unterstuetzt. Mehrsprechererkennung wurde live bestaetigt; Continuous LID ist dadurch nicht nachgewiesen ([T-205](./specs/T-205-continuous-lid-und-diarization-in-c-sharp.md)).
+- Standard-Mono kann feste Sprache oder Continuous LID verwenden; Standard-Stereo verwendet die Primaersprache, MAI Live erkennt die Sprache automatisch. Kein automatischer Modellwechsel. Die fruehere Echo-Unterdrueckung wurde in v0.1.9 entfernt ([T-517](./specs/T-517-echo-cancellation-alpha.md)).
+- **Record for later** speichert lokal zeitsynchrone WAV-Spuren. Dateitranskription hat eigene Einstellungen und verwendet Azure Standard, Azure MAI oder Windows SAPI. Nur ein bestaetigter Azure-Auftrag laedt WAV-Dateien hoch. Details: [T-525](./specs/T-525-batch-transkription-und-lokale-aufnahme.md).
 - Azure vergibt die Sprecher-IDs pro Sitzung neu. Jedes Transkript-Segment fuehrt deshalb die Session-ID mit (`sessionId`). Das UI leitet daraus die sessionsichere Sprecheridentitaet `<sessionId>|<source>:<speaker>` ab: Alias-Zuordnung und das Zusammenfuehren von Segmenten ueberschreiten die Sitzungsgrenze nie. Siehe [T-507](./specs/T-507-pause-stop-und-sitzungsgebundene-sprecherzuordnung.md).
-- Continuous Language Identification (LID) aktiviert (entspricht `meeting-notes`).
 - **Implementierung:** NuGet-Paket `Microsoft.CognitiveServices.Speech` (C#) im Sidecar.
 - Der Stop-Pfad muss je nach Recognizer-Typ korrekt erfolgen (`stopContinuousRecognitionAsync` vs. `stopTranscribingAsync`).
 - Betriebsmodus: bevorzugt Echtzeit-Streaming (Implementierungsdetail des C#-SDK).
@@ -185,14 +164,12 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - Bei geänderter SDK-Sprecher-ID ersetzt ein neues Interim-/Final-Event ältere Interims derselben Quelle; andere Quellen und finale Segmente bleiben erhalten. Transkript, Sprecherzuordnung und Export berücksichtigen Aliase.
 - Diagnostikbereich mit laufendem Debug-Log (App/Sidecar/IPC).
 - Die Debug-Fußzeile ist initial unsichtbar und wird über **Debug-Log** im Drei-Punkte-Menü umgeschaltet. Beim ersten Anzeigen öffnet sich der Logbereich nach oben, maximal bis 50 % des Inhaltsbereichs. Späteres Aus-/Einblenden erhält seinen Öffnungszustand. Fußzeile mit Fehlerzähler und **Log löschen**; nur Fehlerzeilen und der Zaehler werden rot hervorgehoben, nicht der gesamte Logtext.
-- Einstellungen liegen auf **einer** scrollenden Seite mit vier Abschnitten, die als Ueberschriften in der Reihenfolge **Allgemein**, **Audio**, **Azure**, **Proxy** untereinander stehen: **ohne** Tabs und **ohne** Bereichsnavigation, alles bleibt gleichzeitig im Dokument. Der Dialog ist breiter (max. 770 px) und hoeher (max. 620 px) und scrollt im Inhaltsbereich; die Position und Groesse bleiben beim Scrollen gleich. Der Footer enthaelt **Verbindung testen**, das Wiederoeffnen des laufenden/letzten Tests und **Speichern** sowie den tatsaechlichen Backend-Pfad der gemeinsamen Konfigurationsdatei. **Verbindung testen** ist aktiv, sobald Endpunkt, Schluessel und Region gesetzt sind. Erfolgreiches Speichern schliesst den Dialog; bei Fehlern bleibt er mit Fehlermeldung offen. Escape und Focus-Trap bleiben erhalten.
-- Bei leerem Transkript und gestoppter Aufnahme zeigt der Hauptbereich nur Sprache und Audioeinstellungen ohne Anwendungshinweis oder Speichern-Button. Aenderungen werden sofort seriell gespeichert; Azure-/Proxy-Drafts bleiben davon unberuehrt. Start wartet auf erfolgreiche Persistenz. Mikrofon und Speaker-Loopback stehen untereinander; pro Zeile steht die Transkriptions-Checkbox links vor dem Geraet und die Sprechererkennung rechts daneben. **Löschen** im Header ist während Aufnahme, Pause und Start deaktiviert und auch im Handler gesperrt.
+- Einstellungen stehen auf einer scrollenden Seite mit **General**, **Transcription**, **Azure** und **Proxy**. **Save** persistiert den Draft; der Footer zeigt auch den Konfigurationspfad, **Test connection** und das letzte Testergebnis. Native Abnahme und Details: [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md).
+- Die Startseite trennt **Record a meeting** und **Transcribe audio files**. Quellenschalter und Geraeteauswahl stehen unter **Audio devices**; Live-Modelloptionen stehen getrennt von den Dateioptionen. Aenderungen werden sofort seriell gespeichert. **Home** kehrt aus dem abgeschlossenen Transkript zur Startseite zurueck, ohne Text zu loeschen. Siehe [T-525](./specs/T-525-batch-transkription-und-lokale-aufnahme.md).
 - Nach einem Sidecar-Crash kann der Nutzer mit **Start** eine neue Sitzung beginnen, ohne die App neu zu starten. Kein automatischer Reconnect; das alte Transkript bleibt bis zum manuellen Start erhalten. Veraltete Prozess-Events/Timeouts werden ignoriert und absichtliches Stoppen meldet keinen Crash.
-- Nutzer kann Sprache/Devices sowie Azure-Konfiguration und Proxy bearbeiten. Proxy wird gemeinsam mit Azure gespeichert; **Verbindung testen** und das Wiederoeffnen des laufenden/letzten Tests liegen im Dialog-Footer neben **Speichern** und bleiben beim Scrollen sichtbar.
-- Spracheinstellung und unabhaengige Sprechererkennung fuer Mic/Speaker werden ueber Neustarts hinweg persistiert. Die beiden Diarization-Checkboxen stehen jetzt im Abschnitt **Audio** direkt bei den jeweiligen Geraeten und sind waehrend der Aufnahme deaktiviert. Gespeicherte Aenderungen gelten fuer die naechste Aufnahme.
-- Im Abschnitt **Allgemein** stehen **Aufnahme bei erkanntem Meeting automatisch starten** und direkt darunter die neue Option **Aufnahme automatisch beenden, wenn das Meeting automatisch gestartet wurde** (`user.autoStart.autoStop`, standardmaessig aktiv; ausgeschaltet laeuft die automatisch gestartete Aufnahme bis zum manuellen Stop weiter). Darunter folgen **Transkript automatisch als Markdown speichern** (standardmaessig aktiv) und das optionale Feld **Speicherpfad** mit nativem Ordner-Picker - das Feld steht direkt unter seiner Checkbox. Manuelle Eingabe bleibt moeglich; Abbrechen der Ordnerauswahl veraendert den Pfad nicht. Leer bedeutet Anwendungsverzeichnis.
+- **Transcription** im Settings-Dialog enthaelt Auto-Start, Auto-Stop und den automatischen Markdown-Export mit optionalem Pfad und nativem Ordner-Picker. Leer bedeutet Anwendungsverzeichnis. Die Fensteroptionen stehen unter **General**.
 - Die initiale Fenstergroesse ist 950 x 650 logische Pixel; das Fenster bleibt skalierbar.
-- Bei fehlender, nicht lesbarer oder unvollständiger Azure-Konfiguration öffnen sich Einstellungen beim Start automatisch; schließbarer Bottom-Toast ohne Verschiebung des Hauptinhalts. Das ist lokale Pflichtfeldprüfung, keine Azure-Key-Verifikation.
+- Fehlt eine benoetigte Azure-Konfiguration, koennen die Einstellungen beim Start automatisch erscheinen. Die lokale Pflichtfeldpruefung verifiziert keinen Azure-Key. Lokale WAV-Aufnahme erfordert keine Azure-Konfiguration.
 - Separater Diagnose-Dialog mit Transportstatus und vollständiger Schritttabelle nach Abschluss. Schließen kehrt zu Einstellungen zurück, ohne einen laufenden Test abzubrechen; Ergebnisse können wieder geöffnet werden.
 - F12 öffnet/schließt DevTools auch im Release-/Portable-Build.
 - Das auf Nutzerwunsch übernommene Console-Design ersetzt die ursprüngliche 1:1-Darstellung; Backend, IPC, Konfiguration und Diagnose verwenden weiterhin die bestehende Implementierung (siehe [DECISIONS.md](./DECISIONS.md), Fortschreibung AD-004 und [T-403](./specs/T-403-settings-dialog-mit-verbindung-testen-button.md)).
@@ -200,26 +177,27 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 ## 6. Konfiguration
 - Azure-Konfiguration und Benutzeroptionen liegen gemeinsam in **einer** Datei `MeetingNotes.config.json` (Abschnitte `azure` und `user`): im Release direkt neben der EXE, in Entwicklung im Repository-Root. Unabhängig vom Start-Arbeitsverzeichnis, ohne AppData-Migration/-Fallback.
 - Azure-Key bleibt direkt im Feld `azure.speechKey`; Azure-/Proxy-Werte sind im Settings-Dialog editierbar. `AppConfigState` liefert `exists`, `path` und optional `config`.
-- User-Settings enthalten `diarization: { "mic": true, "speaker": true }` sowie `transcript.markdownExport` mit `enabled` (Default `true`) und optionalem `path` (Default `null`). Fehlende Felder werden je Quelle als `true` normalisiert. Rust reicht die gespeicherten Optionen beim Start über `--diarization-mic true|false` und `--diarization-speaker true|false` an den Sidecar weiter.
+- `user.diarization` ist seit v0.1.9 ein gemeinsamer Boolean (Default `true`); die alte Objektform wird per ODER migriert. `user.transcript.markdownExport` behaelt `enabled` (Default `true`) und den optionalen `path` (Default `null`). Siehe [T-103](./specs/T-103-konfiguration-azure-und-user-settings.md).
 - Optionaler HTTP-CONNECT-Proxy über `proxy.host`, `proxy.port` (1–65535), optional `username`/`password`. Host ohne Schema/Pfad. Rust lädt die Dateien und reicht Einstellungen an HTTPS-Diagnose und Sidecar weiter; der Sidecar lädt sie nicht selbst.
 - Sidecar erhält Speech-Key/Proxy-Zugangsdaten über prozesslokale Umgebungsvariablen, nicht Credential-CLI-Argumente. Host/Port/Endpoint/Region/Sprache sind nicht geheime CLI-Args.
-- `azure.model` waehlt das Speech-SDK-Modell (Standard oder MAI Preview); `user.transcription.audioMode` waehlt Dual Mono (Default) oder einen gemeinsamen Stereo-Stream bei zwei Quellen. Details: [T-520](./specs/T-520-mai-transcribe-streaming-feature.md) und [T-521](./specs/T-521-mai-transcribe-mehrkanal-sidecar.md).
-- **Test connection** nutzt den ungespeicherten Entwurf und ist bei laufender oder pausierter Aufnahme gesperrt. Standard prüft HTTPS in Rust und native Speech/WSS im separaten Sidecar. MAI prüft nur native Speech/WSS mit dem regionalen Modell. Beide SDK-Diagnosen verwenden Stille statt Audio-Capture.
+- `azure.model` waehlt Azure Standard oder MAI Preview. `user.transcription.provider` erlaubt alternative Live-Provider; `user.transcription.audioMode` waehlt fuer Standard Dual Mono oder Stereo. `user.fileTranscription` und `azure.batchEndpoint` konfigurieren den Dateipfad unabhaengig von Live-Optionen. Details: [T-521](./specs/T-521-mai-transcribe-mehrkanal-sidecar.md), [T-523](./specs/T-523-native-windows-stt-provider.md) und [T-525](./specs/T-525-batch-transkription-und-lokale-aufnahme.md).
+- **Test connection** nutzt gespeicherte Live-Modelloptionen mit ungespeicherten Azure-/Proxy-Werten. Standard prueft HTTPS in Rust und native Speech/WSS im separaten Sidecar; MAI prueft nur Speech/WSS. Beide SDK-Diagnosen verwenden Stille statt Audio-Capture.
 - HTTPS nutzt expliziten Proxy mit optionaler Basic-Authentifizierung, ansonsten `.no_proxy()`; kein öffentlicher DNS-Fallback. DNS/TCP prüfen den Proxy, sonst den Endpoint mit dessen Port oder 443. HTTPS-HEAD folgt keinen Redirects.
 - **HTTPS-Diagnose und native Windows-Speech-SDK-Prüfung validieren TLS-Zertifikate beide gegen den System-Vertrauensspeicher.** Kein offiziell dokumentierter .NET-Bypass für Speech SDK 1.53 gefunden; für die HTTPS-Probe gibt es keinen Bypass. Bei TLS-Inspection muss das Firmen-Root-CA im Vertrauensspeicher hinterlegt sein.
-- `httpsReachable` bedeutet HTTP-Antwort auch bei 401/403 (für MAI nicht geprüft). `speechReachable` verlangt `Connected` und `SessionStarted` für die vorgesehenen SDK-Proben: bei Standard-Dual-Mono für Recognizer und Transcriber, bei Stereo für den ausgewählten Typ und bei MAI-Mono für den Recognizer. `reachable` verlangt alle für das gewählte Modell vorgesehenen Transporte. HTTPS-Schritte: `2xx` = Erfolg, `401`/`403` = Warnung, `407` = Fehler, sonst Warnung.
+- `httpsReachable` bedeutet HTTP-Antwort auch bei 401/403 (fuer MAI nicht geprueft). `speechReachable` verlangt `Connected` und `SessionStarted` fuer den tatsaechlich verwendeten Recognizer-Typ. `reachable` verlangt alle fuer das Modell vorgesehenen Transporte. HTTPS-Schritte: `2xx` = Erfolg, `401`/`403` = Warnung, `407` = Fehler, sonst Warnung.
 - Diagnoseprozess: 45 s Grenze; DNS/TCP/HTTPS jeweils 5 s Timeout, keine garantierte 45-s-Obergrenze des vollständigen UI-Aufrufs. Native Proben können Azure-Kosten verursachen.
 - Ergebnis wird zurückgegeben und als `transcript:connectivity-result` emittiert; UI nutzt Return-Wert. Separater Dialog zeigt alle Status/Details erst nach Abschluss, einschließlich Validierungs-/IPC-Fehlern, nicht live gestreamte Einzelsteps. Siehe [T-304](./specs/T-304-connectivity-diagnose-in-rust.md).
 
-## 6.1 Audioformat für Azure-Ingest (unverändert)
+## 6.1 Audioformat fuer Azure-Ingest und WAV-Aufnahme
 - Sidecar resampelt Mic- und Speaker-Frames auf ein einheitliches Zielformat:
   - 16 kHz
   - 16-bit PCM
   - mono
 - Ziel: kompatibler, stabiler Ingest-Pfad für Azure Speech bei heterogenen Geräteformaten.
+- Standard-Stereo fuehrt zwei Kanaele in einem Stream; lokale WAV-Aufnahme speichert jede aktivierte Quelle als eigene Monospur.
 
-## 6.2 Audio-Transport (NEU: im selben Prozess)
-- Audio-Frames werden im C#-Sidecar direkt nach Resampling an `PushAudioInputStream.WriteAsync()` der Azure-Speech-SDK übergeben.
+## 6.2 Audio-Transport
+- Der Azure-Live-Pfad gibt resampelte Frames im C#-Sidecar an den SDK-Push-Stream weiter.
 - **Keine Named-Pipe-Frames mehr für Audio** (verglichen mit der Electron-Variante).
 - 5-Sekunden-Durchsatz-Log pro Source (`pushFrame-Statistik`) bleibt erhalten, damit Ingestion-Regressionen sichtbar werden.
 
@@ -241,10 +219,10 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - Vollständiges Transkript per Copy-to-Clipboard als Markdown — identisch zur automatisch gespeicherten Datei.
 - **Markdown exportieren** im Drei-Punkte-Menü speichert manuell über denselben Backend-Pfad und Builder wie der automatische Export; Fehler erscheinen als Toast.
 - Exportinhalt: YAML-Frontmatter (`title`, `date`, `start`, `end`, `duration`, `language`, `segments`, `speakers`) plus finale Segmentliste mit Sprecher/Uhrzeit/Text. Sprecherlabels berücksichtigen quellenspezifische UI-Aliase; ohne Alias wird die Quelle mit ausgegeben, z. B. `Mic · Guest-1`.
-- Zeitformat: deutsches Datums-/Zeitformat. Der Zielpfad des Datei-Exports ist optional; ohne Angabe landet die Datei im Anwendungsverzeichnis, relative Pfade werden dort aufgelöst.
+- Der Zielpfad des Datei-Exports ist optional; ohne Angabe landet die Datei im Anwendungsverzeichnis, relative Pfade werden dort aufgeloest.
 
 ## 8. Entwicklungsumgebung (Stabilitätsvorgabe)
-- Standard für lokale Entwicklung: Node 22 LTS ≥22.12.0; zulässige Versionen gemäß `package.json` (auch ≥24.0.0 <24.16.0).
+- Node.js `>=22.12.0 <27` gemaess [package.json](./package.json).
 - Rust-Toolchain (stable, Edition 2021).
 - .NET 10 SDK (für Sidecar-Build) lokal.
 - Tauri-CLI (2.x) als devDependency.
@@ -255,9 +233,7 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 - Zielsystem: keine .NET-Runtime oder SDK erforderlich; die .NET-10-Runtime ist im komprimierten, getrimmten Single-File-Sidecar enthalten. Native Bibliotheken werden beim Start extrahiert. Sidecar-/Speech-SDK-Metadaten bleiben fuer Reflection erhalten; Trim-Warnungen bleiben sichtbar. Nur `net10.0-windows` wird gebaut — siehe [T-512](./specs/T-512-sidecar-targetframeworks-und-single-file.md).
 - Build-/Start-Flow:
   - Dev: `build.rs` publiziert Sidecar automatisch, danach Start durch Tauri.
-  - Installer: `npm run tauri -- build` bündelt die **self-contained** Sidecar-EXE als externe Resource; separate DLLs werden nicht mehr ausgeliefert.
   - Portable: `npm run tauri -- build --no-bundle`, nach Erfolg `npm run dist:portable` und `npm run test:smoke`; gesamter Ordner erforderlich, nicht nur Haupt-EXE.
-  - Lokaler letzter Portable-Build: **30,74 MB / 4 Dateien**, 3 von 3 Hashes geprüft (Rebuild vom 2026-11-18 nach `1f22adc`). Aktuelle MSI/NSIS- und Clean-Machine-Validierung nicht erneut durchgeführt.
 
 ## 9. Nicht-Ziele
 - Code-Signing
@@ -269,14 +245,14 @@ Ein portabler, unsignierter Desktop-PoC, der parallel Mikrofon und primären Spe
 
 ### Release-Pipeline (T-515)
 
-Jede Veroeffentlichung laeuft ueber GitHub Actions, damit das publizierte ZIP immer zum Tag gehoert. **Es gibt bewusst keinen automatischen Build bei Push oder Pull Request** - der Workflow startet ausschliesslich bei einem Release-Tag:
+Jede Veroeffentlichung laeuft ueber GitHub Actions. Normale Branch-Pushes und Pull Requests starten keinen Build:
 
-- **Release** (`.github/workflows/release.yml`): beim Push eines `v*`-Tags wird genau dieses Tag ausgecheckt, Typecheck, Node-Tests und Spec-Konsistenz laufen, die Portable-Distribution wird gebaut, mit Smoke-Test und Deployment-Pruefung geprueft und als GitHub-Release-Asset veroeffentlicht (`MeetingNotes-v<version>-win-x64.zip` plus `SHA256SUMS.zip`). Ein fehlendes Release laesst sich ohne Tag-Verschiebung ueber **Run workflow** mit dem `tag`-Input nachholen.
-- Die C#-Sidecar-Validierung laeuft bewusst nicht im Workflow: sie braucht reale Audio-Hardware, die GitHub-Runner nicht besitzen.
+- **Release** baut bei `v*`-Tag-Push oder manuellem Start das angegebene Tag. Typecheck, Node-Tests, Smoke und Deployment-Pruefung laufen vor der Veroeffentlichung von `MeetingNotes-v<version>-win-x64.zip` und `SHA256SUMS.txt`.
+- Spec-Konsistenz, Rust-Tests und C#-Sidecar-Validierung laufen separat lokal.
 
 Details: [T-515](./specs/T-515-github-actions-pipeline-und-release.md).
 
-## 10. MVP-Rollout
+## 10. Historischer MVP-Rollout
 
 Die MVPs des Electron-Projekts bleiben die funktionale Grundlage; umgesetzt wird ausschließlich in dieser Tauri-Variante, die Electron-Referenz bleibt unverändert. Aktuelle Teilabnahme siehe [T-500](./specs/T-500-qualitaetssicherung-und-akzeptanztests.md):
 
@@ -302,10 +278,10 @@ Die MVPs des Electron-Projekts bleiben die funktionale Grundlage; umgesetzt wird
 
 ## 11. Offene Entscheidungen und Akzeptanz
 1. [T-505](./specs/T-505-proxy-aware-azure-transport.md): abgeschlossen — der Firmenproxy-/C#-WSS-Test war am 2026-11-12 erfolgreich, ein Workaround entfällt.
-2. Reale Aufnahme/Latenz und Clean-Machine-Deployment sowie aktuelle Installer-Parität prüfen ([T-500](./specs/T-500-qualitaetssicherung-und-akzeptanztests.md)).
+2. Statistischen Latenzreport und P95 fuer Azure Speech nachweisen ([T-502](./specs/T-502-latency-messung.md)); die manuelle Clean-Machine-Abnahme deckt keine experimentellen Sprachmodelle ab ([T-524](./specs/T-524-native-windows-stt-machbarkeit.md)).
 3. Historisch offene Sidecar-Benennung: aktuell `MeetingNotes.Sidecar.exe`; keine Umbenennung in den heutigen Änderungen.
 
-Bereits festgelegt: stdin/stdout statt Named Pipe, Windows-only; Installer-Konfiguration NSIS und MSI, daneben Portable-Ordner. Heute nur Portable neu gebaut.
+Bereits festgelegt: stdin/stdout statt Named Pipe, Windows-only, ausschliesslich Portable als Lieferweg.
 
 ## 12. Querverweise
 - Aktueller Projektstatus: [README.md](./README.md)
