@@ -17,7 +17,7 @@ Qualitaet und Portable-Eignung; Offline ist ein Bonus.
 | Kandidat | Befund | Entscheidung |
 |---|---|---|
 | `System.Speech.Recognition` / Windows SAPI, C# | In-Process-Engine, `InstalledRecognizers`, `DictationGrammar`, `SetInputToAudioStream(Stream, format)` und asynchroner Mehrfachmodus. Damit ist das Einspeisen unseres PCM API-seitig plausibel. Installierte x64-Diktat-Recognizer, Live-Stream-Verhalten, Parallelitaet und getrimmtes Portable sind nicht nachgewiesen. Ein Windows-Sprachpaket oder Voice Access ist kein Beweis fuer einen passenden SAPI-Recognizer. | **Erster Spike** fuer das heutige entpackte Windows-x64-Produkt. Nicht shippen, wenn der Zielrechner keine brauchbare Engine hat oder das Transkript nicht meetingtauglich ist. |
-| `Microsoft.Windows.AI.Speech` / Windows App SDK | Microsoft dokumentiert lokales Batch und Streaming, lokale Modell-Readiness und u.a. `AudioConfiguration.FromStream`/`ForProvider`; das ist kein Nachweis fuer unser WASAPI-PCM und zwei gleichzeitige Instanzen. Laut Speech-Doku experimentell, nicht fuer Produktion unterstuetzt; Windows 11 24H2+ und experimentelles Windows App SDK (dort 2.2.2-experimental9 oder spaeter). NPU auf Copilot+, CPU ohne Copilot+ mit optionalem Modell aus Windows Update, keine GPU. SDK-Setup beschreibt MSIX/`systemAIModels`; der Betrieb im vorhandenen unpackaged ZIP ist nicht belegt. | Interessanter Parallelkandidat fuer separat freigegebenen Labor-Spike; keine neue Runtime, Paketidentitaet oder Insider-Anforderung fuer Azure-Nutzer einfuehren. |
+| `Microsoft.Windows.AI.Speech` / Windows App SDK | Experimentelle API; die Laborintegration erforderte MSIX-Paketidentitaet und ein bereitgestelltes Modell. | Laborpfad wegen des Bereitstellungsaufwands entfernt. |
 | `tauri-plugin-device-ai-apis` / `Windows.Media.SpeechRecognition` | Windows-Backend verwendet `SpeechRecognizer.RecognizeAsync()`; Rust-Streaming-Start/Stop ist auf Windows nicht unterstuetzt. Microsoft verlangt fuer diese WinRT-API Paketidentitaet; die vordefinierte WinRT-Diktatgrammatik benutzt einen Remote-Dienst. Die Online-Verarbeitung ist zulaessig, eigenes Loopback-PCM nimmt das Plugin aber nicht entgegen. TTS im Plugin synthetisiert auf Windows einen Stream, spielt ihn laut README aber nicht ab. | Nicht als Meeting-STT-Abhaengigkeit uebernehmen. Direkte WinRT-Integration allenfalls als Mikrofon-Variante pruefen: ContinuousRecognitionSession, Online-Policy und Paketidentitaet auf Zielrechner nachweisen; kein gleichwertiger Meeting-Modus ohne Loopback. |
 | Web Speech API (`SpeechRecognition`) in Edge / WebView2 | Die Webseite uebergibt keinen Azure-Key; Browser/Runtime, Berechtigungen und ggf. ein Onlinedienst bestimmen die Verfuegbarkeit. `start()` nutzt das Mikrofon, `start(audioTrack)` akzeptiert laut Web-API einen lebenden Audio-Track. Kein direkter Eingang fuer die vorhandenen Sidecar-PCM-Frames. | Als separaten, kostenguenstigen Vergleich pruefen, nicht als Windows-Native-API oder nachgewiesenen Ersatz fuer den Meeting-Pfad behandeln. |
 
@@ -62,24 +62,14 @@ Qualitaet und Portable-Eignung; Offline ist ein Bonus.
   heutigen Textereignis-/Steuerungs-IPC. Bis dahin hoechstens ein Kandidat fuer
   einen deutlich gekennzeichneten, manuell gestarteten Mikrofonmodus.
 
-Falls SAPI durchfaellt: moderne Windows-AI-API nur unter nachgewiesenen und
-akzeptierten Voraussetzungen weiterverfolgen. Ein lokal bereitgestelltes
+Ein lokal bereitgestelltes
 Drittmodell (z.B. Whisper) waere eine separate Entscheidung zu Modellen,
 Lizenz, Paketgroesse und CPU-Last, kein stiller Fallback und kein Teil dieses
 Auftrags. Keine Uebernahme von Windows-Live-Captions-UI als Eingabequelle.
 
-## Windows AI Speech: Labor-Abnahme
+## Windows AI Speech: Historischer Build-Nachweis
 
-Den Standard-Portable-Build ohne Windows App SDK pruefen: Auswahl/Save ohne Azure,
-strukturierte Nichtverfuegbarkeitsmeldung und kein automatischer Start, kein Download,
-kein Fallback. Separat mit experimentellem SDK plus `systemAIModels` pruefen:
-Paketidentitaet des aufrufenden Sidecars, `GetReadyState` ohne Bereitstellung,
-Default-Mic mit genehmigter Testaufnahme, finaler Text und Stop/Quit samt Export.
-Eine registrierte Paketidentitaet und ein bereitgestelltes Modell sind nicht Teil der
-portablen ZIP-Distribution. Eigenes Loopback-PCM und zwei parallele Erkenner bleiben
-eine separate Machbarkeitspruefung, keine angebotene Funktion.
-
-Build-Nachweis: Das getrennte unsignierte x64-Labor-MSIX wurde mit dem
+Vor der Entfernung wurde das getrennte unsignierte x64-Labor-MSIX mit dem
 Windows-SDK-Packager erstellt. Manifest (`systemAIModels`), Tauri-Host,
 experimenteller Sidecar und native Speech-DLL wurden im Paket geprueft.
 Der daraus extrahierte Sidecar meldete ohne Registrierung erwartungsgemaess

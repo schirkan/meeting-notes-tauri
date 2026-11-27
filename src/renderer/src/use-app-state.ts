@@ -834,7 +834,7 @@ export function useAppState() {
   const [connectivityKind, setConnectivityKind] = useState<'azure' | 'native' | 'web'>('azure')
   const returnToSettingsRef = useRef(true)
 
-  const onTestConnectivity = async (fileModel?: 'windows-ai-speech' | 'windows-sapi') => {
+  const onTestConnectivity = async (fileModel?: 'windows-sapi') => {
     if (isTestingConnectivity || isStarting || status.running || batchPendingRef.current || (!fileModel && (draftModel === 'unsupported' || draftFeatures.mode === 'batch'))) return
     const kind = fileModel ? 'native' : draftFeatures.test
     const model = fileModel ?? draftModel
@@ -860,7 +860,7 @@ export function useAppState() {
       }
       // Aktuelle Draft-Werte (auch ungespeicherte Änderungen) testen.
       const payload = kind === 'native'
-        ? { provider: model, ...(model === 'windows-sapi' ? { language: fileModel ? settingsRef.current.language : dialogSettings.language } : {}) }
+        ? { provider: model, language: fileModel ? settingsRef.current.language : dialogSettings.language }
         : {
         ...draftToConfig(configDraft),
         language: dialogSettings.language,
@@ -1034,8 +1034,8 @@ export function useAppState() {
       setToast({ message: errorDetail(error, 'Check the selected audio.'), variant: 'error', persistent: true })
       return
     }
-    if (!tracks.length || (batchModel === 'windows-ai-speech' && tracks.length > 1)) return
-    const provider = batchModel === 'windows-sapi' || batchModel === 'windows-ai-speech' ? batchModel : 'azure'
+    if (!tracks.length) return
+    const provider = batchModel === 'windows-sapi' ? batchModel : 'azure'
     const model = isAzureSpeechModel(batchModel) ? batchModel : undefined
     if (model) {
       if (!isConfigComplete(configState?.config ?? null, true)) {
@@ -1190,7 +1190,7 @@ export function useAppState() {
     onPickBatchAudio,
     onClearBatchAudio,
     onChangeBatchStart,
-    onCheckBatchModel: () => batchModel === 'windows-ai-speech' || batchModel === 'windows-sapi' ? onTestConnectivity(batchModel) : Promise.resolve(),
+    onCheckBatchModel: () => batchModel === 'windows-sapi' ? onTestConnectivity(batchModel) : Promise.resolve(),
     onTranscribeBatchAudio,
     knownSpeakers,
     lastError,

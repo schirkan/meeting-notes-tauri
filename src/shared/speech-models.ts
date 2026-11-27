@@ -9,7 +9,7 @@ type SpeechFeatures = {
   stereo: boolean
   speakerLoopback: boolean
   selectDevices: boolean
-  language: 'selectable' | 'automatic' | 'managed'
+  language: 'selectable' | 'automatic'
   optionalLanguageDetection: boolean
   diarization: boolean
   interim: boolean
@@ -22,7 +22,6 @@ export const LIVE_MODELS = {
   standard: { label: 'Azure Speech (standard)', azure: true, endpoint: true, stereo: true, speakerLoopback: true, selectDevices: true, language: 'selectable', optionalLanguageDetection: true, diarization: true, interim: true, autoStart: true, pause: true, test: 'azure' },
   'mai-transcribe-2-streaming': { label: 'Azure MAI Transcribe (Preview)', azure: true, endpoint: false, stereo: false, speakerLoopback: true, selectDevices: true, language: 'automatic', optionalLanguageDetection: false, diarization: false, interim: true, autoStart: true, pause: true, test: 'azure' },
   'windows-sapi': { label: 'Windows SAPI (Experimental)', azure: false, endpoint: false, stereo: false, speakerLoopback: true, selectDevices: true, language: 'selectable', optionalLanguageDetection: false, diarization: false, interim: false, autoStart: true, pause: true, test: 'native' },
-  'windows-ai-speech': { label: 'Windows AI Speech (Experimental)', azure: false, endpoint: false, stereo: false, speakerLoopback: false, selectDevices: false, language: 'managed', optionalLanguageDetection: false, diarization: false, interim: false, autoStart: false, pause: false, test: 'native' },
   'web-speech': { label: 'Web Speech API (Experimental)', azure: false, endpoint: false, stereo: false, speakerLoopback: false, selectDevices: false, language: 'selectable', optionalLanguageDetection: false, diarization: false, interim: true, autoStart: false, pause: false, test: 'web' },
 } as const satisfies Record<SpeechModel, SpeechFeatures>
 
@@ -30,7 +29,6 @@ export const BATCH_MODELS = {
   standard: LIVE_MODELS.standard.label,
   'mai-transcribe-2-streaming': LIVE_MODELS['mai-transcribe-2-streaming'].label,
   'windows-sapi': LIVE_MODELS['windows-sapi'].label,
-  'windows-ai-speech': LIVE_MODELS['windows-ai-speech'].label,
 } satisfies Record<BatchModel, string>
 
 export function meetingSpeechFeatures(settings: TranscriptionSettings, azureModel: AzureSpeechModel = 'standard'): SpeechFeatures & { model: SpeechModel | 'unsupported'; mode: TranscriptionMode } {

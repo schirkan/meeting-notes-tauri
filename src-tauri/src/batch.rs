@@ -246,9 +246,6 @@ pub async fn transcribe_batch_audio(
     if !provider.supports_batch() {
         return Err("Select a supported Batch model before transcribing.".into());
     }
-    if provider == RecognitionProvider::WindowsAiSpeech && tracks.len() > 1 {
-        return Err("Windows AI Speech only supports one file because it does not return segment timestamps.".into());
-    }
     validate_tracks(&tracks).await?;
     let azure = if provider == RecognitionProvider::Azure {
         let mut config = azure.ok_or(

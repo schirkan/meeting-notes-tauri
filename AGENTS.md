@@ -23,7 +23,7 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
 ## Aktueller Produktstand
 
 - **Meeting Notes**, veroeffentlichte Version **0.1.9**, ist eine portable Windows-11-x64-Anwendung
-  fuer Live-Transkripte. Azure ist Standard; Windows SAPI, Windows AI Speech (separater MSIX-Laborpfad)
+  fuer Live-Transkripte. Azure ist Standard; Windows SAPI
   und Web Speech API sind experimentell, nicht veroeffentlicht. Modellmatrix und offene Abnahmen: [T-523](./specs/T-523-native-windows-stt-provider.md).
 - Batch-Dateitranskription und lokaler Meeting-Recorder speichern zwei zeitlich ausgerichtete WAV-Quellen ohne Begleitdatei und befuellen nach erfolgreichem Stop den Datei-Dialog: [T-525](./specs/T-525-batch-transkription-und-lokale-aufnahme.md), noch nicht veroeffentlicht.
 - Die gesamte Oberflaeche, alle Meldungen und die oeffentliche Doku sind
@@ -155,7 +155,7 @@ Offene Abnahmen und Messverfahren: [T-500](./specs/T-500-qualitaetssicherung-und
   (`4f1a482b-afa7-42a3-a933-ef145302a856`, done).
 - Separate Hardware-Abnahme der Echo-Alpha
   (`455a9e0c-15af-4470-af29-28513028af63`): fachlich geschlossen, siehe [T-519](./specs/T-519-echo-cancellation-alpha-abnahme.md).
-- Modellmatrix, Windows SAPI, Windows AI Speech und Web Speech API: [T-523](./specs/T-523-native-windows-stt-provider.md),
+- Modellmatrix, Windows SAPI und Web Speech API: [T-523](./specs/T-523-native-windows-stt-provider.md),
   [Live-Abnahme](./specs/T-524-native-windows-stt-machbarkeit.md)
   (`6c9e26bb-b2e7-4520-85cd-0a956e52eb2b`); fruehere Recherche `4c5653ae-dd2f-4689-ac21-d4a4a2cf631d`.
 

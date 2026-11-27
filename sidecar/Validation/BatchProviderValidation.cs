@@ -25,15 +25,15 @@ internal static class BatchProviderValidation
             var unsupported = await Run("--transcribe-batch", file, "--recognition-provider", "web-speech");
             check(unsupported.Exit != 0 && HasError(unsupported.Text, "BATCH_TRANSCRIPTION_FAILED", "Select a batch provider"),
                 "Packaged dispatch rejects Web Speech file import");
+            var removed = await Run("--transcribe-batch", file, "--recognition-provider", "windows-ai-speech");
+            check(removed.Exit != 0 && HasError(removed.Text, "BATCH_TRANSCRIPTION_FAILED", "Select a batch provider"),
+                "Packaged dispatch rejects the removed provider without falling back to Azure");
             var untrusted = await Run("--transcribe-batch", file, "--recognition-provider", "azure", "--speech-endpoint", "https://non-azure.invalid");
             check(untrusted.Exit != 0 && HasError(untrusted.Text, "BATCH_TRANSCRIPTION_FAILED", "HTTPS Azure Speech resource endpoint"),
                 "Packaged Azure dispatch rejects untrusted upload destinations");
             var resource = await Run("--transcribe-batch", file, "--recognition-provider", "azure", "--speech-endpoint", "https://test.cognitiveservices.azure.com");
             check(resource.Exit != 0 && HasError(resource.Text, "BATCH_TRANSCRIPTION_FAILED", "subscription key"),
                 "Packaged Azure dispatch requires a key before network access");
-            var windowsAi = await Run("--transcribe-batch", file, "--recognition-provider", "windows-ai-speech");
-            check(windowsAi.Exit != 0 && HasError(windowsAi.Text, "BATCH_TRANSCRIPTION_FAILED", "MSIX"),
-                "Unpackaged Windows AI route declines batch without Azure fallback");
             var record = await Run("--record-batch", Path.Combine(directory.FullName, "no capture"), "--transcription-mic", "false", "--transcription-speaker", "false");
             check(record.Exit != 0 && HasError(record.Text, "SIDECAR_START_FAILED", "at least one audio source"),
                 "Packaged batch capture dispatch validates sources without touching audio devices");

@@ -160,7 +160,6 @@ async fn start_recording_with_origin(
     // Manual and automatic starts use one persisted snapshot for this sidecar.
     lifecycle.web_speech = false;
     lifecycle.sapi = false;
-    lifecycle.windows_ai_speech = false;
     lifecycle.batch_recording = None;
     let settings::AppConfig { azure, user } = settings::load_app_config().await.map_err(|e| e.to_string())?;
     if expected_provider.is_some_and(|expected| expected != user.transcription.provider.as_str())
@@ -183,23 +182,19 @@ async fn start_recording_with_origin(
         events::emit_status(app, &status);
         return Ok(status);
     }
-    if !batch && origin.is_some() && user.transcription.provider == settings::RecognitionProvider::WindowsAiSpeech {
-        return Err("Windows AI Speech allows manual microphone start only.".into());
-    }
-    let (handle, use_sapi, use_windows_ai_speech) = if batch {
+    let (handle, use_sapi) = if batch {
         let root = crate::batch::recordings_directory(app)?;
         tokio::fs::create_dir_all(&root).await.map_err(|err| format!("Cannot open recording folder: {err}"))?;
         let started_at = crate::batch::capture_start(requested_at_ms, chrono::Utc::now())?;
         let (prefix, recording) = crate::batch::recording_outputs(&root, started_at, &user.transcription)?;
         let handle = sidecar::start_batch_recorder(app, &user, &root, &prefix, started_at.timestamp_millis()).map_err(|e| e.to_string())?;
         lifecycle.batch_recording = Some(recording);
-        (handle, false, false)
+        (handle, false)
     } else {
         let options = recording_options(azure, user)?;
         let use_sapi = options.use_sapi;
-        let use_ai = options.transcription.provider == settings::RecognitionProvider::WindowsAiSpeech;
         let handle = sidecar::start(app, options).await.map_err(|e| e.to_string())?;
-        (handle, use_sapi, use_ai)
+        (handle, use_sapi)
     };
 
     // Cache the live handle so stop_recording can reach it. Das passiert vor
@@ -222,7 +217,6 @@ async fn start_recording_with_origin(
 
     lifecycle.auto_origin = origin;
     lifecycle.sapi = use_sapi;
-    lifecycle.windows_ai_speech = use_windows_ai_speech;
     let status = state.mark_started_at(lifecycle.batch_recording.as_ref().map(|recording| recording.started_at.as_str()));
     events::emit_status(app, &status);
     if let Some(origin) = lifecycle.auto_origin.as_ref() {
@@ -259,14 +253,6 @@ fn recording_options(azure: Option<AzureConfig>, user: settings::UserSettings) -
         settings::RecognitionProvider::WindowsSapi => {
             options.use_sapi = true;
             options.transcription.audio_mode = settings::AudioMode::DualMono;
-        }
-        settings::RecognitionProvider::WindowsAiSpeech => {
-            options.transcription.mic = true;
-            options.transcription.speaker = false;
-            options.transcription.audio_mode = settings::AudioMode::DualMono;
-            options.mic_device_id = None;
-            options.speaker_device_id = None;
-            options.language = None;
         }
         settings::RecognitionProvider::Azure => {
             let azure = azure.ok_or("The Azure configuration is missing or invalid. Check the transcription model and connection settings.")?;
@@ -438,20 +424,13 @@ mod lifecycle_tests {
     }
 
     #[test]
-    fn windows_ai_speech_options_only_enable_default_mic_and_no_azure_credentials() {
+    fn removed_provider_does_not_fall_back_to_azure() {
         let user: settings::UserSettings = serde_json::from_value(serde_json::json!({
-            "transcription": {"provider":"windows-ai-speech", "mic":false, "speaker":true, "audioMode":"stereo"},
-            "devices":{"micId":"other-mic","speakerLoopbackId":"other-loopback"},
-            "language":"en-GB"
+            "transcription": {"provider":"windows-ai-speech"}
         })).unwrap();
-        assert_eq!(serde_json::to_value(&user).unwrap()["transcription"]["provider"], "windows-ai-speech");
-        let opts = recording_options(None, user).unwrap();
-        assert_eq!(opts.transcription.provider, settings::RecognitionProvider::WindowsAiSpeech);
-        assert!(!opts.use_sapi && opts.transcription.mic && !opts.transcription.speaker);
-        assert_eq!(opts.transcription.audio_mode, settings::AudioMode::DualMono);
-        assert!(opts.language.is_none() && opts.mic_device_id.is_none() && opts.speaker_device_id.is_none());
-        assert!(opts.speech_key.is_none() && opts.speech_region.is_none() && opts.speech_endpoint.is_none() && opts.proxy.is_none());
-        assert!(!opts.diarization && !opts.auto_language_detection && !opts.interim_results);
+        assert_eq!(user.transcription.provider, settings::RecognitionProvider::Unsupported);
+        assert!(!user.transcription.provider.supports_batch());
+        assert!(recording_options(None, user).err().unwrap().contains("unsupported"));
     }
 
     #[tokio::test]
@@ -519,7 +498,6 @@ pub async fn pause_recording(
     let _lifecycle = lifecycle.lock().await;
     require_running_recording(&state)?;
     if _lifecycle.batch_recording.is_some() { return Err("Batch audio recording does not support pause.".into()); }
-    if _lifecycle.windows_ai_speech { return Err("Windows AI Speech does not support pause.".into()); }
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "pause_recording called.");
 
     let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
@@ -571,7 +549,6 @@ pub async fn resume_recording(
     let _lifecycle = lifecycle.lock().await;
     require_running_recording(&state)?;
     if _lifecycle.batch_recording.is_some() { return Err("Batch audio recording does not support resume.".into()); }
-    if _lifecycle.windows_ai_speech { return Err("Windows AI Speech does not support resume.".into()); }
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "resume_recording called.");
 
     let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
@@ -1048,13 +1025,11 @@ pub async fn test_azure_connectivity(
     }
     let value = payload.unwrap_or(serde_json::Value::Null);
     if let Some(provider) = value.get("provider") {
-        let (flag, event, label) = match provider.as_str() {
-            Some("windows-sapi") => ("--test-sapi", "sapi_probe", "Windows SAPI"),
-            Some("windows-ai-speech") => ("--test-windows-ai-speech", "windows_ai_speech_probe", "Windows AI Speech"),
-            _ => return Err("This model does not use the native connection test.".into()),
-        };
-        let language = (flag == "--test-sapi").then(|| value.get("language").and_then(|v| v.as_str()).unwrap_or("de-DE"));
-        return test_native_readiness(&app, flag, event, label, language).await;
+        if provider.as_str() != Some("windows-sapi") {
+            return Err("This model does not use the native connection test.".into());
+        }
+        let language = value.get("language").and_then(|v| v.as_str()).unwrap_or("de-DE");
+        return test_sapi_readiness(&app, language).await;
     }
     let config: AzureConfig = serde_json::from_value(value.clone())
         .map_err(|_| "Invalid Azure configuration. Check the model, region, speech key, endpoint and proxy.")?;
@@ -1136,12 +1111,12 @@ pub async fn test_azure_connectivity(
 
 // ---------- clipboard ----------
 
-async fn test_native_readiness(app: &AppHandle, flag: &str, event_type: &str, label: &str, language: Option<&str>) -> Result<connectivity::ConnectivityResult, String> {
+async fn test_sapi_readiness(app: &AppHandle, language: &str) -> Result<connectivity::ConnectivityResult, String> {
+    let label = "Windows SAPI";
     let start = std::time::Instant::now();
     let path = sidecar::resolve_sidecar_path(app).map_err(|e| e.to_string())?;
     let mut command = tokio::process::Command::from(background_command(path.as_os_str()));
-    command.arg(flag);
-    if let Some(language) = language { command.args(["--language", language]); }
+    command.args(["--test-sapi", "--language", language]);
     command.env_remove("MEETING_NOTES_SPEECH_KEY");
     command.kill_on_drop(true);
     let output = tokio::time::timeout(std::time::Duration::from_secs(12), command.output()).await
@@ -1149,7 +1124,7 @@ async fn test_native_readiness(app: &AppHandle, flag: &str, event_type: &str, la
         .map_err(|e| format!("The {label} check could not start: {e}"))?;
     let payload = String::from_utf8_lossy(&output.stdout).lines().find_map(|line| {
         let event: serde_json::Value = serde_json::from_str(line).ok()?;
-        (event.get("type")?.as_str()? == event_type).then(|| event.get("payload").cloned()).flatten()
+        (event.get("type")?.as_str()? == "sapi_probe").then(|| event.get("payload").cloned()).flatten()
     }).ok_or_else(|| format!("{label} did not report availability."))?;
     let ready = payload.get("ready").and_then(|v| v.as_bool()) == Some(true) && output.status.success();
     let detail = payload.get("detail").and_then(|v| v.as_str()).map(str::to_string)

@@ -19,9 +19,7 @@ type BatchAudioPanelProps = {
 
 export function BatchAudioPanel(props: BatchAudioPanelProps) {
   const { slots, model, action, disabled } = props
-  const hasBoth = !!slots.mic && !!slots.speaker
-  const native = model === 'windows-sapi' || model === 'windows-ai-speech'
-  const oneSourceOnly = model === 'windows-ai-speech' && hasBoth
+  const native = model === 'windows-sapi'
   return (
     <section id="batch-audio" className="batch-audio-controls" aria-label="Batch transcription">
       <label className="batch-model-field">
@@ -59,11 +57,10 @@ export function BatchAudioPanel(props: BatchAudioPanelProps) {
           )
         })}
       </div>
-      {model === 'windows-ai-speech' && <p className="meta">Windows AI Speech accepts one source only and requires the experimental packaged build.{oneSourceOnly && ' Remove one WAV or select another model.'}</p>}
       {!native && <p className="meta">Azure receives only the WAVs listed above, after you confirm.</p>}
       <div className="batch-audio-actions">
         <button className="secondary-button" type="button" onClick={() => void props.onTranscribe()}
-          disabled={disabled || oneSourceOnly || (!slots.mic && !slots.speaker)}>
+          disabled={disabled || (!slots.mic && !slots.speaker)}>
           {action === 'transcribe' ? 'Transcribing…' : 'Transcribe'}
         </button>
         {native && <button className="secondary-button" type="button" onClick={() => void props.onCheckModel()} disabled={disabled}>Check model availability</button>}

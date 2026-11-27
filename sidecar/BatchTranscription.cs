@@ -6,9 +6,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
-#if WINDOWS_AI_SPEECH
-using Microsoft.Windows.AI.Speech;
-#endif
 
 namespace MeetingNotes.Sidecar;
 
@@ -28,8 +25,8 @@ internal static class BatchTranscription
         string provider = args.GetValueOrDefault("--recognition-provider") ?? "azure";
         try
         {
-            if (provider is not ("azure" or "windows-sapi" or "windows-ai-speech"))
-                throw new BatchFailure("Select a batch provider: Azure, Windows SAPI, or Windows AI Speech.");
+            if (provider is not ("azure" or "windows-sapi"))
+                throw new BatchFailure("Select a batch provider: Azure or Windows SAPI.");
             var path = args.GetValueOrDefault("--transcribe-batch");
             if (string.IsNullOrWhiteSpace(path) || path == "true")
                 throw new BatchFailure("Choose a WAV file for batch transcription.");
@@ -42,12 +39,9 @@ internal static class BatchTranscription
             // Keep the validated file open, preventing writes or replacement during recognition.
             using var audio = File.OpenRead(path);
             var wave = ReadWave(audio);
-            var segments = provider switch
-            {
-                "azure" => await RunAzureAsync(args, audio, wave, language),
-                "windows-sapi" => await RunSapiAsync(path, language ?? "de-DE"),
-                _ => await RunWindowsAiAsync(path)
-            };
+            var segments = provider == "azure"
+                ? await RunAzureAsync(args, audio, wave, language)
+                : await RunSapiAsync(path, language ?? "de-DE");
             Logger.Event("batch_transcript", new { segments });
             return 0;
         }
@@ -66,7 +60,6 @@ internal static class BatchTranscription
                 _ => provider switch
                 {
                     "windows-sapi" => "Windows SAPI could not transcribe the WAV file.",
-                    "windows-ai-speech" => "Windows AI Speech could not transcribe the WAV file. Check MSIX package identity and model readiness.",
                     _ => "Azure Fast Transcription could not process the WAV file."
                 }
             };
@@ -226,30 +219,6 @@ internal static class BatchTranscription
             engine.RecognizeAsync(RecognizeMode.Multiple);
             return await completion.Task;
         }
-    }
-
-    private static async Task<Segment[]> RunWindowsAiAsync(string path)
-    {
-#if WINDOWS_AI_SPEECH
-        SpeechRecognitionModelFactory factory;
-        try { factory = WindowsAiSpeech.OpenReadyFactory(); }
-        catch (InvalidOperationException ex) when (ex.InnerException is null && !OperatingSystem.IsWindowsVersionAtLeast(10, 0, 26100))
-        {
-            throw new BatchFailure("Windows AI Speech requires Windows 11 24H2 or newer.");
-        }
-        catch (InvalidOperationException)
-        {
-            throw new BatchFailure("Windows AI Speech requires MSIX package identity and an already installed speech model. No download was started.");
-        }
-        using var model = await factory.CreateAsync();
-        var recognition = new BatchRecognition(model);
-        var text = await recognition.RecognizeFromFile(path);
-        // The experimental API returns a whole-file string, not timed phrases.
-        return string.IsNullOrWhiteSpace(text) ? [] : [new Segment(text, null, null, null)];
-#else
-        await Task.CompletedTask;
-        throw new BatchFailure("Windows AI Speech batch transcription requires the experimental MSIX sidecar and an installed model.");
-#endif
     }
 
     // RIFF/WAVE with one fmt chunk and one non-empty data chunk. Accept mono/stereo

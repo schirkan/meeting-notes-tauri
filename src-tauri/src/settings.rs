@@ -167,7 +167,6 @@ pub enum RecognitionProvider {
     #[default]
     Azure,
     WindowsSapi,
-    WindowsAiSpeech,
     WebSpeech,
     Unsupported,
 }
@@ -176,14 +175,13 @@ impl RecognitionProvider {
     fn is_azure(&self) -> bool { *self == Self::Azure }
 
     pub fn supports_batch(self) -> bool {
-        matches!(self, Self::Azure | Self::WindowsSapi | Self::WindowsAiSpeech)
+        matches!(self, Self::Azure | Self::WindowsSapi)
     }
 
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Azure => "azure",
             Self::WindowsSapi => "windows-sapi",
-            Self::WindowsAiSpeech => "windows-ai-speech",
             Self::WebSpeech => "web-speech",
             Self::Unsupported => "unsupported",
         }
@@ -198,7 +196,6 @@ pub(crate) fn parse_provider(value: Option<&str>) -> RecognitionProvider {
     match value {
         Some("azure") => RecognitionProvider::Azure,
         Some("windows-sapi") => RecognitionProvider::WindowsSapi,
-        Some("windows-ai-speech") => RecognitionProvider::WindowsAiSpeech,
         Some("web-speech") => RecognitionProvider::WebSpeech,
         _ => RecognitionProvider::Unsupported,
     }
@@ -355,31 +352,8 @@ pub fn app_dir_for(exe: &Path, development_root: Option<&Path>) -> PathBuf {
     }
 }
 
-#[cfg(windows)]
-fn is_windows_ai_speech_lab() -> bool {
-    #[link(name = "kernel32")]
-    extern "system" {
-        fn GetCurrentPackageFamilyName(length: *mut u32, name: *mut u16) -> i32;
-    }
-    let mut name = [0u16; 128];
-    let mut length = name.len() as u32;
-    // The buffer is writable for its advertised length and lives through the call.
-    if unsafe { GetCurrentPackageFamilyName(&mut length, name.as_mut_ptr()) } != 0 {
-        return false;
-    }
-    String::from_utf16_lossy(&name[..(length.saturating_sub(1) as usize)])
-        .starts_with("MeetingNotes.WindowsAiSpeechLab_")
-}
-
-/// Resolve writable data storage; the experimental MSIX installation is read-only.
+/// Resolve writable data storage for the portable app.
 pub fn app_dir() -> Result<PathBuf, SettingsError> {
-    #[cfg(windows)]
-    if is_windows_ai_speech_lab() {
-        let base = std::env::var_os("LOCALAPPDATA").ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::NotFound, "LOCALAPPDATA is unavailable for the Windows AI Speech lab package")
-        })?;
-        return Ok(PathBuf::from(base).join("MeetingNotes.WindowsAiSpeechLab"));
-    }
     let exe = std::env::current_exe()?;
     let development_root = if cfg!(debug_assertions) {
         Path::new(env!("CARGO_MANIFEST_DIR")).parent()

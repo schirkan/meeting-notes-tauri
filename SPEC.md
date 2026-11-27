@@ -12,7 +12,7 @@ Diese Spezifikation ist die **Windows-Variante** von `../meeting-notes/SPEC-v0.1
 
 ---
 
-## Stand der Specs (Abgleich 26.11.2026)
+## Stand der Specs (Abgleich 27.11.2026)
 
 Die Checkboxen wurden gegen den **Code** geprueft, nicht gegen den Spec-Status:
 jeder abgehakte Punkt traegt den Beleg im Klartext (`Beleg: …`), jeder offene
@@ -50,7 +50,7 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-524 | Mindestens 30 Minuten Referenzgespraech inkl. Ueberlappung und Pause/Resume/Stop/Quit messen;… |
 | T-524 | Clean-Machine-Nachweis am getrimmten Portable-ZIP: kein Azure-Konto oder Key, dokumentierte Wi… |
 | T-525 | Reales Mikrofon und Loopback zusammen aufnehmen; Synchronitaet und automatisches Stoppen am Me… |
-| T-525 | Expliziten Upload mit Azure Standard und MAI und Dateierkennung mit Windows AI Speech pruefen. |
+| T-525 | Expliziten Upload mit Azure Standard und MAI pruefen. |
 
 ### Offen als bewusste Entscheidung (16 Punkte)
 
@@ -71,7 +71,7 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-513 | Der Fenster-/Applikations-Fallback (Stufe 2) ist gebaut, falls Stufe… | laut Entscheidung vom 2026-11-18 erst umsetzen, **wenn** die Session-Erkennung in der Praxis nicht trägt. |
 | T-520 | UI, IPC und Export bewahren getrennte Quellen; Sprachgrenzen sind sic… | Sprache und Quellenlabels bei einer Live-Aufnahme mit MAI-Mono muessen noch abgenommen werden. |
 | T-520 | Preview ist nur nach Kosten-, Qualitaets-, Proxy- und Portable-Freiga… | Freigabekriterien und Messung siehe T-522. |
-| T-523 | Laufzeitnachweis fuer die experimentellen Modelle auf Windows x64. | SAPI-Engines, Quellenisolation und Dauerlauf, echtes WebView2-Mikrofon/Netz und paketierter Windows-AI-Speech-Lauf auf einem Syst… |
+| T-523 | Laufzeitnachweis fuer die experimentellen Modelle auf Windows x64. | SAPI-Engines, Quellenisolation und Dauerlauf sowie echtes WebView2-Mikrofon/Netz; siehe T-524. |
 
 ### Nächste Schritte auf deinem Rechner (die 11 offenen Punkte)
 

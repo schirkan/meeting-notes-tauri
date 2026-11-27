@@ -6,7 +6,7 @@ export interface AzureProxyConfig {
 }
 
 export type AzureSpeechModel = 'standard' | 'mai-transcribe-2-streaming'
-export type RecognitionProvider = 'windows-sapi' | 'windows-ai-speech' | 'web-speech' | 'unsupported'
+export type RecognitionProvider = 'windows-sapi' | 'web-speech' | 'unsupported'
 export type SpeechModel = Exclude<RecognitionProvider, 'unsupported'> | AzureSpeechModel
 export type TranscriptionMode = 'live' | 'batch'
 
@@ -131,7 +131,7 @@ export function normalizeUserSettings(input: UserSettingsInput | null | undefine
     language: safeLanguage,
     transcription: {
       ...(input?.transcription?.provider !== undefined && input.transcription.provider !== 'azure'
-        ? { provider: input.transcription.provider === 'windows-sapi' || input.transcription.provider === 'windows-ai-speech' || input.transcription.provider === 'web-speech'
+        ? { provider: input.transcription.provider === 'windows-sapi' || input.transcription.provider === 'web-speech'
             ? input.transcription.provider : 'unsupported' as const } : {}),
       ...(input?.transcription?.mode === undefined || input.transcription.mode === 'live' ? {}
         : { mode: input.transcription.mode === 'batch' ? 'batch' as const : 'unsupported' as const }),

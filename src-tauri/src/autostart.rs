@@ -59,7 +59,6 @@ pub struct RecordingLifecycle {
     pub auto_origin: Option<MeetingDetectedPayload>,
     pub web_speech: bool,
     pub sapi: bool,
-    pub windows_ai_speech: bool,
     pub batch_recording: Option<crate::events::BatchRecording>,
 }
 

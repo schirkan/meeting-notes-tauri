@@ -116,10 +116,6 @@ if (argsMap.ContainsKey("--record-batch"))
     return await BatchAudioRecorder.RunAsync(argsMap);
 // Keep readiness and recording on a separate path: no Azure configuration,
 // environment credentials, SDK calls, or fallback for this provider.
-if (argsMap.ContainsKey("--test-windows-ai-speech"))
-    return await WindowsAiSpeech.ProbeAsync(argsMap.GetValueOrDefault("--language"));
-if (!argsMap.ContainsKey("--transcribe-batch") && argsMap.GetValueOrDefault("--recognition-provider") == "windows-ai-speech")
-    return await WindowsAiSpeech.RunAsync(argsMap);
 if (argsMap.ContainsKey("--test-sapi"))
     return await WindowsSapi.ProbeAsync(argsMap.GetValueOrDefault("--language") ?? "de-DE");
 if (!argsMap.ContainsKey("--transcribe-batch") && argsMap.GetValueOrDefault("--recognition-provider") == "windows-sapi")
@@ -170,7 +166,7 @@ Logger.Event("handshake", new
 });
 if (argsMap.GetValueOrDefault("--recognition-provider") is not (null or "azure"))
 {
-    Logger.Error("SIDECAR_START_FAILED", "Unsupported --recognition-provider; expected azure, windows-sapi, or windows-ai-speech.");
+    Logger.Error("SIDECAR_START_FAILED", "Unsupported --recognition-provider; expected azure or windows-sapi.");
     return 11;
 }
 

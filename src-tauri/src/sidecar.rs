@@ -283,8 +283,6 @@ pub async fn start<R: Runtime>(
         .args(recognition_arguments(options.diarization, options.auto_language_detection, options.interim_results));
     if options.use_sapi {
         command = command.args(["--recognition-provider", "windows-sapi"]);
-    } else if options.transcription.provider == crate::settings::RecognitionProvider::WindowsAiSpeech {
-        command = command.args(["--recognition-provider", "windows-ai-speech"]);
     } else {
         command = command.args(["--speech-model", options.speech_model.as_str()]);
     }

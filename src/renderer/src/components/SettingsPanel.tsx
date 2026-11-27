@@ -191,14 +191,13 @@ export function SettingsPanel(props: SettingsPanelProps) {
               <option value="stereo" disabled={!features.stereo}>Stereo (one session)</option>
             </select>
           </label>}
-          <label className="language-field" title={features.language === 'managed' ? 'The Windows model controls recognition language' : features.language === 'automatic' ? 'This model detects the language automatically' : 'Choose the primary recognition language'}>
+          <label className="language-field" title={features.language === 'automatic' ? 'This model detects the language automatically' : 'Choose the primary recognition language'}>
             <span className="field-caption"><Icon name="flag" />Primary language</span>
-            <select value={features.language === 'managed' ? '' : settings.language} disabled={statusRunning || features.language !== 'selectable'}
+            <select value={settings.language} disabled={statusRunning || features.language !== 'selectable'}
               onChange={(event) => {
                 const language = event.currentTarget.value
                 setSettings((prev) => ({ ...prev, language }))
               }}>
-              {features.language === 'managed' && <option value="">Managed by Windows</option>}
               {!(model === 'windows-sapi' && settings.language === 'en-GB') && !languageOptions.some((option) => option.value === settings.language) && (
                 <option value={settings.language}>{settings.language}</option>
               )}
@@ -210,8 +209,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
           </label>
           <label className="checkbox-field" title={features.language === 'automatic'
             ? 'This model always detects the language automatically'
-            : features.language === 'managed' ? 'Not configurable for this model'
-              : optionalLid ? 'Detect language changes between utterances' : 'This mode uses the primary language'}>
+            : optionalLid ? 'Detect language changes between utterances' : 'This mode uses the primary language'}>
             <input type="checkbox" checked={features.language === 'automatic' || (optionalLid && settings.autoLanguageDetection)}
               disabled={statusRunning || !optionalLid}
               onChange={(event) => {
@@ -247,7 +245,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
             {!batch && features.azure && 'Mono uses one Azure session per enabled source. Stereo uses one session for both sources and keeps them on separate channels. Interim results may appear without a source label. With one source enabled, audio stays mono.'}
             {!batch && model === 'mai-transcribe-2-streaming' && ' Live MAI uses mono only and does not support speaker recognition in Meeting Notes.'}
             {!batch && model === 'windows-sapi' && 'Uses an installed Windows desktop dictation engine for the selected language. No Azure credentials are used.'}
-            {!batch && model === 'windows-ai-speech' && 'On-device recognition from the default microphone. Not available in the standard portable build. Requires MSIX package identity and a ready Windows model. No Azure credentials or automatic downloads.'}
             {!batch && model === 'web-speech' && 'Manual start uses the default microphone. WebView2 may send microphone audio to its online speech service. Availability depends on WebView2, permissions and policy. No Azure credentials are used.'}
             {!batch && model === 'unsupported' && 'Select a supported model before starting transcription.'}
           </p>
