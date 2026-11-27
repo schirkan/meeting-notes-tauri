@@ -31,7 +31,17 @@ pub struct TranscriptStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub started_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub recording_path: Option<String>,
+    pub recording: Option<BatchRecording>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchRecording {
+    pub started_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mic_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub speaker_path: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]

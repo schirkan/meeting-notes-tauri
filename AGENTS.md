@@ -25,7 +25,7 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
 - **Meeting Notes**, veroeffentlichte Version **0.1.9**, ist eine portable Windows-11-x64-Anwendung
   fuer Live-Transkripte. Azure ist Standard; Windows SAPI, Windows AI Speech (separater MSIX-Laborpfad)
   und Web Speech API sind experimentell, nicht veroeffentlicht. Modellmatrix und offene Abnahmen: [T-523](./specs/T-523-native-windows-stt-provider.md).
-- Batch-Dateitranskription fuer Azure Standard/MAI, SAPI und Windows AI Speech sowie lokaler Meeting-Recorder: [T-525](./specs/T-525-batch-transkription-und-lokale-aufnahme.md), noch nicht veroeffentlicht.
+- Batch-Dateitranskription und lokaler Meeting-Recorder speichern zwei zeitlich ausgerichtete WAV-Quellen ohne Begleitdatei und befuellen nach erfolgreichem Stop den Datei-Dialog: [T-525](./specs/T-525-batch-transkription-und-lokale-aufnahme.md), noch nicht veroeffentlicht.
 - Die gesamte Oberflaeche, alle Meldungen und die oeffentliche Doku sind
   englisch; Specs, `SPEC.md` und diese Datei bleiben intern deutsch.
   Siehe [T-516](./specs/T-516-englische-oberflaeche-und-oeffentliche-doku.md).
@@ -147,6 +147,7 @@ Offene Abnahmen und Messverfahren: [T-500](./specs/T-500-qualitaetssicherung-und
 ## Workboard
 
 - Batch-Dateitranskription und lokaler Recorder: `440e6921-7d49-4702-b849-2fb43e36d1f4`.
+- Unabhaengiger Batch-Dateidialog, zeitgestempelte WAVs und Vorbelegung nach Stop: `1e4f4251-fa49-4649-8fa0-2a8aaafef632`.
 
 - Board `meeting-notes-tauri`: Review-Fixes und lokaler Release-Kandidat v0.1.6
   (`a9c11271-1d10-4911-a382-3b79d3aa4c36`, done).

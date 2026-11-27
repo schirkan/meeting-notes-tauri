@@ -24,8 +24,9 @@ struct AppStateInner {
     running: bool,
     paused: bool,
     started_at: Option<String>,
+    start_time_fixed: bool,
     stop_error: Option<String>,
-    recording_path: Option<String>,
+    recording: Option<crate::events::BatchRecording>,
     debug_log: Vec<DebugLogEntry>,
     /// T-201: Zahl der fehlerhaften JSON-Zeilen aus dem Sidecar.
     malformed_lines: u64,
@@ -95,23 +96,30 @@ impl AppState {
             running: inner.running,
             paused: inner.paused,
             started_at: inner.started_at.clone(),
-            recording_path: inner.recording_path.clone(),
+            recording: inner.recording.clone(),
         }
     }
 
     pub fn mark_started(&self) -> TranscriptStatus {
+        self.mark_started_at(None)
+    }
+
+    pub fn mark_started_at(&self, requested_start: Option<&str>) -> TranscriptStatus {
         let mut inner = self.inner.lock().expect("AppState mutex poisoned");
+        let started_at = requested_start.map(str::to_owned)
+            .or_else(|| if inner.start_time_fixed && inner.running { inner.started_at.clone() } else { None })
+            .unwrap_or_else(|| Utc::now().to_rfc3339());
+        inner.start_time_fixed = requested_start.is_some() || (inner.start_time_fixed && inner.running);
         inner.running = true;
         inner.paused = false;
-        let started_at = Utc::now().to_rfc3339();
         inner.started_at = Some(started_at.clone());
         inner.stop_error = None;
-        inner.recording_path = None;
+        inner.recording = None;
         TranscriptStatus {
             running: true,
             paused: false,
             started_at: Some(started_at),
-            recording_path: None,
+            recording: None,
         }
     }
 
@@ -125,7 +133,7 @@ impl AppState {
             running: true,
             paused: true,
             started_at: inner.started_at.clone(),
-            recording_path: None,
+            recording: None,
         }
     }
 
@@ -138,7 +146,7 @@ impl AppState {
             running: true,
             paused: false,
             started_at: inner.started_at.clone(),
-            recording_path: None,
+            recording: None,
         }
     }
 
@@ -158,19 +166,20 @@ impl AppState {
         self.finish_recording(error, None)
     }
 
-    pub fn finish_recording(&self, error: Option<String>, recording_path: Option<String>) -> TranscriptStatus {
+    pub fn finish_recording(&self, error: Option<String>, recording: Option<crate::events::BatchRecording>) -> TranscriptStatus {
         let mut inner = self.inner.lock().expect("AppState mutex poisoned");
         if error.is_some() { inner.stop_error = error; }
         inner.running = false;
         inner.paused = false;
         inner.started_at = None;
+        inner.start_time_fixed = false;
         inner.handshake_version = None;
-        inner.recording_path = recording_path.clone();
+        inner.recording = recording.clone();
         TranscriptStatus {
             running: false,
             paused: false,
             started_at: None,
-            recording_path,
+            recording,
         }
     }
 
@@ -214,6 +223,16 @@ impl AppState {
 #[cfg(test)]
 mod pause_tests {
     use super::*;
+
+    #[test]
+    fn batch_sidecar_confirmation_does_not_change_the_click_time() {
+        let state = AppState::default();
+        let click = "2026-11-27T16:25:00.321+00:00";
+        state.mark_started_at(Some(click));
+        assert_eq!(state.mark_started().started_at.as_deref(), Some(click));
+        state.mark_stopped();
+        assert_ne!(state.mark_started().started_at.as_deref(), Some(click));
+    }
 
     /// Pause und Fortsetzen muessen dieselbe Sitzung und dieselbe
     /// Startzeit beibehalten — nur so bleiben die Sprecher-IDs gueltig

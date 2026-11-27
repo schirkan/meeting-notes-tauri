@@ -194,7 +194,7 @@ fn deserialize_provider<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Recogn
     Ok(parse_provider(serde_json::Value::deserialize(d)?.as_str()))
 }
 
-fn parse_provider(value: Option<&str>) -> RecognitionProvider {
+pub(crate) fn parse_provider(value: Option<&str>) -> RecognitionProvider {
     match value {
         Some("azure") => RecognitionProvider::Azure,
         Some("windows-sapi") => RecognitionProvider::WindowsSapi,

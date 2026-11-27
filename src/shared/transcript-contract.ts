@@ -62,8 +62,21 @@ export interface TranscriptStatus {
   /** Aufnahme ist pausiert: die Azure-Sitzung lebt weiter, es wird kein Audio zugespeist. */
   paused?: boolean
   startedAt?: string
-  /** Path to the manifest of a cleanly stopped local batch recording. */
-  recordingPath?: string | null
+  /** WAV tracks returned only for a cleanly stopped local recording. */
+  recording?: { startedAt: string; micPath?: string; speakerPath?: string }
+}
+
+export type BatchAudioSource = 'mic' | 'speaker'
+
+export interface BatchAudioTrack {
+  path: string
+  source: BatchAudioSource
+  startedAt: string
+}
+
+export interface BatchAudioInspection {
+  startedAt?: string
+  estimated: boolean
 }
 
 export interface DebugLogEntry {
@@ -188,9 +201,10 @@ export type TranscriptProvider = 'azure' | Exclude<RecognitionProvider, 'unsuppo
 export interface TranscriptApi {
   toggleDevtools: () => Promise<void>
   openRepository: () => Promise<void>
-  start: (expectedProvider?: TranscriptProvider, expectedMode?: TranscriptionMode) => Promise<TranscriptStatus>
+  start: (expectedProvider: TranscriptProvider | 'unsupported', expectedMode: TranscriptionMode, requestedAtMs: number) => Promise<TranscriptStatus>
   pickBatchAudio: () => Promise<string | null>
-  transcribeBatchAudio: (path: string, expectedProvider: Exclude<TranscriptProvider, 'web-speech'>, expectedModel?: AzureSpeechModel) => Promise<TranscriptSegment[]>
+  inspectBatchAudio: (path: string) => Promise<BatchAudioInspection>
+  transcribeBatchAudio: (tracks: BatchAudioTrack[], expectedProvider: Exclude<TranscriptProvider, 'web-speech'>, expectedModel?: AzureSpeechModel) => Promise<TranscriptSegment[]>
   stop: () => Promise<TranscriptStatus>
   pause: () => Promise<TranscriptStatus>
   resume: () => Promise<TranscriptStatus>
@@ -218,7 +232,7 @@ export interface TranscriptApi {
     error?: string
     steps: Array<{ step: string; status: 'ok' | 'warn' | 'error'; detail: string }>
   }>
-  copyTranscript: (segments: TranscriptSegment[]) => Promise<void>
+  copyTranscript: (segments: TranscriptSegment[], startedAt?: string) => Promise<void>
   onSegment: (cb: (segment: TranscriptSegment) => void) => () => void
   onError: (cb: (error: TranscriptError) => void) => () => void
   onStatus: (cb: (status: TranscriptStatus) => void) => () => void

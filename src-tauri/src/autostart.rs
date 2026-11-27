@@ -60,7 +60,7 @@ pub struct RecordingLifecycle {
     pub web_speech: bool,
     pub sapi: bool,
     pub windows_ai_speech: bool,
-    pub batch_manifest: Option<std::path::PathBuf>,
+    pub batch_recording: Option<crate::events::BatchRecording>,
 }
 
 impl RecordingLifecycle {

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { hasAzureConnectionFields } from '@shared/config-contract'
 import { AboutDialog } from './components/AboutDialog'
+import { BatchAudioPanel } from './components/BatchAudioPanel'
 import { ConfigPanel } from './components/ConfigPanel'
 import { ConnectivityDialog } from './components/ConnectivityDialog'
 import { DebugLogPanel } from './components/DebugLogPanel'
@@ -34,8 +35,15 @@ export function App() {
     isLoadingInitialData,
     isStarting,
     batchAction,
-    batchAudioPath,
+    batchAudioOpen,
+    setBatchAudioOpen,
+    batchAudioSlots,
+    batchModel,
+    setBatchModel,
     onPickBatchAudio,
+    onClearBatchAudio,
+    onChangeBatchStart,
+    onCheckBatchModel,
     onTranscribeBatchAudio,
     knownSpeakers,
     onCopyTranscript,
@@ -59,6 +67,7 @@ export function App() {
     connectivityResult,
     connectivityKind,
     connectivityDialogOpen,
+    connectivityFromSettings,
     onOpenConnectivityDialog,
     closeConnectivityDialog,
     onToggleRecording,
@@ -88,6 +97,8 @@ export function App() {
   } = useAppState()
   const batch = savedFeatures.mode === 'batch'
   const busy = isLoadingInitialData || isStarting || status.running || batchAction !== null
+  const idle = !isLoadingInitialData && !isStarting && !status.running
+  const showConnectionTest = draftFeatures.mode === 'live' && draftModel !== 'unsupported'
   const audioPanel = <AudioPanel statusRunning={batchAction !== null} batch={batch} settings={settings} devices={devices} setSettings={setIdleSettings}
     selectDevices={savedFeatures.selectDevices} speakerLoopback={savedFeatures.speakerLoopback} />
 
@@ -141,22 +152,37 @@ export function App() {
             setSpeakerAliases={setSpeakerAliases}
             following={autoScrollEnabled}
             onFollow={onFollowTranscript}
-            idleControls={batch && !isLoadingInitialData && !status.running && !isStarting && (
-              <section className="batch-audio-controls" aria-label="Batch transcription">
-                <p className="meta">Batch mode: record locally, import a WAV or choose a completed recording’s recording.json file.</p>
-                <div className="batch-audio-actions">
-                  <button className="secondary-button" type="button" onClick={() => void onPickBatchAudio()}
-                    disabled={batchAction !== null || isSavingSettings || settingsSaveFailed}>Import WAV or choose recording</button>
-                  <button className="secondary-button" type="button" onClick={() => void onTranscribeBatchAudio()}
-                    disabled={!batchAudioPath || batchAction !== null || isSavingSettings || settingsSaveFailed}>
-                    {batchAction === 'transcribe' ? 'Transcribing…' : 'Transcribe'}
-                  </button>
+            idleControls={idle && <>
+              <section className="batch-audio-controls" aria-label="Meeting controls">
+                <div className="batch-audio-actions meeting-mode-controls">
+                  <label>
+                    <span className="field-caption">Meeting mode</span>
+                    <select disabled={batchAction !== null || isSavingSettings}
+                      value={settings.transcription.mode ?? 'live'} onChange={(event) => {
+                        const mode = event.currentTarget.value === 'batch' ? 'batch' : undefined
+                        setIdleSettings((previous) => ({ ...previous, transcription: { ...previous.transcription, mode } }))
+                      }}>
+                      {settings.transcription.mode === 'unsupported' && <option value="unsupported" disabled>Unsupported mode</option>}
+                      <option value="live">Live</option>
+                      <option value="batch">Batch</option>
+                    </select>
+                  </label>
+                  <button className="secondary-button" type="button" aria-expanded={batchAudioOpen} aria-controls="batch-audio"
+                    onClick={() => setBatchAudioOpen((open) => !open)} disabled={batchAction !== null}>Transcribe files</button>
                 </div>
-                {batchAudioPath && <p className="meta-path">Selected audio: {batchAudioPath}</p>}
-                {segments.length > 0 && <details><summary>Audio devices</summary>{audioPanel}</details>}
+                <p className="meta">{batch ? 'Record WAVs locally, then transcribe them separately when ready.' : 'Transcribe meetings as they happen.'} This mode also applies to automatic meetings.</p>
+                {!batch && <div className="meeting-live-model">
+                  <p className="meta">Live model: <strong>{savedFeatures.label}</strong></p>
+                  <button className="secondary-button" type="button" onClick={onOpenSettingsDialog}
+                    disabled={batchAction !== null || isSavingSettings}>Change live model</button>
+                </div>}
+                {batch && segments.length > 0 && <details><summary>Audio devices</summary>{audioPanel}</details>}
               </section>
-            )}
-            emptyContent={!isLoadingInitialData && !status.running && !isStarting && <div className="idle-audio-panel">
+              {batchAudioOpen && <BatchAudioPanel slots={batchAudioSlots} model={batchModel} action={batchAction}
+                disabled={batchAction !== null || isSavingSettings} onModelChange={setBatchModel} onPick={onPickBatchAudio}
+                onClear={onClearBatchAudio} onChangeStart={onChangeBatchStart} onCheckModel={onCheckBatchModel} onTranscribe={onTranscribeBatchAudio} />}
+            </>}
+            emptyContent={idle && <div className="idle-audio-panel">
               {audioPanel}
             </div>}
           />
@@ -192,15 +218,15 @@ export function App() {
               {configState && <p className="meta-path">Configuration: {configState.path}</p>}
             </div>
             <div className="settings-dialog-footer-actions">
-              <button
+              {showConnectionTest && <button
                 className="secondary-button"
                 type="button"
                 onClick={() => void onTestConnectivity()}
-                disabled={busy || isTestingConnectivity || isSavingSettings || isChoosingDirectory || draftModel === 'unsupported' || (draftFeatures.azure && !hasAzureConnectionFields(configDraft))}
+                disabled={busy || isTestingConnectivity || isSavingSettings || isChoosingDirectory || (draftFeatures.azure && !hasAzureConnectionFields(configDraft))}
               >
-                {isTestingConnectivity ? 'Testing …' : draftFeatures.azure ? draftFeatures.mode === 'batch' ? 'Test live connection' : 'Test connection' : 'Check model availability'}
-              </button>
-              {(connectivityResult || isTestingConnectivity) && (
+                {isTestingConnectivity ? 'Testing …' : draftFeatures.azure ? 'Test connection' : 'Check model availability'}
+              </button>}
+              {showConnectionTest && connectivityFromSettings && (connectivityResult || isTestingConnectivity) && (
                 <button className="secondary-button" type="button" onClick={onOpenConnectivityDialog}>
                   {isTestingConnectivity ? 'Show running connection test' : 'Show last connection test'}
                 </button>
@@ -209,7 +235,7 @@ export function App() {
                 className="primary-button settings-save-button"
                 type="button"
                 onClick={() => void onSaveAll()}
-                disabled={busy || isSavingSettings || isChoosingDirectory || draftModel === 'unsupported'}
+                disabled={busy || isSavingSettings || isChoosingDirectory || (!batch && draftModel === 'unsupported')}
               >
                 Save
               </button>
@@ -232,8 +258,8 @@ export function App() {
           configState={configState}
           configDraft={configDraft}
           statusRunning={status.running || isStarting}
-          enabled={draftFeatures.azure}
-          endpointEnabled={draftFeatures.endpoint}
+          liveAzure={draftFeatures.mode === 'live' && draftFeatures.azure}
+          liveEndpointRequired={draftFeatures.mode === 'live' && draftFeatures.azure && draftFeatures.endpoint}
           batch={draftFeatures.mode === 'batch'}
           setConfigDraft={setConfigDraft}
         />
@@ -241,7 +267,6 @@ export function App() {
         <ProxyPanel
           configDraft={configDraft}
           setConfigDraft={setConfigDraft}
-          disabled={!draftFeatures.azure}
         />
       </SettingsDialog>
 

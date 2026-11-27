@@ -312,10 +312,12 @@ pub async fn start<R: Runtime>(
 
 pub fn start_batch_recorder<R: Runtime>(
     app: &AppHandle<R>, user: &crate::settings::UserSettings, directory: &Path,
+    prefix: &str, start_ms: i64,
 ) -> Result<SidecarHandle, SidecarError> {
     let exe = resolve_sidecar_path(app)?;
     let mut command = app.shell().command(exe.to_string_lossy().as_ref())
         .args(["--record-batch", directory.to_str().ok_or_else(|| SidecarError::Spawn("Invalid recording directory.".into()))?])
+        .args(["--recording-prefix", prefix, "--recording-start-unix-ms", &start_ms.to_string()])
         .args(source_arguments(&user.transcription))
         .env("MEETING_NOTES_SPEECH_KEY", "");
     if let Some(id) = user.devices.mic_id.as_deref() { command = command.args(["--mic-device-id", id]); }

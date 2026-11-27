@@ -31,12 +31,13 @@ export function formatLocalDate(date: Date): string {
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
 }
 
-export function formatLocalIsoWithOffset(date: Date): string {
+export function formatLocalIsoWithOffset(date: Date, includeMilliseconds = false): string {
   const value = toDate(date)
   const offsetMinutes = -value.getTimezoneOffset()
   const sign = offsetMinutes >= 0 ? '+' : '-'
   const absolute = Math.abs(offsetMinutes)
-  return `${formatLocalDate(value)}T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}${sign}${pad(Math.floor(absolute / 60))}:${pad(absolute % 60)}`
+  const fraction = includeMilliseconds && value.getMilliseconds() ? `.${String(value.getMilliseconds()).padStart(3, '0')}` : ''
+  return `${formatLocalDate(value)}T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}${fraction}${sign}${pad(Math.floor(absolute / 60))}:${pad(absolute % 60)}`
 }
 
 export function formatDuration(start: Date, end: Date): string {
@@ -57,12 +58,14 @@ function quote(value: string): string {
 
 export function buildTranscriptMetadata(
   segments: TranscriptSegment[],
-  now: Date = new Date()
+  now: Date = new Date(),
+  startedAt?: string
 ): TranscriptMetadata {
   const finals = segments.filter((segment) => segment.state === 'final')
   const first = finals[0]
   const last = finals[finals.length - 1]
-  const start = first ? new Date(first.timestampIso) : now
+  const trackStart = startedAt ? new Date(startedAt) : null
+  const start = trackStart && !Number.isNaN(trackStart.getTime()) ? trackStart : first ? new Date(first.timestampIso) : now
   const end = last ? new Date(last.timestampIso) : start
   const safeStart = Number.isNaN(start.getTime()) ? now : start
   const safeEnd = Number.isNaN(end.getTime()) ? safeStart : end
@@ -75,8 +78,8 @@ export function buildTranscriptMetadata(
   return {
     title: `Meeting Notes ${formatLocalDate(safeStart)}`,
     date: formatLocalDate(safeStart),
-    start: formatLocalIsoWithOffset(safeStart),
-    end: formatLocalIsoWithOffset(safeEnd),
+    start: formatLocalIsoWithOffset(safeStart, startedAt !== undefined),
+    end: formatLocalIsoWithOffset(safeEnd, startedAt !== undefined),
     duration: formatDuration(safeStart, safeEnd),
     language,
     segments: finals.length,
@@ -120,9 +123,10 @@ export function buildTranscriptBody(segments: TranscriptSegment[]): string {
 
 export function buildTranscriptMarkdown(
   segments: TranscriptSegment[],
-  now: Date = new Date()
+  now: Date = new Date(),
+  startedAt?: string
 ): string {
-  const metadata = buildTranscriptMetadata(segments, now)
+  const metadata = buildTranscriptMetadata(segments, now, startedAt)
   const frontmatter = buildTranscriptFrontmatter(metadata)
   const body = buildTranscriptBody(segments)
   return body.length === 0 ? frontmatter : `${frontmatter}\n\n${body}`

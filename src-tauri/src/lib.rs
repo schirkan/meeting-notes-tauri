@@ -100,6 +100,7 @@ pub fn run() {
       commands::open_repository,
       commands::start_recording,
       batch::pick_batch_audio,
+      batch::inspect_batch_audio,
       batch::transcribe_batch_audio,
       commands::stop_recording,
       commands::pause_recording,

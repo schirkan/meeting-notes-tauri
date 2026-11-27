@@ -65,6 +65,7 @@ async function openApp(options) {
     window.settingsSaveError = input.saveSettingsError
     window.directoryPickerResult = input.directoryPickerResult ?? null
     window.batchPickerResult = input.batchPickerResult ?? null
+    window.batchInspections = input.batchInspections ?? {}
     window.batchResult = input.batchResult ?? []
     window.transcriptApi = {
       toggleDevtools: async () => {
@@ -79,16 +80,18 @@ async function openApp(options) {
         }
         return snapshot
       },
-      start: async (provider, mode) => {
+      start: async (provider, mode, requestedAtMs) => {
         window.lastStartCalled = true
         window.lastStartProvider = provider
         window.lastStartMode = mode
+        window.lastStartRequestedAt = requestedAtMs
         return window.emitStatus({ running: true, paused: false, startedAt: new Date().toISOString() })
       },
       stop: async () => {
         window.lastStopCalled = true
         // Rust emits stopped even if shutting down the sidecar fails.
-        const nextStatus = input.stopRecordingPath ? { ...stoppedStatus, recordingPath: input.stopRecordingPath } : stoppedStatus
+        const nextStatus = input.stopRecording ? { ...stoppedStatus, recording: { ...input.stopRecording,
+          startedAt: new Date(window.lastStartRequestedAt).toISOString() } } : stoppedStatus
         window.emitStatus(nextStatus)
         if (input.stopError) throw input.stopError
         return nextStatus
@@ -98,9 +101,14 @@ async function openApp(options) {
         if (window.batchPickerError) throw window.batchPickerError
         return window.batchPickerResult
       },
-      transcribeBatchAudio: async (path, provider, model) => {
+      inspectBatchAudio: async (path) => {
+        window.batchInspectedPaths ??= []
+        window.batchInspectedPaths.push(path)
+        return window.batchInspections[path] ?? { estimated: false }
+      },
+      transcribeBatchAudio: async (tracks, provider, model) => {
         window.batchCalls ??= []
-        window.batchCalls.push({ path, provider, model })
+        window.batchCalls.push({ tracks, provider, model })
         if (window.batchError) throw window.batchError
         return window.batchResult
       },
@@ -183,7 +191,10 @@ async function openApp(options) {
         }
         return input.connectivityResult
       },
-      copyTranscript: async (segments) => { window.lastCopiedSegments = segments },
+      copyTranscript: async (segments, startedAt) => {
+        window.lastCopiedSegments = segments
+        window.lastCopiedStart = startedAt
+      },
       onSegment: (callback) => {
         window.emitSegment = callback
         return () => { delete window.emitSegment }
@@ -647,13 +658,12 @@ test('native model selection applies the matrix and saves without Azure credenti
     const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
     const model = dialog.getByLabel('Transcription model')
     assert.deepEqual(await model.locator('option').allTextContents(), [
-      'Azure Speech (standard)', 'Azure MAI Transcribe (Preview)', 'Windows SAPI (Experimental)', 'Windows AI Speech (Experimental)', 'Web Speech API (Experimental)',
-      'Azure Speech (standard) — Batch', 'Azure MAI Transcribe (Preview) — Batch', 'Windows SAPI (Experimental) — Batch', 'Windows AI Speech (Experimental) — Batch'
+      'Azure Speech (standard)', 'Azure MAI Transcribe (Preview)', 'Windows SAPI (Experimental)', 'Windows AI Speech (Experimental)', 'Web Speech API (Experimental)'
     ])
     await model.selectOption('windows-sapi')
-    assert.equal(await dialog.getByLabel('Endpoint', { exact: true }).isDisabled(), true)
-    assert.equal(await dialog.getByLabel('Speech Key').isDisabled(), true)
-    assert.equal(await dialog.getByLabel('Host', { exact: true }).isDisabled(), true)
+    assert.equal(await dialog.getByLabel('Endpoint', { exact: true }).isEnabled(), true)
+    assert.equal(await dialog.getByLabel('Speech Key').isEnabled(), true)
+    assert.equal(await dialog.getByLabel('Host', { exact: true }).isEnabled(), true)
     assert.equal(await dialog.getByLabel('Primary language').isEnabled(), true)
     assert.equal(await dialog.getByLabel('Audio stream mode').isDisabled(), true)
     assert.equal(await dialog.getByLabel('Speaker recognition', { exact: true }).isDisabled(), true)
@@ -684,7 +694,7 @@ test('Windows AI Speech checks native availability and saves without Azure crede
   try {
     const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
     await dialog.getByLabel('Transcription model').selectOption('windows-ai-speech')
-    for (const label of ['Speech Key', 'Audio stream mode', 'Speaker recognition', 'Enable interim results', 'Start transcription automatically']) {
+    for (const label of ['Audio stream mode', 'Speaker recognition', 'Enable interim results', 'Start transcription automatically']) {
       assert.ok(await dialog.getByLabel(label).isDisabled(), label)
     }
     const language = dialog.getByRole('combobox', { name: 'Primary language' })
@@ -724,47 +734,54 @@ test('Web Speech starts without Azure, drains finals on quit and does not call t
   } finally { await page.close() }
 })
 
-test('Batch model choices expose capture capabilities and can save unconfigured Azure MAI for local recording', async () => {
-  const manifest = 'D:/recordings/latest/recording.json'
-  const page = await openApp({ configState: { exists: false, path: 'test-config', config: null }, transcription: { mode: 'batch' }, stopRecordingPath: manifest,
+test('Meeting mode controls automatic recording, and clean stop prefills both WAVs with the click time', async () => {
+  const micPath = 'D:/recordings/2026-11-27T16-25-22.123Z-mic.wav'
+  const speakerPath = 'D:/recordings/2026-11-27T16-25-22.123Z-speaker.wav'
+  const startedAt = '2026-11-27T16:25:22.123Z'
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: null }, transcription: { provider: 'windows-sapi' }, stopRecording: { micPath, speakerPath },
     inputs: [{ id: 'batch-mic', name: 'Batch mic', isDefault: false }], outputs: [{ id: 'batch-speaker', name: 'Batch speaker', isDefault: false }] })
   try {
-    assert.equal(await page.getByRole('dialog', { name: 'Settings' }).count(), 0)
-    await page.getByRole('button', { name: 'Start recording', exact: true }).waitFor()
-    await page.getByRole('button', { name: 'Open settings dialog' }).click()
+    const mode = page.getByLabel('Meeting mode')
+    assert.equal(await mode.inputValue(), 'live')
+    assert.ok(await page.getByText('Live model: Windows SAPI (Experimental)', { exact: true }).isVisible())
+    await page.getByRole('button', { name: 'Change live model' }).click()
+    const liveDialog = page.getByRole('dialog', { name: 'Settings' })
+    assert.equal(await liveDialog.getByLabel('Transcription model').inputValue(), 'windows-sapi')
+    await liveDialog.getByRole('button', { name: 'Close dialog', exact: true }).click()
+    await mode.selectOption('batch')
+    await page.waitForFunction(() => window.lastSavedSettings?.transcription.mode === 'batch')
+    await reopenSettings(page)
     const dialog = page.getByRole('dialog', { name: 'Settings' })
-    const model = dialog.getByLabel('Transcription model')
-    for (const choice of ['standard-batch', 'windows-sapi-batch', 'windows-ai-speech-batch', 'mai-transcribe-2-streaming-batch']) {
-      await model.selectOption(choice)
-      assert.ok(await dialog.getByLabel('Start recording automatically').isEnabled(), choice)
-      assert.ok(await dialog.getByLabel('Stop recording automatically').isEnabled(), choice)
-      assert.ok(await dialog.getByLabel('Enable interim results').isDisabled(), choice)
-      assert.ok(await dialog.getByLabel('Audio stream mode').isDisabled(), choice)
-      assert.equal(await dialog.getByLabel('Endpoint', { exact: true }).isEnabled(), !choice.startsWith('windows-'))
-      assert.equal(await dialog.getByLabel('Speaker recognition', { exact: true }).isEnabled(), !choice.startsWith('windows-'))
-    }
-    await dialog.getByLabel('Endpoint', { exact: true }).fill('https://speech-example.cognitiveservices.azure.com')
-    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+    assert.ok(await dialog.getByLabel('Start recording automatically').isEnabled())
+    assert.ok(await dialog.getByLabel('Stop recording automatically').isEnabled())
+    assert.equal(await dialog.getByLabel('Transcription model').count(), 0)
+    assert.equal(await dialog.getByLabel('Audio stream mode').count(), 0)
+    assert.equal(await dialog.getByLabel('Enable interim results').count(), 0)
+    assert.equal(await dialog.getByRole('button', { name: /test.*connection|check model availability/i }).count(), 0)
+    await dialog.getByRole('button', { name: 'Close dialog', exact: true }).click()
     await dialog.waitFor({ state: 'hidden' })
-    assert.deepEqual(await page.evaluate(() => window.lastSavedSettings.transcription), { mode: 'batch', mic: true, speaker: true, audioMode: 'dual-mono' })
-    assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), {
-      model: 'mai-transcribe-2-streaming', endpoint: 'https://speech-example.cognitiveservices.azure.com', region: '', speechKey: '', interimResults: true
-    })
+    assert.equal(await page.getByRole('button', { name: 'Change live model' }).count(), 0)
     await page.getByLabel('Microphone', { exact: true }).selectOption('batch-mic')
     await page.getByLabel('Speaker Loopback', { exact: true }).selectOption('batch-speaker')
     assert.ok(await page.getByLabel('Record microphone', { exact: true }).isChecked())
     assert.ok(await page.getByLabel('Record speaker loopback', { exact: true }).isChecked())
+    await page.evaluate((instant) => { Date.now = () => instant }, Date.parse(startedAt))
     await page.getByRole('button', { name: 'Start recording', exact: true }).click()
     const stop = page.getByRole('button', { name: 'Stop recording', exact: true })
     await stop.waitFor()
     assert.equal(await page.getByRole('button', { name: 'Pause', exact: true }).count(), 0)
     assert.equal(await page.getByRole('region', { name: 'Batch transcription' }).count(), 0)
-    assert.deepEqual(await page.evaluate(() => [window.lastStartProvider, window.lastStartMode, window.lastSavedSettings.devices]), [
-      'azure', 'batch', { micId: 'batch-mic', speakerLoopbackId: 'batch-speaker' }
+    assert.deepEqual(await page.evaluate(() => [window.lastStartProvider, window.lastStartMode, window.lastSavedSettings.devices, window.lastStartRequestedAt]), [
+      'windows-sapi', 'batch', { micId: 'batch-mic', speakerLoopbackId: 'batch-speaker' }, Date.parse(startedAt)
     ])
     await stop.click()
-    await page.getByText(`Selected audio: ${manifest}`, { exact: true }).waitFor()
-    assert.equal(await page.evaluate(() => window.batchCalls), undefined)
+    const form = page.getByRole('region', { name: 'Batch transcription' })
+    await form.getByText(micPath, { exact: true }).waitFor()
+    assert.ok(await form.getByText(speakerPath, { exact: true }).isVisible())
+    assert.equal(await form.getByLabel('Microphone start time').inputValue(), startedAt)
+    assert.equal(await form.getByLabel('Speaker start time').inputValue(), startedAt)
+    assert.equal(await form.getByText(/estimated/i).count(), 0)
+    assert.equal(await page.evaluate(() => window.batchCalls ?? window.transcriptWrites), undefined)
     await page.getByRole('button', { name: 'Transcribe', exact: true }).click()
     await page.getByRole('alert').getByText(/Configure the Azure endpoint, region and speech key/).waitFor()
     assert.equal(await page.evaluate(() => window.batchCalls), undefined)
@@ -773,26 +790,52 @@ test('Batch model choices expose capture capabilities and can save unconfigured 
 
 const batchFinal = { id: 'batch-test', sessionId: 'batch-session', source: 'mic', speaker: '', timestampIso: '2026-11-26T11:11:00Z', text: 'Batch final text', state: 'final' }
 
-test('Batch WAV import requires explicit Azure upload consent and uses existing Markdown export', async () => {
-  const wav = 'D:/audio/interview.wav'
+test('Two explicitly assigned WAVs require Azure consent and export from the earliest sample zero', async () => {
+  const mic = 'D:/audio/interview-mic.wav'
+  const speaker = 'D:/audio/interview-speaker.wav'
+  const speakerEstimate = '2026-11-26T11:10:39.120Z'
+  const micStart = '2026-11-26T11:10:40.000Z'
+  const firstStart = '2026-11-26T11:10:39.123Z'
   const model = 'mai-transcribe-2-streaming'
-  const page = await openApp({ configState: { exists: true, path: 'test-config', config: { ...validConfig, model } },
-    transcription: { mode: 'batch' }, batchPickerResult: wav, batchResult: [batchFinal, { ...batchFinal, id: 'partial', text: 'Do not show', state: 'interim' }] })
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig },
+    transcription: { provider: 'web-speech' }, batchPickerResult: mic,
+    batchInspections: { [mic]: { startedAt: micStart, estimated: false }, [speaker]: { startedAt: speakerEstimate, estimated: true } },
+    batchResult: [batchFinal, { ...batchFinal, id: 'partial', text: 'Do not show', state: 'interim' }] })
   try {
-    const pick = page.getByRole('button', { name: 'Import WAV or choose recording', exact: true })
-    const transcribe = page.getByRole('button', { name: 'Transcribe', exact: true })
-    await pick.waitFor()
+    await page.getByRole('button', { name: 'Transcribe files' }).click()
+    const form = page.getByRole('region', { name: 'Batch transcription' })
+    const modelSelect = form.getByLabel('File transcription model')
+    assert.deepEqual(await modelSelect.locator('option').allTextContents(), ['Azure Speech (standard)', 'Azure MAI Transcribe (Preview)', 'Windows SAPI (Experimental)', 'Windows AI Speech (Experimental)'])
+    await modelSelect.selectOption(model)
+    assert.equal(await form.getByRole('button', { name: /test.*connection|check model availability/i }).count(), 0)
+    const pickMic = form.getByRole('button', { name: 'Choose microphone WAV' })
+    const pickSpeaker = form.getByRole('button', { name: 'Choose speaker WAV' })
+    const transcribe = form.getByRole('button', { name: 'Transcribe', exact: true })
     assert.equal(await transcribe.isDisabled(), true)
-    await pick.click()
-    const selected = page.getByText(`Selected audio: ${wav}`, { exact: true })
+    await pickMic.click()
+    const selected = form.getByText(mic, { exact: true })
     await selected.waitFor()
     assert.equal(await page.evaluate(() => window.batchCalls), undefined)
     await page.evaluate(() => { window.batchPickerResult = null })
-    await pick.click()
+    await pickMic.click()
     assert.equal(await selected.isVisible(), true)
+    await page.evaluate(path => { window.batchPickerResult = path }, speaker)
+    await pickSpeaker.click()
+    await form.getByText('Estimated from the file’s timestamp.', { exact: false }).waitFor()
+    const speakerStart = form.getByLabel('Speaker start time')
+    assert.equal(await speakerStart.inputValue(), speakerEstimate)
+    await speakerStart.fill('')
+    await transcribe.click()
+    await page.getByRole('alert').getByText('Enter the speaker start time before transcribing.').waitFor()
+    await speakerStart.fill('not a timestamp')
+    await transcribe.click()
+    await page.getByRole('alert').getByText('Enter a valid speaker start time with a UTC offset or Z.').waitFor()
+    await speakerStart.fill('2026-11-26T12:10:39.123+01:00')
+    assert.equal(await form.getByText(/estimated/i).count(), 0)
     page.once('dialog', prompt => {
       assert.match(prompt.message(), /Send the selected audio to Azure/)
-      assert.ok(prompt.message().includes(wav))
+      assert.ok(prompt.message().includes(`Microphone: ${mic}`))
+      assert.ok(prompt.message().includes(`Speaker: ${speaker}`))
       return prompt.dismiss()
     })
     await transcribe.click()
@@ -801,11 +844,18 @@ test('Batch WAV import requires explicit Azure upload consent and uses existing 
     await transcribe.click()
     await page.getByText('Batch final text', { exact: true }).waitFor()
     await page.getByText('Transcript saved: D:/Notes/transcript-2026-11-11-22-05-00.md', { exact: true }).waitFor()
-    assert.deepEqual(await page.evaluate(() => window.batchCalls), [{ path: wav, provider: 'azure', model }])
-    assert.match(await page.evaluate(() => window.lastSavedMarkdown), /Mic: Batch final text/)
+    assert.deepEqual(await page.evaluate(() => window.batchCalls), [{ tracks: [
+      { path: mic, source: 'mic', startedAt: micStart }, { path: speaker, source: 'speaker', startedAt: firstStart }
+    ], provider: 'azure', model }])
+    const markdown = await page.evaluate(() => window.lastSavedMarkdown)
+    const exportedStart = markdown.match(/^start: "([^"]+)"$/m)?.[1]
+    assert.equal(Date.parse(exportedStart), Date.parse(firstStart))
+    assert.match(markdown, /Mic: Batch final text/)
+    assert.equal(await page.evaluate(() => window.lastSavedSettings ?? window.lastSavedConfig), undefined)
     assert.equal(await page.getByText('Do not show', { exact: true }).count(), 0)
     await page.getByRole('button', { name: 'Copy transcript' }).click()
     assert.equal(await page.evaluate(() => window.lastCopiedSegments[0].text), batchFinal.text)
+    assert.equal(await page.evaluate(() => window.lastCopiedStart), firstStart)
     await page.evaluate(() => { window.batchError = 'Speech resource denied the request' })
     page.once('dialog', prompt => prompt.accept())
     await transcribe.click()
@@ -816,10 +866,13 @@ test('Batch WAV import requires explicit Azure upload consent and uses existing 
   } finally { await page.close() }
 })
 
-test('Batch automatic capture status exposes the manifest without invoking or exporting until native transcription', async () => {
-  const manifest = 'D:/recordings/auto/recording.json'
+test('Automatic local capture prefills files without uploading; Windows AI requires a single assigned source', async () => {
+  const startedAt = '2026-11-26T11:10:30.123Z'
+  const micPath = 'D:/recordings/auto-mic.wav'
+  const speakerPath = 'D:/recordings/auto-speaker.wav'
   const page = await openApp({ configState: { exists: false, path: 'test-config', config: null },
-    transcription: { provider: 'windows-ai-speech', mode: 'batch' }, transcript: { markdownExport: { enabled: false } }, batchResult: [batchFinal] })
+    transcription: { provider: 'windows-sapi', mode: 'batch' }, transcript: { markdownExport: { enabled: false } }, batchResult: [{ ...batchFinal, source: 'speaker' }],
+    connectivityResult: { reachable: true, speechReachable: true, latencyMs: 2, steps: [] } })
   try {
     await page.getByRole('button', { name: 'Start recording', exact: true }).waitFor()
     await page.evaluate(() => {
@@ -828,21 +881,28 @@ test('Batch automatic capture status exposes the manifest without invoking or ex
     })
     await page.getByRole('button', { name: 'Stop recording', exact: true }).waitFor()
     await page.getByText('Meeting detected (teams). Local recording starts automatically.', { exact: true }).waitFor()
-    await page.evaluate(recordingPath => window.emitStatus({ running: false, recordingPath }), manifest)
-    await page.getByText(`Selected audio: ${manifest}`, { exact: true }).waitFor()
+    await page.evaluate(recording => window.emitStatus({ running: false, recording }), { startedAt, micPath, speakerPath })
+    const form = page.getByRole('region', { name: 'Batch transcription' })
+    await form.getByText(speakerPath, { exact: true }).waitFor()
     assert.equal(await page.evaluate(() => window.lastStartCalled ?? window.batchCalls ?? window.transcriptWrites), undefined)
-    await page.getByRole('button', { name: 'Transcribe', exact: true }).click()
+    await form.getByLabel('File transcription model').selectOption('windows-ai-speech')
+    const transcribe = form.getByRole('button', { name: 'Transcribe', exact: true })
+    assert.ok(await transcribe.isDisabled())
+    await form.getByRole('button', { name: 'Check model availability' }).click()
+    const availability = page.getByRole('dialog', { name: 'Model availability' })
+    await availability.getByText('Model check passed').waitFor()
+    assert.deepEqual(await page.evaluate(() => window.lastConnectivityPayload), { provider: 'windows-ai-speech' })
+    await availability.getByRole('button', { name: 'Close dialog', exact: true }).click()
+    await form.getByRole('button', { name: 'Remove microphone WAV' }).click()
+    await transcribe.click()
     await page.getByText('Batch final text', { exact: true }).waitFor()
-    assert.deepEqual(await page.evaluate(() => window.batchCalls), [{ path: manifest, provider: 'windows-ai-speech', model: undefined }])
+    assert.deepEqual(await page.evaluate(() => window.batchCalls), [{ tracks: [{ path: speakerPath, source: 'speaker', startedAt }], provider: 'windows-ai-speech', model: undefined }])
     assert.equal(await page.evaluate(() => window.transcriptWrites), undefined)
+    await page.getByLabel('Meeting mode').selectOption('live')
+    await page.waitForFunction(() => !!window.lastSavedSettings && window.lastSavedSettings.transcription.mode === undefined)
     await reopenSettings(page)
     const dialog = page.getByRole('dialog', { name: 'Settings' })
-    await dialog.getByLabel('Transcription model').selectOption('web-speech')
-    assert.ok(await dialog.getByLabel('Start transcription automatically').isDisabled())
-    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
-    await dialog.waitFor({ state: 'hidden' })
-    assert.equal(await page.evaluate(() => window.lastSavedSettings.transcription.mode), undefined)
-    assert.equal(await page.getByRole('region', { name: 'Batch transcription' }).count(), 0)
+    assert.equal(await dialog.getByLabel('Transcription model').inputValue(), 'windows-sapi')
   } finally { await page.close() }
 })
 
@@ -878,7 +938,7 @@ test('MAI selection tests the unsaved draft and preserves Standard controls when
     assert.match(modelHint, /Mono uses one Azure session per enabled source/)
     assert.match(modelHint, /Stereo uses one session for both sources/)
     assert.match(modelHint, /MAI uses mono only/)
-    assert.equal(await endpoint.isDisabled(), true)
+    assert.equal(await endpoint.isEnabled(), true)
     assert.equal(await language.isDisabled(), true)
     await settings.getByRole('button', { name: 'Test connection', exact: true }).click()
 
@@ -1803,10 +1863,13 @@ test('idle audio settings stay centered in the available transcript area', async
       for (const withSpeakers of [false, true]) {
         if (withSpeakers) await page.getByRole('button', { name: 'Speaker mapping show', exact: true }).click()
         const area = await page.locator('.console-transcript').boundingBox()
+        const controls = await page.getByRole('region', { name: 'Meeting controls' }).boundingBox()
+        const availableTop = controls.y + controls.height
+        const availableHeight = area.y + area.height - availableTop
         const panel = await idle.boundingBox()
         assert.ok(Math.abs(panel.x + panel.width / 2 - area.x - area.width / 2 - (width > 1100 ? 150 : 0)) < 1)
-        assert.ok(Math.abs(panel.y + panel.height / 2 - area.y - area.height / 2) < 1)
-        assert.ok(panel.height <= area.height + 1)
+        assert.ok(Math.abs(panel.y + panel.height / 2 - availableTop - availableHeight / 2) < 1)
+        assert.ok(panel.height <= availableHeight + 1)
         assert.equal(await idle.evaluate(element => element.scrollWidth <= element.clientWidth), true)
         if (withSpeakers) await page.getByRole('button', { name: 'Speaker mapping hide', exact: true }).click()
       }

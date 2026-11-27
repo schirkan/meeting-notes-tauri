@@ -112,18 +112,21 @@ pub async fn start_recording(
     state: State<'_, AppState>,
     expected_provider: Option<String>,
     expected_mode: Option<String>,
+    requested_at_ms: Option<i64>,
 ) -> Result<events::TranscriptStatus, String> {
+    let requested_at_ms = requested_at_ms.or_else(|| Some(chrono::Utc::now().timestamp_millis()));
     let gate = app.state::<CaptureStartGate>();
     let _capture = gate.lock().await;
     let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
     let mut lifecycle = lifecycle.lock().await;
-    start_recording_with_origin(&app, &state, &mut lifecycle, None, expected_provider.as_deref(), expected_mode.as_deref()).await
+    start_recording_with_origin(&app, &state, &mut lifecycle, None, expected_provider.as_deref(), expected_mode.as_deref(), requested_at_ms).await
 }
 
 pub(crate) async fn start_recording_for_meeting(
     app: &AppHandle,
     origin: crate::autostart::MeetingDetectedPayload,
 ) -> Result<bool, String> {
+    let requested_at_ms = chrono::Utc::now().timestamp_millis();
     // Never queue an automatic start behind either gate: its meeting could
     // end while the ordered detector consumer is waiting here.
     let gate = app.state::<CaptureStartGate>();
@@ -134,7 +137,7 @@ pub(crate) async fn start_recording_for_meeting(
     let Ok(mut lifecycle) = lifecycle.try_lock() else {
         return Ok(false);
     };
-    start_recording_with_origin(app, &app.state::<AppState>(), &mut lifecycle, Some(origin), None, None).await?;
+    start_recording_with_origin(app, &app.state::<AppState>(), &mut lifecycle, Some(origin), None, None, Some(requested_at_ms)).await?;
     Ok(true)
 }
 
@@ -145,6 +148,7 @@ async fn start_recording_with_origin(
     origin: Option<crate::autostart::MeetingDetectedPayload>,
     expected_provider: Option<&str>,
     expected_mode: Option<&str>,
+    requested_at_ms: Option<i64>,
 ) -> Result<events::TranscriptStatus, String> {
     if app.state::<crate::tray::WindowBehavior>().protects_transcript() {
         return Err("Finish quitting before starting a new transcription.".into());
@@ -157,7 +161,7 @@ async fn start_recording_with_origin(
     lifecycle.web_speech = false;
     lifecycle.sapi = false;
     lifecycle.windows_ai_speech = false;
-    lifecycle.batch_manifest = None;
+    lifecycle.batch_recording = None;
     let settings::AppConfig { azure, user } = settings::load_app_config().await.map_err(|e| e.to_string())?;
     if expected_provider.is_some_and(|expected| expected != user.transcription.provider.as_str())
         || expected_mode.is_some_and(|expected| expected != user.transcription.mode.as_str()) {
@@ -169,8 +173,7 @@ async fn start_recording_with_origin(
     push_and_emit_debug(app, state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "start_recording called.");
 
     let batch = user.transcription.mode == settings::TranscriptionMode::Batch;
-    if user.transcription.mode == settings::TranscriptionMode::Unsupported
-        || (batch && !user.transcription.provider.supports_batch()) {
+    if user.transcription.mode == settings::TranscriptionMode::Unsupported {
         return Err("The saved provider does not support the selected transcription mode.".into());
     }
     if !batch && user.transcription.provider == settings::RecognitionProvider::WebSpeech {
@@ -186,9 +189,10 @@ async fn start_recording_with_origin(
     let (handle, use_sapi, use_windows_ai_speech) = if batch {
         let root = crate::batch::recordings_directory(app)?;
         tokio::fs::create_dir_all(&root).await.map_err(|err| format!("Cannot open recording folder: {err}"))?;
-        let directory = root.join(format!("{}-{}", chrono::Local::now().format("%Y%m%d-%H%M%S"), uuid::Uuid::new_v4()));
-        let handle = sidecar::start_batch_recorder(app, &user, &directory).map_err(|e| e.to_string())?;
-        lifecycle.batch_manifest = Some(directory.join("recording.json"));
+        let started_at = crate::batch::capture_start(requested_at_ms, chrono::Utc::now())?;
+        let (prefix, recording) = crate::batch::recording_outputs(&root, started_at, &user.transcription)?;
+        let handle = sidecar::start_batch_recorder(app, &user, &root, &prefix, started_at.timestamp_millis()).map_err(|e| e.to_string())?;
+        lifecycle.batch_recording = Some(recording);
         (handle, false, false)
     } else {
         let options = recording_options(azure, user)?;
@@ -219,7 +223,7 @@ async fn start_recording_with_origin(
     lifecycle.auto_origin = origin;
     lifecycle.sapi = use_sapi;
     lifecycle.windows_ai_speech = use_windows_ai_speech;
-    let status = state.mark_started();
+    let status = state.mark_started_at(lifecycle.batch_recording.as_ref().map(|recording| recording.started_at.as_str()));
     events::emit_status(app, &status);
     if let Some(origin) = lifecycle.auto_origin.as_ref() {
         events::emit_meeting_detected(app, origin);
@@ -300,7 +304,7 @@ pub async fn stop_recording(
     }
     lifecycle.auto_origin = None;
     if std::mem::take(&mut lifecycle.web_speech) { return Ok(finish_web_recording(&app, &state)); }
-    stop_recording_inner(&app, &state, false, lifecycle.batch_manifest.take()).await
+    stop_recording_inner(&app, &state, false, lifecycle.batch_recording.take()).await
 }
 
 pub async fn stop_recording_for_quit(app: &AppHandle) -> Result<events::TranscriptStatus, String> {
@@ -311,7 +315,7 @@ pub async fn stop_recording_for_quit(app: &AppHandle) -> Result<events::Transcri
         // The renderer drains browser finals on the subsequent quit-export request.
         return Ok(finish_web_recording(app, &app.state::<AppState>()));
     }
-    stop_recording_inner(app, &app.state::<AppState>(), true, lifecycle.batch_manifest.take()).await
+    stop_recording_inner(app, &app.state::<AppState>(), true, lifecycle.batch_recording.take()).await
 }
 
 /// Only the process that automatically started this recording can end it.
@@ -340,14 +344,14 @@ pub async fn stop_recording_for_meeting(
         return Ok(false);
     }
     lifecycle.auto_origin = None;
-    stop_recording_inner(app, &state, false, lifecycle.batch_manifest.take()).await.map(|_| true)
+    stop_recording_inner(app, &state, false, lifecycle.batch_recording.take()).await.map(|_| true)
 }
 
 async fn stop_recording_inner(
     app: &AppHandle,
     state: &AppState,
     for_quit: bool,
-    batch_manifest: Option<std::path::PathBuf>,
+    batch_recording: Option<events::BatchRecording>,
 ) -> Result<events::TranscriptStatus, String> {
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "stop_recording called.");
 
@@ -393,8 +397,8 @@ async fn stop_recording_inner(
     };
 
     // Quit already presents its own failure; only remember errors it has not seen.
-    let result = result.and_then(|()| match batch_manifest {
-        Some(path) if path.is_file() => Ok(Some(path.to_string_lossy().into_owned())),
+    let result = result.and_then(|()| match batch_recording {
+        Some(recording) if crate::batch::recording_files_complete(&recording) => Ok(Some(recording)),
         Some(_) => Err("The audio recording did not finalize.".into()),
         None => Ok(None),
     });
@@ -514,7 +518,7 @@ pub async fn pause_recording(
     let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
     let _lifecycle = lifecycle.lock().await;
     require_running_recording(&state)?;
-    if _lifecycle.batch_manifest.is_some() { return Err("Batch audio recording does not support pause.".into()); }
+    if _lifecycle.batch_recording.is_some() { return Err("Batch audio recording does not support pause.".into()); }
     if _lifecycle.windows_ai_speech { return Err("Windows AI Speech does not support pause.".into()); }
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "pause_recording called.");
 
@@ -566,7 +570,7 @@ pub async fn resume_recording(
     let lifecycle = app.state::<Mutex<crate::autostart::RecordingLifecycle>>();
     let _lifecycle = lifecycle.lock().await;
     require_running_recording(&state)?;
-    if _lifecycle.batch_manifest.is_some() { return Err("Batch audio recording does not support resume.".into()); }
+    if _lifecycle.batch_recording.is_some() { return Err("Batch audio recording does not support resume.".into()); }
     if _lifecycle.windows_ai_speech { return Err("Windows AI Speech does not support resume.".into()); }
     push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info, "resume_recording called.");
 

@@ -9,6 +9,7 @@ export const TAURI_COMMANDS = {
   openRepository: 'open_repository',
   startRecording: 'start_recording',
   pickBatchAudio: 'pick_batch_audio',
+  inspectBatchAudio: 'inspect_batch_audio',
   transcribeBatchAudio: 'transcribe_batch_audio',
   stopRecording: 'stop_recording',
   pauseRecording: 'pause_recording',

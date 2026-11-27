@@ -17,6 +17,7 @@ import {
 } from '@shared/tauri-contract'
 import type {
   AudioDeviceSnapshot,
+  BatchAudioInspection,
   DebugLogEntry,
   MeetingDetected,
   TranscriptApi,
@@ -47,8 +48,8 @@ export type ConnectivityResult = {
 // `transcript-markdown` module, so the clipboard copy and the automatic
 // file export carry the identical frontmatter and body (T-506).
 
-async function copyTranscriptToClipboard(segments: TranscriptSegment[]): Promise<void> {
-  const text = buildTranscriptMarkdown(segments)
+async function copyTranscriptToClipboard(segments: TranscriptSegment[], startedAt?: string): Promise<void> {
+  const text = buildTranscriptMarkdown(segments, new Date(), startedAt)
   if (!navigator.clipboard?.writeText) {
     throw new Error('The clipboard is not supported by the WebView.')
   }
@@ -73,10 +74,11 @@ function subscribe<T>(event: string, cb: (payload: T) => void): () => void {
 const api: TranscriptApi = {
   toggleDevtools: () => invoke<void>(TAURI_COMMANDS.toggleDevtools),
   openRepository: () => invoke<void>(TAURI_COMMANDS.openRepository),
-  start: (expectedProvider, expectedMode) => invoke<TranscriptStatus>(TAURI_COMMANDS.startRecording, { expectedProvider, expectedMode }),
+  start: (expectedProvider, expectedMode, requestedAtMs) => invoke<TranscriptStatus>(TAURI_COMMANDS.startRecording, { expectedProvider, expectedMode, requestedAtMs }),
   pickBatchAudio: () => invoke<string | null>(TAURI_COMMANDS.pickBatchAudio),
-  transcribeBatchAudio: (path, expectedProvider, expectedModel) =>
-    invoke<TranscriptSegment[]>(TAURI_COMMANDS.transcribeBatchAudio, { path, expectedProvider, expectedModel }),
+  inspectBatchAudio: (path) => invoke<BatchAudioInspection>(TAURI_COMMANDS.inspectBatchAudio, { path }),
+  transcribeBatchAudio: (tracks, expectedProvider, expectedModel) =>
+    invoke<TranscriptSegment[]>(TAURI_COMMANDS.transcribeBatchAudio, { tracks, expectedProvider, expectedModel }),
   stop: () => invoke<TranscriptStatus>(TAURI_COMMANDS.stopRecording),
   pause: () => invoke<TranscriptStatus>(TAURI_COMMANDS.pauseRecording),
   resume: () => invoke<TranscriptStatus>(TAURI_COMMANDS.resumeRecording),
@@ -94,7 +96,7 @@ const api: TranscriptApi = {
   completeQuitExport: (requestId, error) => invoke<void>(TAURI_COMMANDS.completeQuitExport, { requestId, error }),
   selectTranscriptDirectory: () => open({ directory: true, multiple: false, title: 'Choose save folder' }),
   testAzureConnectivity: (payload) => invoke<ConnectivityResult>(TAURI_COMMANDS.testAzureConnectivity, { payload }),
-  copyTranscript: (segments) => copyTranscriptToClipboard(segments),
+  copyTranscript: copyTranscriptToClipboard,
   onSegment: (cb) => subscribe<TranscriptSegment>(TAURI_EVENTS.segment, cb),
   onError: (cb) => subscribe<TranscriptError>(TAURI_EVENTS.error, cb),
   onStatus: (cb) => subscribe<TranscriptStatus>(TAURI_EVENTS.status, cb),
