@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Meeting Notes — Start page mockup</title>
+  <link rel="stylesheet" href="../../src/renderer/src/styles.css">
+  <link rel="stylesheet" href="mockup.css">
+  <script src="mockup.js" defer></script>
+</head>
+<body>
+  <svg width="0" height="0" hidden aria-hidden="true">
+    <symbol id="icon-mic" viewBox="0 0 24 24">
+      <path d="M9 5a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0zM5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/>
+    </symbol>
+    <symbol id="icon-speaker" viewBox="0 0 24 24">
+      <path d="M3 9h4l5-4v14l-5-4H3zM16 8a6 6 0 0 1 0 8M19 5a10 10 0 0 1 0 14"/>
+    </symbol>
+  </svg>
+  <header class="mock-header">
+    <strong>Meeting Notes</strong>
+    <span class="mock-badge">Start page mockup</span>
+  </header>
+  <main class="mock-main">
+    <div class="mock-layout">
+      <section class="workflow" id="record-workflow" data-mode="live" aria-labelledby="record-heading">
+        <header>
+          <h1 id="record-heading">Record a meeting</h1>
+          <p class="meta">Capture your microphone, speaker audio, or both.</p>
+        </header>
+        <fieldset class="mock-mode" aria-label="Transcription mode">
+          <div class="mode-options">
+            <label title="See the transcript as the meeting happens."><input type="radio" name="mode" value="live" checked><span>Transcribe live</span></label>
+            <label title="Save WAVs locally. Choose a model when you transcribe the files on the right."><input type="radio" name="mode" value="batch"><span>Record for later</span></label>
+          </div>
+        </fieldset>
+        <fieldset class="mock-devices">
+          <legend>Audio devices</legend>
+          <div class="mock-field">
+            <label class="field-caption" for="mic-device"><svg class="icon" aria-hidden="true"><use href="#icon-mic"/></svg>Microphone</label>
+            <div class="audio-source-control">
+              <input type="checkbox" id="mic" aria-label="Include microphone" checked>
+              <select id="mic-device"><option>System default</option><option>USB microphone (example)</option></select>
+            </div>
+          </div>
+          <div class="mock-field">
+            <label class="field-caption" for="speaker-device"><svg class="icon" aria-hidden="true"><use href="#icon-speaker"/></svg>Speaker loopback</label>
+            <div class="audio-source-control">
+              <input type="checkbox" id="speaker" aria-label="Include speaker loopback" checked>
+              <select id="speaker-device"><option>System default</option><option>Speakers (example)</option></select>
+            </div>
+          </div>
+        </fieldset>
+        <div class="mode-variants">
+          <div class="live-controls live-only" inert>
+            <div class="mock-field">
+              <h3 id="meeting-model-heading">Transcription model</h3>
+              <select id="meeting-model" aria-labelledby="meeting-model-heading"></select>
+            </div>
+            <fieldset class="model-settings" aria-labelledby="meeting-model-heading">
+              <label class="mock-field">
+                <span class="field-caption">Audio stream mode</span>
+                <select id="stream">
+                  <option value="mono">Mono (separate sessions per audio device)</option>
+                  <option value="stereo">Stereo (one session)</option>
+                </select>
+              </label>
+              <label class="mock-field">
+                <span class="field-caption">Primary language</span>
+                <select id="language">
+                  <option value="en-US">English (United States)</option>
+                  <option value="en-GB">English (United Kingdom)</option>
+                  <option value="de-DE">German (Germany)</option>
+                  <option value="fr-FR">French (France)</option>
+                </select>
+              </label>
+              <label class="checkbox-field"><input id="detect-language" type="checkbox">Automatic language detection</label>
+              <label class="checkbox-field"><input id="recognize-speakers" type="checkbox">Speaker recognition</label>
+              <label class="checkbox-field"><input id="interim" type="checkbox" checked>Enable interim results</label>
+            </fieldset>
+            <button class="primary-button" id="start-live" type="button">Start live transcription</button>
+          </div>
+          <button class="primary-button batch-only" id="start-batch" type="button">Start recording</button>
+        </div>
+      </section>
+
+      <section class="workflow" aria-labelledby="files-heading">
+        <header>
+          <h2 id="files-heading">Transcribe audio files</h2>
+          <p class="meta">Create a transcript from existing WAV recordings.</p>
+        </header>
+        <section class="audio-files" aria-labelledby="audio-files-heading">
+          <h3 id="audio-files-heading">Audio files</h3>
+          <div id="file-slots"></div>
+        </section>
+        <div class="mock-field">
+          <h3 id="file-model-heading">Transcription model</h3>
+          <select id="file-model" aria-labelledby="file-model-heading"></select>
+        </div>
+        <fieldset class="model-settings" aria-labelledby="file-model-heading">
+          <label class="mock-field">
+            <span class="field-caption">Language</span>
+            <select id="file-language" aria-describedby="file-language-hint">
+              <option value="auto">Auto-detect</option>
+              <option value="en-US">English (United States)</option>
+              <option value="en-GB">English (United Kingdom)</option>
+              <option value="de-DE">German (Germany)</option>
+              <option value="fr-FR">French (France)</option>
+            </select>
+          </label>
+          <p class="meta" id="file-language-hint" hidden>Choose a language with an installed Windows speech recognizer.</p>
+          <label class="checkbox-field"><input id="file-speaker-recognition" type="checkbox">Speaker recognition</label>
+        </fieldset>
+        <div class="batch-audio-actions mock-file-actions">
+          <span class="meta" id="transcribe-hint">Select at least one WAV to continue.</span>
+          <button id="check-model" type="button" hidden>Check model availability</button>
+          <button class="primary-button" id="transcribe" type="button" aria-describedby="transcribe-hint" disabled>Transcribe</button>
+        </div>
+      </section>
+    </div>
+  </main>
+  <template id="file-slot">
+    <fieldset>
+      <legend><span class="field-caption"><svg class="icon" aria-hidden="true"><use/></svg><span class="source-label"></span></span></legend>
+      <input class="file-input" type="file" accept=".wav,audio/wav" hidden>
+      <div class="audio-source-control file-picker">
+        <div class="file-path-control">
+          <input class="file-path" type="text" placeholder="No WAV selected" readonly>
+          <button class="remove" type="button" hidden><span aria-hidden="true">&times;</span></button>
+        </div>
+        <button class="choose" type="button">Select file</button>
+      </div>
+      <div class="file-details">
+        <label class="mock-field">
+          <span class="field-caption"></span>
+          <input class="start-time" type="datetime-local" step="1" required disabled>
+        </label>
+      </div>
+    </fieldset>
+  </template>
+  <dialog id="preview-dialog" aria-labelledby="preview-title">
+    <h2 id="preview-title"></h2>
+    <p>No recording, upload, or transcription runs in this mockup.</p>
+    <form method="dialog"><button autofocus>Close</button></form>
+  </dialog>
+</body>
+</html>
