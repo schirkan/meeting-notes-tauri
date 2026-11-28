@@ -9,6 +9,7 @@ import { HeroStatusCard } from './components/HeroStatusCard'
 import { ProxyPanel } from './components/ProxyPanel'
 import { SettingsDialog } from './components/SettingsDialog'
 import { AudioPanel } from './components/AudioPanel'
+import { LiveModelPanel } from './components/LiveModelPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SpeakerMappingPanel } from './components/SpeakerMappingPanel'
 import { TranscriptPanel } from './components/TranscriptPanel'
@@ -35,11 +36,13 @@ export function App() {
     isLoadingInitialData,
     isStarting,
     batchAction,
-    batchAudioOpen,
-    setBatchAudioOpen,
+    showStartPage: home,
+    setShowHome,
     batchAudioSlots,
-    batchModel,
-    setBatchModel,
+    fileDefaults,
+    setFileDefaults,
+    setLiveModel,
+    setLiveAzureInterim,
     onPickBatchAudio,
     onClearBatchAudio,
     onChangeBatchStart,
@@ -71,6 +74,8 @@ export function App() {
     onOpenConnectivityDialog,
     closeConnectivityDialog,
     onToggleRecording,
+    silenceCountdown,
+    restartSilenceTimer,
     openDebugPanel,
     runtimeIssue,
     segments,
@@ -96,8 +101,12 @@ export function App() {
     dismissToast
   } = useAppState()
   const batch = savedFeatures.mode === 'batch'
+  const canShowSpeakers = !home && (segments.length > 0 || (status.running && !batch))
+  const showSpeakers = canShowSpeakers && speakersOpen
   const busy = isLoadingInitialData || isStarting || status.running || batchAction !== null
   const idle = !isLoadingInitialData && !isStarting && !status.running
+  const controlsDisabled = batchAction !== null || isSavingSettings
+  const startDisabled = isLoadingInitialData || !isConfigReady || controlsDisabled || settingsSaveFailed
   const showConnectionTest = draftFeatures.mode === 'live' && draftModel !== 'unsupported'
   const audioPanel = <AudioPanel statusRunning={batchAction !== null} batch={batch} settings={settings} devices={devices} setSettings={setIdleSettings}
     selectDevices={savedFeatures.selectDevices} speakerLoopback={savedFeatures.speakerLoopback} />
@@ -119,14 +128,18 @@ export function App() {
           runtimeIssue={runtimeIssue}
           isStarting={isStarting}
           batch={batch}
-          settingsDisabled={batchAction !== null}
+          settingsDisabled={controlsDisabled}
           pauseSupported={savedFeatures.pause}
-          startDisabled={isLoadingInitialData || !isConfigReady || isSavingSettings || settingsSaveFailed || batchAction !== null}
+          navigation={idle && segments.length > 0 ? <nav className="home-navigation" aria-label="View">
+            <button type="button" aria-pressed={home} disabled={batchAction !== null} onClick={() => setShowHome(true)}>Home</button>
+            <button type="button" aria-pressed={!home} disabled={batchAction !== null} onClick={() => setShowHome(false)}>Transcript</button>
+          </nav> : null}
           canCopyTranscript={finalCount > 0}
           canResetTranscript={!busy && segments.length > 0}
           durationLabel={durationLabel}
           startedAtLabel={startedAtLabel}
-          speakersOpen={speakersOpen}
+          speakersOpen={showSpeakers}
+          speakersDisabled={!canShowSpeakers}
           debugVisible={debugVisible}
           onToggleSpeakers={() => setSpeakersOpen((open) => !open)}
           onOpenAbout={() => setAboutOpen(true)}
@@ -143,7 +156,37 @@ export function App() {
           onResume={onResume}
           onResetTranscript={onResetTranscript}
         />
-        <div className={`layout-grid console-grid ${speakersOpen ? '' : 'inspector-hidden'}`}>
+        {home ? <div className="home-scroll"><div className="home-layout">
+          <section className="home-workflow" aria-labelledby="record-workflow-heading">
+            <header><h2 id="record-workflow-heading">Record a meeting</h2><p className="meta">Capture your microphone, speaker audio, or both.</p></header>
+            <fieldset className="home-mode" aria-label="Transcription mode" disabled={batchAction !== null}>
+              <label title="See the transcript as the meeting happens.">
+                <input type="radio" name="meeting-mode" checked={settings.transcription.mode !== 'unsupported' && !batch}
+                  onChange={() => setIdleSettings((previous) => ({ ...previous, transcription: { ...previous.transcription, mode: undefined } }))} /><span>Transcribe live</span>
+              </label>
+              <label title="Save WAVs locally. Choose a model when you transcribe the files on the right.">
+                <input type="radio" name="meeting-mode" checked={batch}
+                  onChange={() => setIdleSettings((previous) => ({ ...previous, transcription: { ...previous.transcription, mode: 'batch' } }))} /><span>Record for later</span>
+              </label>
+            </fieldset>
+            {audioPanel}
+            <div className="home-record-options">
+              <div className="home-live" inert={batch}>
+                <LiveModelPanel features={savedFeatures} settings={settings} disabled={controlsDisabled} azureInterim={configState?.config?.interimResults ?? true}
+                  setSettings={setIdleSettings} onModelChange={setLiveModel} onAzureInterimChange={setLiveAzureInterim} />
+                {!isConfigReady && savedFeatures.azure && <>
+                  {savedFeatures.endpoint && !configState?.config?.endpoint.trim() && <p className="meta">The Azure Speech endpoint is missing.</p>}
+                  <button type="button" disabled={controlsDisabled} onClick={onOpenSettingsDialog}>Configure Azure</button>
+                </>}
+                <button className="primary-button" type="button" disabled={startDisabled || !!runtimeIssue} onClick={() => void onToggleRecording()}>Start live transcription</button>
+              </div>
+              {batch && <button className="primary-button home-batch-start" type="button" disabled={startDisabled || !!runtimeIssue} onClick={() => void onToggleRecording()}>Start recording</button>}
+            </div>
+          </section>
+          <BatchAudioPanel slots={batchAudioSlots} defaults={fileDefaults} action={batchAction}
+            disabled={controlsDisabled} onDefaultsChange={setFileDefaults} onPick={onPickBatchAudio} onClear={onClearBatchAudio}
+            onChangeStart={onChangeBatchStart} onCheckModel={onCheckBatchModel} onTranscribe={onTranscribeBatchAudio} />
+        </div></div> : <div className={`layout-grid console-grid ${showSpeakers ? '' : 'inspector-hidden'}`}>
           <TranscriptPanel
             segments={segments}
             transcriptListRef={transcriptListRef}
@@ -152,41 +195,8 @@ export function App() {
             setSpeakerAliases={setSpeakerAliases}
             following={autoScrollEnabled}
             onFollow={onFollowTranscript}
-            idleControls={idle && <>
-              <section className="batch-audio-controls" aria-label="Meeting controls">
-                <div className="batch-audio-actions meeting-mode-controls">
-                  <label>
-                    <span className="field-caption">Meeting mode</span>
-                    <select disabled={batchAction !== null || isSavingSettings}
-                      value={settings.transcription.mode ?? 'live'} onChange={(event) => {
-                        const mode = event.currentTarget.value === 'batch' ? 'batch' : undefined
-                        setIdleSettings((previous) => ({ ...previous, transcription: { ...previous.transcription, mode } }))
-                      }}>
-                      {settings.transcription.mode === 'unsupported' && <option value="unsupported" disabled>Unsupported mode</option>}
-                      <option value="live">Live</option>
-                      <option value="batch">Batch</option>
-                    </select>
-                  </label>
-                  <button className="secondary-button" type="button" aria-expanded={batchAudioOpen} aria-controls="batch-audio"
-                    onClick={() => setBatchAudioOpen((open) => !open)} disabled={batchAction !== null}>Transcribe files</button>
-                </div>
-                <p className="meta">{batch ? 'Record WAVs locally, then transcribe them separately when ready.' : 'Transcribe meetings as they happen.'} This mode also applies to automatic meetings.</p>
-                {!batch && <div className="meeting-live-model">
-                  <p className="meta">Live model: <strong>{savedFeatures.label}</strong></p>
-                  <button className="secondary-button" type="button" onClick={onOpenSettingsDialog}
-                    disabled={batchAction !== null || isSavingSettings}>Change live model</button>
-                </div>}
-                {batch && segments.length > 0 && <details><summary>Audio devices</summary>{audioPanel}</details>}
-              </section>
-              {batchAudioOpen && <BatchAudioPanel slots={batchAudioSlots} model={batchModel} action={batchAction}
-                disabled={batchAction !== null || isSavingSettings} onModelChange={setBatchModel} onPick={onPickBatchAudio}
-                onClear={onClearBatchAudio} onChangeStart={onChangeBatchStart} onCheckModel={onCheckBatchModel} onTranscribe={onTranscribeBatchAudio} />}
-            </>}
-            emptyContent={idle && <div className="idle-audio-panel">
-              {audioPanel}
-            </div>}
           />
-          <aside className="console-inspector" id="console-speakers" hidden={!speakersOpen} aria-labelledby="console-speakers-title">
+          <aside className="console-inspector" id="console-speakers" hidden={!showSpeakers} aria-labelledby="console-speakers-title">
             <SpeakerMappingPanel
               knownSpeakers={knownSpeakers}
               speakerLabels={speakerLabels}
@@ -194,7 +204,7 @@ export function App() {
               setSpeakerAliases={setSpeakerAliases}
             />
           </aside>
-        </div>
+        </div>}
 
         {debugVisible && <DebugLogPanel
           debugOpen={debugOpen}
@@ -205,6 +215,12 @@ export function App() {
           onClearDebug={onClearDebugLog}
         />}
       </div>
+
+      {silenceCountdown !== null && <div className="silence-warning" role="status">
+        <span>No audio detected. Recording will stop in {silenceCountdown}s.</span>
+        <button type="button" onClick={restartSilenceTimer}>Keep recording</button>
+        <button type="button" onClick={() => { restartSilenceTimer(); void onToggleRecording() }}>Stop now</button>
+      </div>}
 
       <SettingsDialog
         isOpen={settingsDialogOpen && !isLoadingInitialData}
@@ -235,7 +251,7 @@ export function App() {
                 className="primary-button settings-save-button"
                 type="button"
                 onClick={() => void onSaveAll()}
-                disabled={busy || isSavingSettings || isChoosingDirectory || (!batch && draftModel === 'unsupported')}
+                disabled={busy || isSavingSettings || isChoosingDirectory}
               >
                 Save
               </button>
@@ -246,8 +262,7 @@ export function App() {
       >
         <SettingsPanel
           statusRunning={status.running || isStarting}
-          configDraft={configDraft}
-          setConfigDraft={setConfigDraft}
+          features={draftFeatures}
           settings={dialogSettings}
           setSettings={setDialogSettings}
           onChooseDirectory={onChooseTranscriptDirectory}
@@ -260,7 +275,6 @@ export function App() {
           statusRunning={status.running || isStarting}
           liveAzure={draftFeatures.mode === 'live' && draftFeatures.azure}
           liveEndpointRequired={draftFeatures.mode === 'live' && draftFeatures.azure && draftFeatures.endpoint}
-          batch={draftFeatures.mode === 'batch'}
           setConfigDraft={setConfigDraft}
         />
 

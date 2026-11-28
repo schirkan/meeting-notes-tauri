@@ -38,6 +38,7 @@ export interface WebSpeechSessionOptions {
   onSegment: (segment: TranscriptSegment) => void
   /** Unexpected termination after readiness; explicit stop/abort never calls this. */
   onEnded: (error?: string) => void
+  onRestart?: () => void
 }
 
 const startTimeoutMs = 10_000
@@ -68,11 +69,14 @@ function nativeError(error: unknown, fallback: string): string {
   return fallback
 }
 
-/** One manual capture. Create a new instance for every recording; no automatic restart. */
+/** One manual capture, potentially spanning several native recognition runs. */
 export class WebSpeechSession {
   readonly sessionId = `web-speech-${Date.now()}-${++nextSession}`
   private recognition?: Recognition
-  private phase: 'idle' | 'starting' | 'listening' | 'stopping' | 'ended' = 'idle'
+  private phase: 'idle' | 'starting' | 'listening' | 'restarting' | 'stopping' | 'ended' = 'idle'
+  private restartTimer?: ReturnType<typeof setTimeout>
+  private rapidEnds = 0
+  private run = 0
   private settle?: (error?: string) => void
   private stopPromise?: Promise<void>
 
@@ -81,7 +85,13 @@ export class WebSpeechSession {
   /** Call directly from the user's Start gesture. Resolves only when recognition starts listening. */
   async start(): Promise<void> {
     if (this.phase !== 'idle') throw new Error('This Web Speech session has already been used.')
+    await this.startRecognition()
+  }
+
+  private async startRecognition(): Promise<void> {
     this.phase = 'starting'
+    const run = this.run++
+    let listeningSince = 0
     try {
       const ctor = recognitionConstructor()
       if (!ctor) throw new Error('Web Speech recognition is not available in this WebView.')
@@ -102,18 +112,38 @@ export class WebSpeechSession {
       }
 
       recognition.onstart = () => {
-        if (this.phase !== 'starting') return
+        if (this.recognition !== recognition || this.phase !== 'starting') return
         this.phase = 'listening'
+        listeningSince = performance.now()
         this.settle?.()
       }
       recognition.onend = () => {
-        const error = this.phase === 'stopping' ? undefined : this.phase === 'starting'
-          ? 'Web Speech recognition ended before listening started.'
-          : 'Web Speech recognition ended unexpectedly.'
+        if (this.recognition !== recognition) return
+        if (this.phase === 'listening') {
+          if (performance.now() - listeningSince >= 10_000) this.rapidEnds = 0
+          if (++this.rapidEnds <= 3) {
+            this.detachRecognition(false)
+            this.phase = 'restarting'
+            this.options.onRestart?.()
+            this.restartTimer = setTimeout(() => {
+              this.restartTimer = undefined
+              void this.startRecognition().catch((error: Error) => {
+                if (error.message !== cancelled) this.options.onEnded(error.message)
+              })
+            }, 500)
+            return
+          }
+          this.finish('Web Speech recognition ended repeatedly and could not keep listening.')
+          return
+        }
+        const error = this.phase === 'starting' ? 'Web Speech recognition ended before listening started.' : undefined
         this.finish(error)
       }
-      recognition.onerror = ({ error }) => this.finish(recognitionError(error), true)
+      recognition.onerror = ({ error }) => {
+        if (this.recognition === recognition) this.finish(recognitionError(error), true)
+      }
       recognition.onresult = ({ resultIndex, results }) => {
+        if (this.recognition !== recognition) return
         for (let index = resultIndex; index < results.length; index++) {
           if (this.phase !== 'listening' && this.phase !== 'stopping') return
           const result = results[index]
@@ -122,7 +152,7 @@ export class WebSpeechSession {
           const text = alternative?.transcript.trim()
           if (!text) continue
           this.options.onSegment({
-            id: `${this.sessionId}-${index}`,
+            id: `${this.sessionId}-${run}-${index}`,
             sessionId: this.sessionId,
             source: 'mic',
             speaker: 'self',
@@ -153,7 +183,7 @@ export class WebSpeechSession {
   /** Waits for finals and end, rejecting on failure or timeout. Cancels an in-flight start. */
   stop(): Promise<void> {
     if (this.phase === 'stopping') return this.stopPromise!
-    if (this.phase === 'starting') this.abort()
+    if (this.phase === 'starting' || this.phase === 'restarting') this.abort()
     if (this.phase !== 'listening' || !this.recognition) return Promise.resolve()
 
     this.phase = 'stopping'
@@ -188,16 +218,22 @@ export class WebSpeechSession {
     if (this.phase === 'ended') return
     const wasListening = this.phase === 'listening'
     this.phase = 'ended'
+    clearTimeout(this.restartTimer)
+    this.restartTimer = undefined
+    this.stopPromise = undefined
+    this.detachRecognition(abortNative)
+    this.settle?.(error)
+    if (wasListening && notify) this.options.onEnded(error)
+  }
+
+  private detachRecognition(abortNative: boolean): void {
     const recognition = this.recognition
     this.recognition = undefined
-    this.stopPromise = undefined
     if (recognition) {
       recognition.onstart = recognition.onend = recognition.onerror = recognition.onresult = null
       if (abortNative) {
         try { recognition.abort() } catch { /* Browser already closed the capture. */ }
       }
     }
-    this.settle?.(error)
-    if (wasListening && notify) this.options.onEnded(error)
   }
 }

@@ -236,6 +236,8 @@ export interface TranscriptApi {
   onSegment: (cb: (segment: TranscriptSegment) => void) => () => void
   onError: (cb: (error: TranscriptError) => void) => () => void
   onStatus: (cb: (status: TranscriptStatus) => void) => () => void
+  onAudioActivity: (cb: (startedAt: string) => void) => () => void
+  showSilenceWarning: () => Promise<void>
   onDebugLog: (cb: (entry: DebugLogEntry) => void) => () => void
   onMeetingDetected: (cb: (detected: MeetingDetected) => void) => () => void
 }

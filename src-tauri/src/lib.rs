@@ -99,6 +99,7 @@ pub fn run() {
       commands::toggle_devtools,
       commands::open_repository,
       commands::start_recording,
+      commands::show_silence_warning,
       batch::pick_batch_audio,
       batch::inspect_batch_audio,
       batch::transcribe_batch_audio,

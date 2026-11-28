@@ -18,7 +18,8 @@
       {
         "title": "Meeting Notes",
         "width": 950,
-        "height": 650,
+        "height": 800,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,msSpeechRecognitionServiceUseCetoService --autoplay-policy=no-user-gesture-required",
         "resizable": true,
         "label": "main"
       }

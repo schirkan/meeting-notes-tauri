@@ -9,18 +9,13 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::{commands, connectivity, events::BatchRecording, settings, sidecar, state::AppState};
 use settings::{AzureSpeechModel, RecognitionProvider};
-
-pub(crate) fn recordings_directory(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path()
-        .app_local_data_dir()
-        .map(|path| path.join("Recordings"))
-        .map_err(|err| format!("Cannot resolve the local recordings folder: {err}"))
-}
+use crate::state::{DebugLogEntryLevel, DebugLogEntrySource};
 
 #[tauri::command]
 pub async fn pick_batch_audio(app: AppHandle) -> Result<Option<String>, String> {
     let mut dialog = app.dialog().file().add_filter("WAV audio", &["wav"]);
-    let directory = recordings_directory(&app)?;
+    let user = settings::load_user_settings().await.map_err(|err| err.to_string())?;
+    let directory = settings::transcript_output_directory(&user).map_err(|err| err.to_string())?;
     if directory.is_dir() {
         dialog = dialog.set_directory(directory);
     }
@@ -228,6 +223,30 @@ pub async fn transcribe_batch_audio(
     expected_provider: String,
     expected_model: Option<String>,
 ) -> Result<Vec<BatchSegment>, String> {
+    let state = app.state::<AppState>();
+    commands::push_and_emit_debug(&app, &state, DebugLogEntrySource::Ipc, DebugLogEntryLevel::Info,
+        format!("File transcription requested for {} WAV track(s).", tracks.len()));
+    let result = run_batch_audio(&app, tracks, expected_provider, expected_model).await;
+    match &result {
+        Ok(segments) => {
+            commands::push_and_emit_debug(&app, &state, DebugLogEntrySource::Main,
+                if segments.is_empty() { DebugLogEntryLevel::Warn } else { DebugLogEntryLevel::Info },
+                format!("File transcription completed with {} recognized segments.", segments.len()));
+        }
+        Err(_) => {
+            commands::push_and_emit_debug(&app, &state, DebugLogEntrySource::Main, DebugLogEntryLevel::Error,
+                "File transcription failed. See the error notification for details.");
+        }
+    }
+    result
+}
+
+async fn run_batch_audio(
+    app: &AppHandle,
+    tracks: Vec<InputTrack>,
+    expected_provider: String,
+    expected_model: Option<String>,
+) -> Result<Vec<BatchSegment>, String> {
     let gate = app.state::<commands::CaptureStartGate>();
     let _batch = gate
         .try_start()
@@ -246,6 +265,13 @@ pub async fn transcribe_batch_audio(
     if !provider.supports_batch() {
         return Err("Select a supported Batch model before transcribing.".into());
     }
+    let requested_model = if provider == RecognitionProvider::WindowsSapi { Some("windows-sapi") } else { expected_model.as_deref() };
+    if user.file_transcription.as_ref().is_some_and(|file| Some(file.model.as_str()) != requested_model) {
+        return Err("The saved file transcription model changed. Select the model again before transcribing.".into());
+    }
+    let (language, auto_language, diarization) = user.file_transcription.as_ref()
+        .map(|file| (file.language.as_str(), file.auto_language_detection, file.diarization))
+        .unwrap_or((&user.language, user.auto_language_detection, user.diarization));
     validate_tracks(&tracks).await?;
     let azure = if provider == RecognitionProvider::Azure {
         let mut config = azure.ok_or(
@@ -256,10 +282,10 @@ pub async fn transcribe_batch_audio(
             Some("mai-transcribe-2-streaming") => AzureSpeechModel::MaiTranscribe2Streaming,
             _ => return Err("Select a supported Azure Batch model.".into()),
         };
-        config.check_connection_fields()?;
-        if config.endpoint.trim().is_empty() {
-            return Err("Enter the Azure Speech resource endpoint for Fast Transcription.".into());
+        if config.region.trim().is_empty() || config.speech_key.trim().is_empty() {
+            return Err("Enter the Azure region and speech key.".into());
         }
+        config.endpoint = config.batch_endpoint.take().filter(|endpoint| !endpoint.trim().is_empty()).unwrap_or(config.endpoint);
         if let Some(proxy) = config.proxy.as_ref() {
             connectivity::configured_proxy(proxy)?;
         }
@@ -267,11 +293,14 @@ pub async fn transcribe_batch_audio(
     } else {
         None
     };
-    let exe = sidecar::resolve_sidecar_path(&app).map_err(|err| err.to_string())?;
+    let exe = sidecar::resolve_sidecar_path(app).map_err(|err| err.to_string())?;
     let mut segments = Vec::new();
     let multiple = tracks.len() > 1;
     for track in tracks {
         let source = track.source.as_str();
+        let model = azure.as_ref().map_or(provider.as_str(), |config| config.model.as_str());
+        commands::push_and_emit_debug(app, &app.state::<AppState>(), DebugLogEntrySource::Sidecar, DebugLogEntryLevel::Info,
+            format!("Transcribing {source} WAV with {model}."));
         let origin = track.started_at.ok_or("Missing start time.")?;
         let mut command =
             tokio::process::Command::from(commands::background_command(exe.as_os_str()));
@@ -282,11 +311,11 @@ pub async fn transcribe_batch_audio(
                 "--recognition-provider",
                 provider.as_str(),
                 "--language",
-                &user.language,
+                language,
                 "--diarization-speaker",
-                if user.diarization { "true" } else { "false" },
+                if provider == RecognitionProvider::Azure && diarization { "true" } else { "false" },
                 "--auto-language-detection",
-                if user.auto_language_detection {
+                if provider == RecognitionProvider::Azure && auto_language {
                     "true"
                 } else {
                     "false"
@@ -329,6 +358,16 @@ pub async fn transcribe_batch_audio(
             .await
             .map_err(|_| "File transcription timed out. The audio files were kept.".to_string())?
             .map_err(|err| format!("The file transcription worker could not start: {err}"))?;
+        for line in output.stdout.split(|byte| *byte == b'\n') {
+            if let Ok(event) = serde_json::from_slice::<serde_json::Value>(line) {
+                if event["code"] == "BATCH_SAPI_DIAGNOSTICS" || event["code"] == "BATCH_TRANSCRIPTION_FAILED" {
+                    if let Some(message) = event["message"].as_str() {
+                        let level = if event["level"] == "error" { DebugLogEntryLevel::Error } else { DebugLogEntryLevel::Info };
+                        commands::push_and_emit_debug(app, &app.state::<AppState>(), DebugLogEntrySource::Sidecar, level, message);
+                    }
+                }
+            }
+        }
         let result = parse_output(&output.stdout, output.status.success())?;
         let session_id = uuid::Uuid::new_v4().to_string();
         for phrase in result.segments {

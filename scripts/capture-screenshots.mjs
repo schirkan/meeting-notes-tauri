@@ -148,6 +148,8 @@ async function openApp(browser, baseUrl, options = {}) {
       onSegment: (callback) => { window.emitSegment = callback; return () => { delete window.emitSegment } },
       onError: noSubscription,
       onStatus: (callback) => { window.emitStatus = (value) => { currentStatus = value; callback(value) }; return () => { delete window.emitStatus } },
+      onAudioActivity: () => () => {},
+      showSilenceWarning: async () => {},
       onDebugLog: (callback) => { window.emitDebugLog = (value) => callback(value); return () => { delete window.emitDebugLog } },
       onMeetingDetected: (callback) => { window.emitMeetingDetected = callback; return () => { delete window.emitMeetingDetected } }
     }

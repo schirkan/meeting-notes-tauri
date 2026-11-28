@@ -41,7 +41,7 @@ internal static class BatchTranscription
             var wave = ReadWave(audio);
             var segments = provider == "azure"
                 ? await RunAzureAsync(args, audio, wave, language)
-                : await RunSapiAsync(path, language ?? "de-DE");
+                : await RunSapiAsync(audio, language ?? "de-DE");
             Logger.Event("batch_transcript", new { segments });
             return 0;
         }
@@ -77,7 +77,7 @@ internal static class BatchTranscription
             ? @"(?:cognitiveservices\.azure\.com|api\.cognitive\.microsoft\.com)"
             : @"cognitiveservices\.azure\.com";
         if (endpoint is null || !endpoint.All(char.IsAscii) || !Regex.IsMatch(endpoint, $@"\Ahttps://{label}\.{suffix}/?\z", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
-            throw new BatchFailure("Configure an HTTPS Azure Speech resource endpoint with no path, credentials, query, or port.");
+            throw new BatchFailure("Configure an HTTPS Azure Speech resource endpoint under Settings > Azure > File transcription endpoint (no path, credentials, query, or port).");
         return new Uri(new Uri(endpoint, UriKind.Absolute), FastApiPath);
     }
 
@@ -192,7 +192,7 @@ internal static class BatchTranscription
     private static long? IntField(JsonElement obj, string name) =>
         obj.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var i) && i >= 0 ? i : null;
 
-    private static async Task<Segment[]> RunSapiAsync(string path, string language)
+    private static async Task<Segment[]> RunSapiAsync(Stream audio, string language)
     {
         SpeechRecognitionEngine engine;
         try { engine = WindowsSapi.Open(language); }
@@ -202,9 +202,14 @@ internal static class BatchTranscription
         }
         using (engine)
         {
-            engine.SetInputToWaveFile(path);
+            audio.Position = 0;
+            engine.SetInputToWaveStream(audio);
             var completion = new TaskCompletionSource<Segment[]>(TaskCreationOptions.RunContinuationsAsynchronously);
             var segments = new List<Segment>();
+            var rejected = 0;
+            var peakLevel = 0;
+            engine.SpeechRecognitionRejected += (_, _) => rejected++;
+            engine.AudioLevelUpdated += (_, e) => peakLevel = Math.Max(peakLevel, e.AudioLevel);
             engine.SpeechRecognized += (_, e) =>
             {
                 if (e.Result is { } result && !string.IsNullOrWhiteSpace(result.Text))
@@ -217,7 +222,10 @@ internal static class BatchTranscription
                 else completion.TrySetResult(segments.ToArray());
             };
             engine.RecognizeAsync(RecognizeMode.Multiple);
-            return await completion.Task;
+            var result = await completion.Task;
+            Logger.Info("status", "BATCH_SAPI_DIAGNOSTICS",
+                $"Windows SAPI ({language}): {result.Length} recognized, {rejected} rejected, peak input level {peakLevel}/100.");
+            return result;
         }
     }
 

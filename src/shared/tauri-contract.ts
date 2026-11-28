@@ -8,6 +8,7 @@ export const TAURI_COMMANDS = {
   toggleDevtools: 'toggle_devtools',
   openRepository: 'open_repository',
   startRecording: 'start_recording',
+  showSilenceWarning: 'show_silence_warning',
   pickBatchAudio: 'pick_batch_audio',
   inspectBatchAudio: 'inspect_batch_audio',
   transcribeBatchAudio: 'transcribe_batch_audio',
@@ -32,6 +33,7 @@ export type TauriCommand = (typeof TAURI_COMMANDS)[keyof typeof TAURI_COMMANDS]
 
 export const TAURI_EVENTS = {
   segment: 'transcript:segment',
+  audioActivity: 'transcript:audio-activity',
   status: 'transcript:status',
   quitExport: 'transcript:quit-export',
   error: 'transcript:error',

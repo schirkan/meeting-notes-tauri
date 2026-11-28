@@ -39,7 +39,7 @@ if (args.Contains("--batch-only"))
     {
         ProbeSelfContained(start);
         foreach (var variable in variables) start.Environment.Remove(variable);
-    }, Check, args.Contains("--batch-synthetic"));
+    }, Check, args.Contains("--batch-synthetic"), args.Contains("--batch-synthetic-german"));
     Console.WriteLine($"PASS: {assertions} batch assertions (synthetic WAV and no Azure requests or audio devices).");
     return;
 }

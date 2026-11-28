@@ -15,9 +15,12 @@ export function batchTracks(slots: BatchAudioSlots): BatchAudioTrack[] {
   return BATCH_SOURCES.flatMap((source) => {
     const slot = slots[source]
     if (!slot) return []
-    const value = slot.startedAt.trim()
+    const entered = slot.startedAt.trim()
     const name = source === 'mic' ? 'microphone' : 'speaker'
-    if (!value) throw new Error(`Enter the ${name} start time before transcribing.`)
+    if (!entered) throw new Error(`Enter the ${name} start time before transcribing.`)
+    const local = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?$/.test(entered)
+    const value = local ? utcTrackStart(entered) : entered
+    if (local && !value) throw new Error(`Enter a valid local ${name} start time.`)
     const timestamp = Date.parse(value)
     const date = value.slice(0, 10)
     const midnight = new Date(`${date}T00:00:00Z`)
@@ -32,4 +35,17 @@ export function batchTracks(slots: BatchAudioSlots): BatchAudioTrack[] {
 export function earliestTrackStart(tracks: BatchAudioTrack[]): string | undefined {
   // batchTracks normalizes timestamps to UTC ISO strings before submission.
   return tracks.map(({ startedAt }) => startedAt).sort()[0]
+}
+
+export function localTrackStart(value: string): string {
+  if (value && !/(Z|[+-]\d{2}:\d{2})$/i.test(value)) return value
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return ''
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, -1)
+}
+
+function utcTrackStart(value: string): string {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime()) || !localTrackStart(date.toISOString()).startsWith(value)) return ''
+  return date.toISOString()
 }

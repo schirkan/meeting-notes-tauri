@@ -3,6 +3,7 @@ import { hasAzureConnectionFields, isAzureSpeechModel, type AzureConfig, type Az
 export type ConfigDraft = {
   model: AzureSpeechModel
   endpoint: string
+  batchEndpoint: string
   region: string
   speechKey: string
   interimResults: boolean
@@ -16,6 +17,7 @@ export function toConfigDraft(config: AzureConfig | null): ConfigDraft {
   return {
     model: config?.model ?? 'standard',
     endpoint: config?.endpoint ?? '',
+    batchEndpoint: config?.batchEndpoint ?? '',
     region: config?.region ?? '',
     speechKey: config?.speechKey ?? '',
     interimResults: config?.interimResults ?? true,
@@ -36,6 +38,13 @@ export function draftToConfig(draft: ConfigDraft, { allowIncomplete = false } = 
     throw new Error('Please select a supported transcription model.')
   }
   const config: AzureConfig = { endpoint, region, speechKey, interimResults: draft.interimResults }
+  const batchEndpoint = draft.batchEndpoint.trim()
+  if (batchEndpoint) {
+    if (!isBatchSpeechEndpoint(batchEndpoint, 'standard')) {
+      throw new Error('Enter an HTTPS Azure Speech resource endpoint without a path, credentials, query, or port.')
+    }
+    config.batchEndpoint = batchEndpoint
+  }
   if (model !== 'standard') config.model = model
   if (!allowIncomplete && !hasAzureConnectionFields(config)) {
     throw new Error(model === 'standard'
@@ -75,4 +84,10 @@ export function isConfigComplete(config: AzureConfig | null, requireEndpoint = f
   }
 
   return config.proxy.host.trim().length > 0 && Number.isInteger(config.proxy.port) && config.proxy.port > 0 && config.proxy.port <= 65535
+}
+
+export function isBatchSpeechEndpoint(endpoint: string, model: AzureSpeechModel): boolean {
+  const label = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?'
+  const suffix = model === 'standard' ? '(?:cognitiveservices\\.azure\\.com|api\\.cognitive\\.microsoft\\.com)' : 'cognitiveservices\\.azure\\.com'
+  return new RegExp(`^https://${label}\\.${suffix}/?$`, 'i').test(endpoint.trim())
 }

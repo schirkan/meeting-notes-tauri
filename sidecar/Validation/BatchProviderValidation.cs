@@ -7,7 +7,7 @@ using NAudio.Wave;
 
 internal static class BatchProviderValidation
 {
-    public static async Task RunAsync(string exe, Action<ProcessStartInfo> configure, Action<bool, string> check, bool synthetic)
+    public static async Task RunAsync(string exe, Action<ProcessStartInfo> configure, Action<bool, string> check, bool synthetic, bool german = false)
     {
         using var normal = JsonDocument.Parse(BatchTranscription.AzureDefinition(AzureSpeechModel.Standard, "en-GB", false, false));
         check(normal.RootElement.GetProperty("locales")[0].GetString() == "en-GB" &&
@@ -41,19 +41,23 @@ internal static class BatchProviderValidation
 
             // Synthesize directly to disk; never play to a speaker or open a capture device.
             var speech = Path.Combine(directory.FullName, "synthetic test speech.wav");
+            var locale = german ? "de-DE" : "en-GB";
             using (var voice = new SpeechSynthesizer())
             {
-                voice.SelectVoiceByHints(VoiceGender.NotSet, VoiceAge.NotSet, 0, CultureInfo.GetCultureInfo("en-GB"));
+                voice.SelectVoiceByHints(VoiceGender.NotSet, VoiceAge.NotSet, 0, CultureInfo.GetCultureInfo(locale));
                 voice.SetOutputToWaveFile(speech, WindowsSapi.SpeechPcm);
-                voice.Speak("Elephants drink water. Elephants drink water.");
+                voice.Speak(german ? "Elefanten trinken Wasser. Elefanten trinken Wasser." : "Elephants drink water. Elephants drink water.");
                 voice.SetOutputToNull();
             }
-            var sapi = await Run("--transcribe-batch", speech, "--recognition-provider", "windows-sapi", "--language", "en-GB");
+            var sapi = await Run("--transcribe-batch", speech, "--recognition-provider", "windows-sapi", "--language", locale);
             check(sapi.Exit == 0, $"Packaged native SAPI WAV job completed: {sapi.Text}");
             check(ReadEvents(sapi.Text).Any(e => e.GetProperty("type").GetString() == "batch_transcript" &&
                 e.GetProperty("payload").GetProperty("segments").EnumerateArray().Any(s =>
-                    (s.GetProperty("text").GetString() ?? "").Contains("elephant", StringComparison.OrdinalIgnoreCase) &&
+                    (s.GetProperty("text").GetString() ?? "").Contains(german ? "Wasser" : "elephant", StringComparison.OrdinalIgnoreCase) &&
                     s.GetProperty("offsetMs").ValueKind == JsonValueKind.Number)), "Packaged SAPI recognized synthesized speech with an offset");
+            var silence = await Run("--transcribe-batch", file, "--recognition-provider", "windows-sapi", "--language", locale);
+            check(silence.Exit == 0 && HasError(silence.Text, "BATCH_SAPI_DIAGNOSTICS", "0 recognized"),
+                "Packaged SAPI reports a diagnostic when no speech is recognized");
         }
         finally { directory.Delete(recursive: true); }
 

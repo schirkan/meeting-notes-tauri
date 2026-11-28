@@ -4,6 +4,7 @@
   "azure": {
     "model": "standard",
     "endpoint": "wss://westeurope.stt.speech.microsoft.com/speech/universal/v2",
+    "batchEndpoint": "",
     "region": "westeurope",
     "speechKey": "<YOUR-AZURE-SPEECH-KEY-HERE>",
     "interimResults": true,
@@ -17,6 +18,12 @@
 
   "user": {
     "language": "de-DE",
+    "fileTranscription": {
+      "model": "standard",
+      "language": "de-DE",
+      "autoLanguageDetection": true,
+      "diarization": true
+    },
     "transcription": {
       "mic": true,
       "speaker": true,
@@ -37,6 +44,8 @@
     "autoStart": {
       "enabled": true,
       "autoStop": true,
+      "stopOnSilence": false,
+      "silenceMinutes": 5,
       "processes": []
     },
     "window": {

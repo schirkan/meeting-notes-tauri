@@ -65,7 +65,7 @@ fn empty_device_snapshot() -> DeviceSnapshot {
     }
 }
 
-fn push_and_emit_debug(
+pub(crate) fn push_and_emit_debug(
     app: &AppHandle,
     state: &AppState,
     source: DebugLogEntrySource,
@@ -183,7 +183,7 @@ async fn start_recording_with_origin(
         return Ok(status);
     }
     let (handle, use_sapi) = if batch {
-        let root = crate::batch::recordings_directory(app)?;
+        let root = settings::transcript_output_directory(&user).map_err(|err| err.to_string())?;
         tokio::fs::create_dir_all(&root).await.map_err(|err| format!("Cannot open recording folder: {err}"))?;
         let started_at = crate::batch::capture_start(requested_at_ms, chrono::Utc::now())?;
         let (prefix, recording) = crate::batch::recording_outputs(&root, started_at, &user.transcription)?;
@@ -266,7 +266,7 @@ fn recording_options(azure: Option<AzureConfig>, user: settings::UserSettings) -
             options.speech_endpoint = (azure.model == settings::AzureSpeechModel::Standard).then_some(azure.endpoint);
             options.proxy = azure.proxy;
         }
-        _ => return Err("The saved transcription model is unsupported. Choose a model in Settings.".into()),
+        _ => return Err("The saved transcription model is unsupported. Choose a model on the start page.".into()),
     }
     Ok(options)
 }
@@ -275,6 +275,11 @@ fn finish_web_recording(app: &AppHandle, state: &AppState) -> events::Transcript
     let status = state.mark_stopped_with_error(None);
     events::emit_status(app, &status);
     status
+}
+
+#[tauri::command]
+pub fn show_silence_warning(app: AppHandle) -> Result<(), String> {
+    crate::tray::show_main(&app)
 }
 
 #[tauri::command]
@@ -1458,6 +1463,15 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) -> bool {
     let payload = parsed.get("payload").cloned().unwrap_or(serde_json::Value::Null);
 
     match ty {
+        "audio_activity" => {
+            let status = app.state::<AppState>().snapshot_status();
+            if status.running && !status.paused {
+                if let Some(started_at) = status.started_at {
+                    use tauri::Emitter;
+                    let _ = app.emit("transcript:audio-activity", started_at);
+                }
+            }
+        }
         "transcript" | "transcript:segment" => {
             // T-502: Die Pipe-Stufe (Sidecar-Event -> Rust) ergaenzen und
             // die Gesamtlatenz bis zum Tauri-Event berechnen. Die Messzeile

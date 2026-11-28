@@ -27,6 +27,8 @@ This README describes the development branch. Local WAV recording, file transcri
 
 ### Record now, transcribe later
 
+**Stop automatically after silence** is off by default. When enabled, it warns after five minutes of silence by default, then stops after 60 seconds unless audio resumes or you choose **Keep recording**. Set the delay under **Settings → Transcription**. This applies to local recording and native live models, not Web Speech API.
+
 For Azure file transcription, set **Settings → Azure → File transcription endpoint** to your Speech resource origin, such as `https://<resource>.cognitiveservices.azure.com`. If this field is blank and your existing live endpoint is already a suitable resource endpoint, it is reused. A regional `*.stt.speech.microsoft.com` endpoint does not work for file transcription. Both modes use the configured Speech key. For SAPI, select the language spoken in the file. If no text is recognized, listen to the selected WAV and check **Debug log** for the reported input level and rejected recognitions.
 
 Choose **Record for later** under **Record a meeting** to record locally, even without speech credentials or a ready model. **Start recording** and meeting auto-start share this local recording path. **Stop recording** or meeting auto-stop saves audio and fills in **Transcribe audio files**; it does not transcribe or upload it.

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_USER_SETTINGS, isAzureSpeechModel, normalizeUserSettings, type AppConfigState, type UserSettings } from '@shared/config-contract'
-import { BATCH_MODELS, meetingSpeechFeatures, type BatchModel } from '@shared/speech-models'
+import { DEFAULT_USER_SETTINGS, fileTranscriptionDefaults, isAzureSpeechModel, normalizeUserSettings, type AppConfigState, type AzureConfig, type FileTranscriptionSettings, type SpeechModel, type UserSettings } from '@shared/config-contract'
+import { BATCH_MODELS, meetingSpeechFeatures } from '@shared/speech-models'
 import type { BatchAudioSource, MeetingDetected } from '@shared/transcript-contract'
 import { buildTranscriptMarkdown } from '@shared/transcript-markdown'
 import {
@@ -17,7 +17,7 @@ import {
   type TranscriptSegment,
   type TranscriptStatus
 } from '@shared/transcript-contract'
-import { type ConfigDraft, draftToConfig, isConfigComplete, toConfigDraft } from './config-utils'
+import { type ConfigDraft, draftToConfig, isBatchSpeechEndpoint, isConfigComplete, toConfigDraft } from './config-utils'
 import type { ConnectivityResult } from './components/ConnectivityDialog'
 import { canUseWebSpeech, WebSpeechSession } from './web-speech'
 import { batchTracks, earliestTrackStart, slotsFromRecording, type BatchAudioSlots } from './batch-audio'
@@ -101,9 +101,9 @@ export function useAppState() {
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false)
   const [debugOpen, setDebugOpen] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
-  const [batchAudioOpen, setBatchAudioOpen] = useState(false)
+  const [showHome, setShowHome] = useState(false)
   const [batchAudioSlots, setBatchAudioSlots] = useState<BatchAudioSlots>({})
-  const [batchModel, setBatchModel] = useState<BatchModel>('standard')
+  const fileDefaults = fileTranscriptionDefaults(settings)
   const [batchTranscriptStart, setBatchTranscriptStart] = useState<string | undefined>()
   const [batchAction, setBatchAction] = useState<'pick' | 'transcribe' | null>(null)
   const lastCompletedRecordingRef = useRef<string | null>(null)
@@ -122,6 +122,18 @@ export function useAppState() {
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
   const autoScrollEnabledRef = useRef(true)
   const transcriptListRef = useRef<HTMLUListElement | null>(null)
+  const audioActivityRef = useRef<{ startedAt: string; at: number } | null>(null)
+  const [silenceCountdown, setSilenceCountdown] = useState<number | null>(null)
+  const showStartPage = !isLoadingInitialData && !isStarting && !status.running && (segments.length === 0 || showHome)
+
+  const clearTranscript = () => {
+    setShowHome(false)
+    setSegments([])
+    setBatchTranscriptStart(undefined)
+    setSpeakerAliases({})
+    autoScrollEnabledRef.current = true
+    setAutoScrollEnabled(true)
+  }
 
   const observeRecordingStart = (nextStatus: TranscriptStatus, resetTranscript = true) => {
     const startedAt = nextStatus.startedAt
@@ -131,12 +143,8 @@ export function useAppState() {
     recordingGenerationRef.current++
     setSessionStartedAt(startedAt)
     // A first paused status describes a session already in progress, even before getStatus resolves.
-    if (!resetTranscript || (previousStart === null && nextStatus.paused) || settingsRef.current.transcription.mode === 'batch') return
-    setSegments([])
-    setBatchTranscriptStart(undefined)
-    setSpeakerAliases({})
-    autoScrollEnabledRef.current = true
-    setAutoScrollEnabled(true)
+    if (!resetTranscript || (previousStart === null && nextStatus.paused)) return
+    clearTranscript()
   }
 
   const prefillBatchAudio = (nextStatus: TranscriptStatus) => {
@@ -146,7 +154,8 @@ export function useAppState() {
     if (key === lastCompletedRecordingRef.current) return
     lastCompletedRecordingRef.current = key
     setBatchAudioSlots(slotsFromRecording(recording))
-    setBatchAudioOpen(true)
+    setShowHome(true)
+    setToast({ message: 'Recording ready. Choose a model to transcribe the saved WAVs.', variant: 'info', persistent: false })
   }
 
   const onToggleDevtools = async () => {
@@ -209,9 +218,10 @@ export function useAppState() {
         const transcription = normalizeUserSettings(nextSettings).transcription
         const { model } = meetingSpeechFeatures(transcription, nextConfig.config?.model)
         if (transcription.mode !== 'batch' && (model === 'unsupported' || (!transcription.provider && (!nextConfig.exists || !isConfigComplete(nextConfig.config))))) {
-          setSettingsDialogOpen(true)
           setToast({
-            message: model === 'unsupported' ? 'The saved transcription model is unsupported. Choose another in Settings.' : 'Azure configuration is missing or incomplete. Please complete it in the settings and save.',
+            message: model === 'unsupported' ? 'The saved transcription model is unsupported. Choose another on the start page.'
+              : model === 'standard' && !nextConfig.config?.endpoint.trim() ? 'The Azure Speech endpoint is missing. Configure it in Settings or choose another model.'
+              : 'Azure configuration is missing or incomplete. Configure it in Settings or choose another model.',
             variant: 'error',
             persistent: true
           })
@@ -221,7 +231,6 @@ export function useAppState() {
         const nextSettings = await settingsLoad.catch(() => null)
         const transcription = normalizeUserSettings(nextSettings).transcription
         if (disposed || transcription.provider || transcription.mode === 'batch') return
-        setSettingsDialogOpen(true)
         setToast({
           message: 'The Azure configuration could not be loaded. Please check it in the settings and save.',
           variant: 'error',
@@ -306,6 +315,10 @@ export function useAppState() {
       })
     })
 
+    const unsubAudioActivity = transcriptApi.onAudioActivity((startedAt) => {
+      audioActivityRef.current = { startedAt, at: performance.now() }
+      setSilenceCountdown(null)
+    })
     const unsubStatus = transcriptApi.onStatus((nextStatus) => {
       receivedLiveStatus = true
       if (webSpeechRef.current && (startPendingRef.current || !nextStatus.running)) return
@@ -369,6 +382,7 @@ export function useAppState() {
       unsubSegment()
       unsubError()
       unsubStatus()
+      unsubAudioActivity()
       unsubQuitExport()
       unsubMeetingDetected()
       unsubDebugLog()
@@ -390,12 +404,12 @@ export function useAppState() {
     }
 
     list.addEventListener('scroll', handleScroll, { passive: true })
-    handleScroll()
+    if (autoScrollEnabledRef.current) list.scrollTop = list.scrollHeight
 
     return () => {
       list.removeEventListener('scroll', handleScroll)
     }
-  }, [])
+  }, [showStartPage])
 
   useEffect(() => {
     if (!autoScrollEnabled || !transcriptListRef.current) return
@@ -405,7 +419,7 @@ export function useAppState() {
     const observer = new ResizeObserver(follow)
     observer.observe(list)
     return () => observer.disconnect()
-  }, [segments, speakerAliases, autoScrollEnabled])
+  }, [segments, speakerAliases, autoScrollEnabled, showStartPage])
 
   useEffect(() => {
     if (!status.running || !status.startedAt) return
@@ -548,6 +562,11 @@ export function useAppState() {
     return [minutes, seconds].map((value) => String(value).padStart(2, '0')).join(':')
   }, [now, sessionStartedAt, status.paused, status.running, status.startedAt])
 
+  const addWebSpeechLog = (level: DebugLogEntry['level'], message: string) => {
+    const entry: DebugLogEntry = { id: crypto.randomUUID(), timestampIso: new Date().toISOString(), source: 'main', level, message }
+    setDebugLog((previous) => [entry, ...previous].slice(0, 300))
+  }
+
   const onStart = async (requestedAtMs: number) => {
     if (startPendingRef.current || batchPendingRef.current) return
     startPendingRef.current = true
@@ -568,6 +587,12 @@ export function useAppState() {
         web = new WebSpeechSession({
           language: settingsRef.current.language,
           interimResults: settingsRef.current.transcription.webInterimResults,
+          onRestart: () => {
+            if (!web || webSpeechRef.current !== web) return
+            const sessionId = web.sessionId
+            setSegments((previous) => previous.filter((segment) => segment.sessionId !== sessionId || segment.state !== 'interim'))
+            addWebSpeechLog('warn', 'Web Speech ended unexpectedly. Restarting recognition in the same recording.')
+          },
           onSegment: (segment) => {
             if (webSpeechRef.current !== web) return
             if (!webStarted) pendingSegments.push(segment)
@@ -579,6 +604,7 @@ export function useAppState() {
             setStatus((previous) => ({ ...previous, running: false, paused: false }))
             void window.transcriptApi.stop().catch(() => {})
             if (error) {
+              addWebSpeechLog('error', error)
               setLastError({ code: 'WEB_SPEECH_ENDED', message: error })
               setToast({ message: error, variant: 'error', persistent: true })
             }
@@ -586,6 +612,8 @@ export function useAppState() {
         })
         webSpeechRef.current = web
       }
+      clearTranscript()
+      setSessionStartedAt(null)
       const next = await window.transcriptApi.start(provider ?? 'azure', mode, requestedAtMs)
       if (web) {
         reservedWeb = true
@@ -663,6 +691,46 @@ export function useAppState() {
     }
   }
 
+  const stopForSilenceRef = useRef(onStop)
+  stopForSilenceRef.current = onStop
+  const { stopOnSilence, silenceMinutes } = settings.autoStart
+  const restartSilenceTimer = () => {
+    if (status.startedAt) audioActivityRef.current = { startedAt: status.startedAt, at: performance.now() }
+    setSilenceCountdown(null)
+  }
+
+  useEffect(() => {
+    setSilenceCountdown(null)
+    if (!stopOnSilence || !status.running || status.paused || !status.startedAt || webSpeechRef.current) return
+    const startedAt = status.startedAt
+    audioActivityRef.current = { startedAt, at: performance.now() }
+    let warnedActivity: { startedAt: string; at: number } | null = null
+    let deadline = 0
+    const interval = window.setInterval(() => {
+      const activity = audioActivityRef.current
+      if (activity?.startedAt !== startedAt) return
+      const now = performance.now()
+      if (now - activity.at < silenceMinutes * 60_000) return
+      if (warnedActivity !== activity) {
+        warnedActivity = activity
+        deadline = now + 60_000
+        void window.transcriptApi.showSilenceWarning().catch((error) => {
+          setToast({ message: errorDetail(error, 'Could not show the silence warning.'), variant: 'error', persistent: true })
+          audioActivityRef.current = { startedAt, at: performance.now() }
+          setSilenceCountdown(null)
+        })
+      }
+      const remaining = Math.ceil((deadline - now) / 1000)
+      if (remaining > 0) setSilenceCountdown(remaining)
+      else {
+        window.clearInterval(interval)
+        setSilenceCountdown(null)
+        void stopForSilenceRef.current()
+      }
+    }, 1000)
+    return () => window.clearInterval(interval)
+  }, [stopOnSilence, silenceMinutes, status.running, status.paused, status.startedAt])
+
   const onToggleRecording = async () => {
     const requestedAtMs = Date.now()
     if (status.running) {
@@ -689,17 +757,15 @@ export function useAppState() {
     }
     // A new recording may have started (and even stopped) while IPC was pending.
     if (recordingGenerationRef.current !== generation) return
-    setSegments([])
-    setBatchTranscriptStart(undefined)
-    setSpeakerAliases({})
+    clearTranscript()
     setSessionStartedAt(null)
     setStatus((prev) => ({ ...prev, startedAt: undefined }))
-    autoScrollEnabledRef.current = true
-    setAutoScrollEnabled(true)
   }
 
-  const setIdleSettings: React.Dispatch<React.SetStateAction<UserSettings>> = (update) => {
-    const next = typeof update === 'function' ? update(settingsRef.current) : update
+  const setIdleSettings = (update: React.SetStateAction<UserSettings>, azure?: AzureConfig) => {
+    const previous = settingsRef.current
+    const updated = typeof update === 'function' ? update(previous) : update
+    const next = { ...updated, fileTranscription: updated.fileTranscription ?? fileTranscriptionDefaults(previous) }
     settingsRef.current = next
     setSettings(next)
     const revision = ++settingsSaveRevisionRef.current
@@ -708,12 +774,18 @@ export function useAppState() {
     // Serialize full snapshots so rapid changes cannot overwrite one another.
     settingsSaveQueueRef.current = settingsSaveQueueRef.current.then(async () => {
       try {
+        if (azure) {
+          const savedConfig = await window.transcriptApi.saveConfig(azure)
+          setConfigState(savedConfig)
+          setConfigDraft(toConfigDraft(savedConfig.config))
+        }
         const saved = normalizeUserSettings(await window.transcriptApi.saveSettings(next))
         if (revision === settingsSaveRevisionRef.current) {
           if (settingsRef.current === next) {
             settingsRef.current = saved
             setSettings(saved)
           }
+
           const previousError = settingsSaveErrorRef.current
           if (previousError) setToast((previous) => previous?.message === previousError ? null : previous)
           settingsSaveErrorRef.current = null
@@ -734,6 +806,26 @@ export function useAppState() {
     })
   }
 
+  const setLiveModel = (model: SpeechModel) => {
+    const current = configState?.config ?? null
+    const azure = isAzureSpeechModel(model) && model !== (current?.model ?? 'standard')
+      ? { ...(current ?? { endpoint: '', region: '', speechKey: '', interimResults: true }), model }
+      : undefined
+    setIdleSettings((previous) => ({
+      ...previous, transcription: {
+        ...previous.transcription,
+        provider: isAzureSpeechModel(model) ? undefined : model
+      }
+    }), azure)
+  }
+
+  const setLiveAzureInterim = (interimResults: boolean) => setIdleSettings((previous) => previous,
+    { ...(configState?.config ?? { endpoint: '', region: '', speechKey: '' }), interimResults })
+
+  const setFileDefaults = (update: Partial<FileTranscriptionSettings>) => setIdleSettings((previous) => ({
+    ...previous, fileTranscription: { ...fileTranscriptionDefaults(previous), ...update }
+  }))
+
   // Einziger Speichern-Pfad fuer den Settings-Dialog: der Button im
   // Dialog-Footer schreibt beide Abschnitte (Azure-Konfiguration inkl. Proxy
   // und Benutzereinstellungen). Die Benutzereinstellungen werden zuerst
@@ -741,7 +833,7 @@ export function useAppState() {
   // automatischen Oeffnen nach einem Start ohne Konfiguration) die
   // Sprache-/Geraete-Auswahl nicht verwerft.
   const onSaveAll = async () => {
-    if (isSavingSettings || isStarting || batchPendingRef.current || (draftModel === 'unsupported' && draftFeatures.mode === 'live')) return
+    if (isSavingSettings || isStarting || batchPendingRef.current) return
     setIsSavingSettings(true)
     const snapshot = dialogSettings
     const revision = settingsSaveRevisionRef.current
@@ -860,7 +952,7 @@ export function useAppState() {
       }
       // Aktuelle Draft-Werte (auch ungespeicherte Änderungen) testen.
       const payload = kind === 'native'
-        ? { provider: model, language: fileModel ? settingsRef.current.language : dialogSettings.language }
+        ? { provider: model, language: fileModel ? fileTranscriptionDefaults(settingsRef.current).language : dialogSettings.language }
         : {
         ...draftToConfig(configDraft),
         language: dialogSettings.language,
@@ -1025,7 +1117,14 @@ export function useAppState() {
   }
 
   const onTranscribeBatchAudio = async () => {
-    if (!canUseBatchAudio()) return
+    if (!canUseBatchAudio() || settingsSaveFailed) return
+    const batchModel = fileTranscriptionDefaults(settingsRef.current).model
+    const reportBatchConfigurationError = (message: string) => {
+      const entry: DebugLogEntry = { id: crypto.randomUUID(), timestampIso: new Date().toISOString(),
+        source: 'ipc', level: 'error', message }
+      setDebugLog((previous) => [entry, ...previous].slice(0, 300))
+      setToast({ message, variant: 'error', persistent: true })
+    }
     let tracks
     try {
       tracks = batchTracks(batchAudioSlots)
@@ -1038,8 +1137,13 @@ export function useAppState() {
     const provider = batchModel === 'windows-sapi' ? batchModel : 'azure'
     const model = isAzureSpeechModel(batchModel) ? batchModel : undefined
     if (model) {
-      if (!isConfigComplete(configState?.config ?? null, true)) {
-        setToast({ message: 'Configure the Azure endpoint, region and speech key in Settings before transcribing. Local recording does not require credentials.', variant: 'error', persistent: true })
+      const azure = configState?.config
+      if (!azure?.region.trim() || !azure.speechKey.trim()) {
+        reportBatchConfigurationError('Configure the Azure region and speech key in Settings before transcribing. Local recording does not require credentials.')
+        return
+      }
+      if (!isBatchSpeechEndpoint(azure.batchEndpoint?.trim() || azure.endpoint, model)) {
+        reportBatchConfigurationError('In Settings > Azure > File transcription endpoint, enter your resource endpoint, for example https://<resource>.cognitiveservices.azure.com.')
         return
       }
       const files = tracks.map(({ source, path }) => `${source === 'mic' ? 'Microphone' : 'Speaker'}: ${path}`).join('\n')
@@ -1052,10 +1156,13 @@ export function useAppState() {
     try {
       const result = await window.transcriptApi.transcribeBatchAudio(tracks, provider, model)
       const finals = result.filter((segment) => segment.state === 'final' && segment.text.trim())
-      if (!finals.length) throw new Error('No speech was recognized. The selected audio and previous transcript are unchanged.')
+      if (!finals.length) throw new Error(provider === 'windows-sapi'
+        ? 'Windows SAPI recognized no speech. Check the selected language and listen to the WAV. See Debug log for input level and rejected speech. Your files and previous transcript are unchanged.'
+        : 'No speech was recognized. The selected audio and previous transcript are unchanged.')
       if (recordingGenerationRef.current !== generation) throw new Error('A recording started while transcription was in progress. The selected audio is still available.')
       const startedAt = earliestTrackStart(tracks)
       setSegments(finals)
+      setShowHome(false)
       setBatchTranscriptStart(startedAt)
       setSpeakerAliases({})
       autoScrollEnabledRef.current = true
@@ -1182,15 +1289,17 @@ export function useAppState() {
     isLoadingInitialData,
     isStarting,
     batchAction,
-    batchAudioOpen,
-    setBatchAudioOpen,
+    showStartPage,
+    setShowHome,
     batchAudioSlots,
-    batchModel,
-    setBatchModel,
+    fileDefaults,
+    setFileDefaults,
+    setLiveModel,
+    setLiveAzureInterim,
     onPickBatchAudio,
     onClearBatchAudio,
     onChangeBatchStart,
-    onCheckBatchModel: () => batchModel === 'windows-sapi' ? onTestConnectivity(batchModel) : Promise.resolve(),
+    onCheckBatchModel: () => fileDefaults.model === 'windows-sapi' ? onTestConnectivity('windows-sapi') : Promise.resolve(),
     onTranscribeBatchAudio,
     knownSpeakers,
     lastError,
@@ -1233,6 +1342,8 @@ export function useAppState() {
       if (returnToSettingsRef.current) setSettingsDialogOpen(true)
     },
     onToggleRecording,
+    silenceCountdown,
+    restartSilenceTimer,
     onPause,
     onResume,
     runtimeIssue,

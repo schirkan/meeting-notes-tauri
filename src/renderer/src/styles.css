@@ -100,22 +100,48 @@ summary::-webkit-details-marker { display: none; }
 .speaker-editor input:focus-visible { outline: none; }
 .floating-follow { position: absolute; bottom: 16px; right: 24px; z-index: 2; background: #363044; color: #d4c5ff; border-color: #655282; box-shadow: 0 5px 20px #00000040; }
 .floating-follow:hover { background: #4a3d62; }
-.idle-audio-panel { width: 100%; max-width: 500px; padding: 28px; margin: auto; min-height: 0; overflow: auto; flex-shrink: 1; transform: translateX(150px); }
-@media (max-width: 1100px) { .idle-audio-panel { transform: none; } }
-.idle-audio-panel + .transcript-list { display: none; }
-.idle-audio-panel h2 { font-size: 16px; }
-.batch-audio-controls { padding: 12px; display: grid; gap: 8px; flex-shrink: 0; border-bottom: 1px solid var(--line); }
-.batch-audio-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.meeting-mode-controls { align-items: end; }
-.meeting-mode-controls label, .batch-model-field { display: grid; gap: 4px; justify-self: start; }
-.meeting-mode-controls select { min-width: 120px; }
-.meeting-live-model { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.meeting-live-model button { min-height: 24px; padding: 3px 7px; }
-#batch-audio { max-height: 65%; overflow: auto; }
-.batch-audio-slots { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 8px; }
-.batch-audio-slots fieldset { margin: 0; min-width: 0; border: 1px solid var(--line); border-radius: 7px; display: grid; align-content: start; gap: 6px; }
-.batch-audio-slots input { width: 100%; }
-.batch-audio-controls summary { color: var(--muted); cursor: pointer; }
+.home-scroll { flex: 1; min-height: 0; overflow: auto; display: flex; padding: 24px; background: var(--surface); }
+.home-layout { width: 100%; max-width: 820px; margin: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.home-workflow { min-width: 0; padding: 8px clamp(16px, 4vw, 42px); display: grid; align-content: start; gap: 12px; }
+.home-workflow + .home-workflow { border-left: 1px solid #414957; }
+.home-workflow header h2 { margin-bottom: 4px; font-size: 21px; }
+.home-workflow h3, .home-workflow .settings h2 { margin: 0; font-size: 13px; font-weight: 600; }
+.home-workflow .settings-block { margin: 0; gap: 7px; }
+.home-workflow .panel-header { margin-bottom: 6px; }
+.home-workflow fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.home-mode { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; background: var(--bg); border-radius: 8px; }
+.home-workflow .home-mode { padding: 3px; border: 1px solid var(--line); }
+.home-mode label { position: relative; cursor: pointer; }
+.home-mode input { position: absolute; inset: 0; min-height: 0; height: 100%; margin: 0; opacity: 0; cursor: inherit; }
+.home-mode input:disabled { opacity: 0; }
+.home-mode span { display: grid; place-items: center; min-height: 32px; padding: 4px; text-align: center; border-radius: 5px; }
+.home-mode input:checked + span, .home-navigation button[aria-pressed="true"] { color: #17141e; background: var(--accent); font-weight: 600; }
+.home-mode input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.home-mode:disabled { opacity: .6; }
+.home-record-options, .home-live, .home-fields, .home-files { display: grid; gap: 7px; }
+.home-record-options > * { grid-area: 1 / 1; }
+.home-live { gap: 12px; }
+.home-live[inert] { visibility: hidden; }
+.home-live > button, .home-batch-start { place-self: start end; }
+.home-fields .checkbox-field { min-height: 24px; }
+.home-files { gap: 12px; }
+.home-files fieldset { display: grid; gap: 5px; }
+.home-files legend { padding: 0; margin-bottom: 5px; color: var(--muted); font-size: 11px; }
+.home-file-picker, .home-actions, .home-navigation { display: flex; align-items: center; gap: 8px; }
+.home-file-picker > button { min-height: 36px; }
+.home-file-path { position: relative; flex: 1; min-width: 0; }
+.home-file-path input { user-select: text; }
+.home-file-path:has(button) input { padding-right: 36px; }
+.home-file-path button { position: absolute; inset: 4px 4px 4px auto; width: 28px; min-height: 0; padding: 0; border: 0; background: transparent; }
+.home-actions { justify-content: flex-end; flex-wrap: wrap; }
+.home-navigation { gap: 4px; }
+.silence-warning { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 40; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: max-content; max-width: calc(100% - 32px); padding: 12px; background: var(--bg); border: 1px solid var(--accent); border-radius: 8px; }
+@media (max-width: 650px) {
+  .home-scroll { padding: 20px 16px; }
+  .home-layout { max-width: 470px; grid-template-columns: minmax(0, 1fr); }
+  .home-workflow { padding: 8px; }
+  .home-workflow + .home-workflow { margin-top: 18px; padding-top: 22px; border-left: 0; border-top: 1px solid #414957; }
+}
 .empty { color: var(--muted); padding: 24px 12px; margin: 0; }
 .console-inspector { padding: 14px; border-left: 1px solid var(--line); min-height: 0; overflow-y: auto; }
 .panel-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
@@ -247,6 +273,7 @@ input[type="checkbox"] { width: 14px; height: 14px; min-height: 14px; padding: 0
 }
 @media (max-width: 500px) {
   .console-header { padding: 0 10px; gap: 2px; }
+  .home-navigation button { padding-inline: 5px; }
   .live-badge time { font-size: 11px; }
   .toolbar-actions > button { width: 28px; min-width: 28px; min-height: 28px; padding: 5px; }
   .recording-actions button { gap: 0; }
@@ -263,7 +290,6 @@ input[type="checkbox"] { width: 14px; height: 14px; min-height: 14px; padding: 0
   .settings-dialog .settings-block, .settings-dialog .proxy-settings-grid { grid-template-columns: minmax(0, 1fr); }
   .settings-dialog-footer-content { grid-template-columns: minmax(0, 1fr); }
   .settings-dialog-footer-actions { justify-content: flex-end; max-width: none; flex-wrap: wrap; }
-  .idle-audio-panel { padding: 24px; }
   .about-content { gap: 16px; }
   .about-content img { width: 96px; height: 96px; }
   .debug-summary { padding: 0 10px; }

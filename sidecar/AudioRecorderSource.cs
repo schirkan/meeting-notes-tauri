@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
@@ -41,6 +42,7 @@ internal sealed class AudioRecorderSource : IDisposable
     private bool _engineMode;
     private bool _disposed;
     private bool _resamplerDiscontinuity;
+    private long? _lastAudioActivity;
     internal event Action<Exception>? CaptureFailed;
 
     private AudioRecorderSource(
@@ -236,18 +238,34 @@ internal sealed class AudioRecorderSource : IDisposable
                         packetTimestamp = null;
                     _resamplerDiscontinuity = false;
                 }
+                ReportAudioActivity(pcm, capturedAtTicks);
                 _onFrame(pcm, capturedAtTicks, captureLatencyMs, packetTimestamp);
                 return;
             }
 
             // Engine-Modus: das Zielformat soll direkt aus der Engine kommen.
             // Der Span gilt nur fuer die Dauer des Callbacks, deshalb kopieren.
+            if ((flags & AudioClientBufferFlags.Silent) == 0) ReportAudioActivity(buffer, capturedAtTicks);
             _onFrame(buffer.ToArray(), capturedAtTicks, captureLatencyMs, packetTimestamp);
         }
         catch (Exception ex)
         {
             if (CaptureFailed is { } onFailure) onFailure(ex);
             else Logger.Error("SIDECAR_UNAVAILABLE", $"Recording error ({_label}): {ex.Message}");
+        }
+    }
+
+    private void ReportAudioActivity(ReadOnlySpan<byte> pcm, long capturedAtTicks)
+    {
+        if (_targetFormat.BitsPerSample != 16 || _targetFormat.Encoding != WaveFormatEncoding.Pcm
+            || (_lastAudioActivity is long last && capturedAtTicks - last < Stopwatch.Frequency)) return;
+        // A floor of roughly -50 dBFS ignores very low background noise.
+        foreach (var sample in MemoryMarshal.Cast<byte, short>(pcm))
+        {
+            if (sample is > -104 and < 104) continue;
+            _lastAudioActivity = capturedAtTicks;
+            Logger.Event("audio_activity", true);
+            break;
         }
     }
 

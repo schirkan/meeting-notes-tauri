@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { TranscriptSegment } from '@shared/transcript-contract'
 import { formatTranscriptSource, getSpeakerClassForIdentity, getSpeakerIdentity, hasIdentifiedSpeaker } from '../speaker-utils'
 import { Icon } from './Icon'
@@ -11,8 +11,6 @@ type TranscriptPanelProps = {
   setSpeakerAliases: React.Dispatch<React.SetStateAction<Record<string, string>>>
   following: boolean
   onFollow: () => void
-  idleControls?: ReactNode
-  emptyContent?: ReactNode
 }
 
 function TranscriptRow({ segment, getSpeakerLabel, speakerAliases, setSpeakerAliases }: Pick<TranscriptPanelProps,
@@ -61,9 +59,8 @@ function TranscriptRow({ segment, getSpeakerLabel, speakerAliases, setSpeakerAli
 export function TranscriptPanel(props: TranscriptPanelProps) {
   return (
     <section className="console-transcript transcript-panel" aria-label="Transcript">
-      {props.idleControls}
       {props.segments.length > 0 && <div className="console-column-labels"><span>TIME / SPEAKER</span><span>TRANSCRIPT</span></div>}
-      {props.segments.length === 0 && (props.emptyContent ?? <p className="empty">No data yet.</p>)}
+      {props.segments.length === 0 && <p className="empty">No data yet.</p>}
       <ul ref={props.transcriptListRef} className="transcript-list" tabIndex={0} aria-label="Transcript entries">
         {props.segments.map((segment) => <TranscriptRow key={segment.id} segment={segment} {...props} />)}
       </ul>

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import type { TranscriptStatus } from '@shared/transcript-contract'
 import { Icon } from './Icon'
 
@@ -10,13 +10,14 @@ type HeroStatusCardProps = {
   isStarting: boolean
   batch: boolean
   settingsDisabled: boolean
-  startDisabled: boolean
+  navigation: ReactNode
   pauseSupported: boolean
   canCopyTranscript: boolean
   canResetTranscript: boolean
   durationLabel: string
   startedAtLabel: string
   speakersOpen: boolean
+  speakersDisabled: boolean
   debugVisible: boolean
   onToggleSpeakers: () => void
   onToggleDebug: () => void
@@ -54,32 +55,30 @@ export function HeroStatusCard(props: HeroStatusCardProps) {
   }, [])
   const closeMenu = () => { if (menuRef.current) menuRef.current.open = false }
   const { status, isStarting } = props
-  const recordLabel = status.running ? (props.batch ? 'Stop recording' : 'Stop')
-    : isStarting ? 'Starting …' : props.batch ? 'Start recording' : 'Start'
+  const recordLabel = props.batch ? 'Stop recording' : 'Stop'
   const pauseLabel = status.paused ? 'Resume' : 'Pause'
   const speakerLabel = `Speaker mapping ${props.speakersOpen ? 'hide' : 'show'}`
 
   return (
     <header className="console-header">
-      <div className={`toolbar-actions recording-actions hero-controls${props.batch ? ' batch-recording-actions' : ''}`}>
+      {status.running ? <div className={`toolbar-actions recording-actions hero-controls${props.batch ? ' batch-recording-actions' : ''}`}>
         {!props.batch && <button type="button" onClick={() => void (status.paused ? props.onResume() : props.onPause())}
           disabled={!status.running || !props.pauseSupported || isStarting} aria-label={pauseLabel}
           title={props.pauseSupported ? pauseLabel : 'Pause is not supported by this model'}>
           <Icon name={status.paused ? 'play' : 'pause'} /><span>{pauseLabel}</span>
         </button>}
-        <button className={status.running ? 'stop-button' : 'start-button primary-button'} type="button"
+        <button className="stop-button" type="button"
           onClick={() => void props.onToggleRecording()}
-          disabled={!status.running && (isStarting || props.startDisabled || !!props.runtimeIssue)}
           aria-label={recordLabel} title={recordLabel}>
-          <Icon name={status.running ? 'stop' : 'play'} /><span>{recordLabel}</span>
+          <Icon name="stop" /><span>{recordLabel}</span>
         </button>
-      </div>
+      </div> : <div className="header-navigation">{props.navigation}</div>}
       <div className="status-center">
-        <span className={`live-badge ${status.paused ? 'paused' : status.running ? '' : 'stopped'}`}
+        {props.durationLabel !== '00:00' && <span className={`live-badge ${status.paused ? 'paused' : status.running ? '' : 'stopped'}`}
           aria-label={`${props.statusLabel}: ${props.durationLabel}`}
           title={`${props.statusLabel} · ${props.runtimeIssue ?? props.statusDescription}`}>
           <span className="dot" /><time title={`Started at: ${props.startedAtLabel}`}>{props.durationLabel}</time>
-        </span>
+        </span>}
       </div>
       <div className="toolbar-actions utility-actions">
         <button type="button" onClick={() => void props.onCopyTranscript()} disabled={!props.canCopyTranscript}
@@ -88,7 +87,7 @@ export function HeroStatusCard(props: HeroStatusCardProps) {
           aria-label="Clear transcript" title={status.running ? 'Stop the transcription to clear the transcript' : 'Clear transcript'}>
           <Icon name="trash" /><span>Clear</span>
         </button>
-        <button type="button" onClick={props.onToggleSpeakers} aria-expanded={props.speakersOpen}
+        <button type="button" onClick={props.onToggleSpeakers} disabled={props.speakersDisabled} aria-expanded={props.speakersOpen}
           aria-controls="console-speakers" aria-label={speakerLabel} title={speakerLabel}><Icon name="users" /><span>Speakers</span></button>
         <button className="icon-button" type="button" onClick={props.onOpenSettingsDialog} disabled={props.settingsDisabled}
           aria-label="Open settings dialog" title="Settings"><Icon name="settings" /></button>

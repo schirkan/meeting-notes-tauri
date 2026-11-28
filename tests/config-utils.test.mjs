@@ -338,6 +338,20 @@ test('toConfigDraft maps null config to empty defaults', () => {
   assert.equal(draft.proxyPort, '')
 })
 
+test('file transcription endpoint is separate from the regional live endpoint', () => {
+  const live = 'wss://westeurope.stt.speech.microsoft.com/speech/universal/v2'
+  const files = 'https://speech-resource.cognitiveservices.azure.com'
+  const draft = utils.toConfigDraft({ endpoint: live, batchEndpoint: files, region: 'westeurope', speechKey: 'test', interimResults: true })
+  assert.equal(utils.draftToConfig(draft).endpoint, live)
+  assert.equal(utils.draftToConfig(draft).batchEndpoint, files)
+  for (const model of ['standard', 'mai-transcribe-2-streaming']) {
+    assert.equal(utils.isBatchSpeechEndpoint(files, model), true)
+    assert.equal(utils.isBatchSpeechEndpoint(live, model), false)
+    assert.equal(utils.isBatchSpeechEndpoint(`${files}/speech`, model), false)
+  }
+  assert.throws(() => utils.draftToConfig({ ...draft, batchEndpoint: live }), /Azure Speech resource endpoint/)
+})
+
 test('toConfigDraft maps existing config to draft', () => {
   const draft = utils.toConfigDraft({
     endpoint: 'wss://e', region: 'r', speechKey: 'k', interimResults: false,
@@ -353,22 +367,22 @@ test('toConfigDraft maps existing config to draft', () => {
 
 test('draftToConfig throws on missing required fields', () => {
   assert.throws(() => utils.draftToConfig({
-    model: 'standard', endpoint: '', region: 'r', speechKey: 'k', interimResults: true,
+    model: 'standard', endpoint: '', batchEndpoint: '', region: 'r', speechKey: 'k', interimResults: true,
     proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
   }), /endpoint/i)
   assert.throws(() => utils.draftToConfig({
-    model: 'standard', endpoint: 'e', region: '', speechKey: 'k', interimResults: true,
+    model: 'standard', endpoint: 'e', batchEndpoint: '', region: '', speechKey: 'k', interimResults: true,
     proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
   }), /region/i)
   assert.throws(() => utils.draftToConfig({
-    model: 'standard', endpoint: 'e', region: 'r', speechKey: '', interimResults: true,
+    model: 'standard', endpoint: 'e', batchEndpoint: '', region: 'r', speechKey: '', interimResults: true,
     proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
   }), /speech key/i)
 })
 
 test('draftToConfig produces config without proxy when the proxy host is blank', () => {
   const c = utils.draftToConfig({
-    model: 'standard', endpoint: 'wss://e', region: 'r', speechKey: 'k', interimResults: false,
+    model: 'standard', endpoint: 'wss://e', batchEndpoint: '', region: 'r', speechKey: 'k', interimResults: false,
     proxyHost: '', proxyPort: '', proxyUsername: '', proxyPassword: ''
   })
   assert.equal(c.endpoint, 'wss://e')
@@ -394,15 +408,15 @@ test('MAI requires region and key but not the Standard endpoint', () => {
 
 test('draftToConfig requires a valid port when a proxy host is set', () => {
   assert.throws(() => utils.draftToConfig({
-    model: 'standard', endpoint: 'e', region: 'r', speechKey: 'k', interimResults: true,
+    model: 'standard', endpoint: 'e', batchEndpoint: '', region: 'r', speechKey: 'k', interimResults: true,
     proxyHost: 'h', proxyPort: '', proxyUsername: '', proxyPassword: ''
   }), /port/i)
   assert.throws(() => utils.draftToConfig({
-    model: 'standard', endpoint: 'e', region: 'r', speechKey: 'k', interimResults: true,
+    model: 'standard', endpoint: 'e', batchEndpoint: '', region: 'r', speechKey: 'k', interimResults: true,
     proxyHost: 'h', proxyPort: '0', proxyUsername: '', proxyPassword: ''
   }), /port/i)
   assert.throws(() => utils.draftToConfig({
-    model: 'standard', endpoint: 'e', region: 'r', speechKey: 'k', interimResults: true,
+    model: 'standard', endpoint: 'e', batchEndpoint: '', region: 'r', speechKey: 'k', interimResults: true,
     proxyHost: 'h', proxyPort: 'abc', proxyUsername: '', proxyPassword: ''
   }), /port/i)
 })

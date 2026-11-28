@@ -1,15 +1,18 @@
-import { BATCH_MODELS, type BatchModel } from '@shared/speech-models'
+import type { FileTranscriptionSettings } from '@shared/config-contract'
+import { BATCH_MODELS } from '@shared/speech-models'
 import type { BatchAudioSource } from '@shared/transcript-contract'
-import { BATCH_SOURCES, type BatchAudioSlots } from '../batch-audio'
+import { BATCH_SOURCES, localTrackStart, type BatchAudioSlots } from '../batch-audio'
+import { Icon } from './Icon'
+import { SpeechLanguageOptions } from './SpeechLanguageOptions'
 
 const sourceLabels = { mic: 'Microphone', speaker: 'Speaker' }
 
 type BatchAudioPanelProps = {
   slots: BatchAudioSlots
-  model: BatchModel
+  defaults: FileTranscriptionSettings
   action: 'pick' | 'transcribe' | null
   disabled: boolean
-  onModelChange: (model: BatchModel) => void
+  onDefaultsChange: (update: Partial<FileTranscriptionSettings>) => void
   onPick: (source: BatchAudioSource) => Promise<void>
   onClear: (source: BatchAudioSource) => void
   onChangeStart: (source: BatchAudioSource, startedAt: string) => void
@@ -18,52 +21,69 @@ type BatchAudioPanelProps = {
 }
 
 export function BatchAudioPanel(props: BatchAudioPanelProps) {
-  const { slots, model, action, disabled } = props
+  const { slots, defaults, action, disabled } = props
+  const { model } = defaults
   const native = model === 'windows-sapi'
+  const hasFiles = Boolean(slots.mic || slots.speaker)
   return (
-    <section id="batch-audio" className="batch-audio-controls" aria-label="Batch transcription">
-      <label className="batch-model-field">
-        <span className="field-caption">File transcription model</span>
-        <select value={model} onChange={(event) => props.onModelChange(event.currentTarget.value as BatchModel)} disabled={disabled}>
-          {Object.entries(BATCH_MODELS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-        </select>
-      </label>
-      <p className="meta">Assign at least one WAV and a start time for each. Start times describe the first audio sample, not the first spoken words.</p>
-      <div className="batch-audio-slots">
+    <section className="home-workflow" aria-labelledby="file-workflow-heading">
+      <header><h2 id="file-workflow-heading">Transcribe audio files</h2><p className="meta">Create a transcript from existing WAV recordings.</p></header>
+      <section className="home-files" aria-labelledby="audio-files-heading">
+        <h3 id="audio-files-heading">Audio files</h3>
         {BATCH_SOURCES.map((source) => {
           const label = sourceLabels[source]
           const slot = slots[source]
           return (
             <fieldset key={source} disabled={disabled}>
-              <legend>{label} WAV</legend>
-              <div className="batch-audio-actions">
-                <button className="secondary-button" type="button" onClick={() => void props.onPick(source)}>Choose {label.toLowerCase()} WAV</button>
-                {slot && <button className="secondary-button" type="button" onClick={() => props.onClear(source)}>Remove {label.toLowerCase()} WAV</button>}
+              <legend className="field-caption"><Icon name={source} />{label} WAV</legend>
+              <div className="home-file-picker">
+                <div className="home-file-path">
+                  <input readOnly aria-label={`${label} WAV file path`} value={slot?.path ?? ''} title={slot?.path} placeholder="No WAV selected" />
+                  {slot && <button type="button" aria-label={`Remove ${label.toLowerCase()} WAV`} title="Clear selection (keeps the file)" onClick={() => props.onClear(source)}><Icon name="close" /></button>}
+                </div>
+                <button type="button" aria-label={`Select file for ${label.toLowerCase()} WAV`} onClick={() => void props.onPick(source)}>Select file</button>
               </div>
-              {slot && <>
-                <p className="meta-path">{slot.path}</p>
-                <label>
-                  <span className="field-caption">{label} start time</span>
-                  <input type="text" required value={slot.startedAt} placeholder="2026-11-27T16:00:00Z"
-                    aria-describedby={`batch-${source}-time-hint`}
-                    onChange={(event) => props.onChangeStart(source, event.currentTarget.value)} />
-                </label>
-                <p className="meta" id={`batch-${source}-time-hint`}>
-                  {slot.estimated ? 'Estimated from the file’s timestamp. ' : ''}
-                  {slot.startedAt ? 'ISO date and time with a UTC offset or Z.' : 'Start time unknown. Enter an ISO date and time with a UTC offset or Z.'}
-                </p>
-              </>}
+              <label>
+                {label} start time
+                <input type="datetime-local" step="any" required disabled={!slot} value={localTrackStart(slot?.startedAt ?? '')}
+                  title={slot?.estimated ? 'Estimated from the file timestamp. Adjust to the first audio sample if needed.' : 'Start time of the first audio sample (local time).'}
+                  onChange={(event) => props.onChangeStart(source, event.currentTarget.value)} />
+              </label>
             </fieldset>
           )
         })}
+      </section>
+      <div className="home-fields">
+        <h3 id="file-model-heading">Transcription model</h3>
+        <select aria-labelledby="file-model-heading" value={model} disabled={disabled} onChange={(event) => {
+          const value = event.currentTarget.value
+          if (value === 'standard' || value === 'mai-transcribe-2-streaming' || value === 'windows-sapi') props.onDefaultsChange({ model: value })
+        }}>
+          {Object.entries(BATCH_MODELS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+        </select>
+        <label>Language
+          <select value={!native && defaults.autoLanguageDetection ? 'auto' : defaults.language} disabled={disabled}
+            title={native ? 'Choose a language with an installed Windows speech recognizer.' : undefined} onChange={(event) => {
+              const language = event.currentTarget.value
+              if (language === 'auto') props.onDefaultsChange({ autoLanguageDetection: true })
+              else props.onDefaultsChange({ language, ...(native ? {} : { autoLanguageDetection: false }) })
+            }}>
+            <option value="auto" disabled={native}>Auto-detect</option>
+            <SpeechLanguageOptions language={defaults.language} />
+          </select>
+        </label>
+        <label className="checkbox-field" title={native ? 'Windows SAPI does not support speaker recognition' : undefined}>
+          <input type="checkbox" checked={!native && defaults.diarization} disabled={disabled || native}
+            onChange={(event) => props.onDefaultsChange({ diarization: event.currentTarget.checked })} />Speaker recognition
+        </label>
       </div>
-      {!native && <p className="meta">Azure receives only the WAVs listed above, after you confirm.</p>}
-      <div className="batch-audio-actions">
-        <button className="secondary-button" type="button" onClick={() => void props.onTranscribe()}
-          disabled={disabled || (!slots.mic && !slots.speaker)}>
+      <div className="home-actions">
+        {!hasFiles && <span className="meta" id="transcribe-hint">Select at least one WAV to continue.</span>}
+        {native && <button type="button" onClick={() => void props.onCheckModel()} disabled={disabled}>Check model availability</button>}
+        <button className="primary-button" type="button" onClick={() => void props.onTranscribe()}
+          aria-describedby={!hasFiles ? 'transcribe-hint' : undefined} disabled={disabled || !hasFiles}>
           {action === 'transcribe' ? 'Transcribing…' : 'Transcribe'}
         </button>
-        {native && <button className="secondary-button" type="button" onClick={() => void props.onCheckModel()} disabled={disabled}>Check model availability</button>}
       </div>
     </section>
   )

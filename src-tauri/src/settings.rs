@@ -46,6 +46,8 @@ pub struct AzureConfig {
     pub model: AzureSpeechModel,
     #[serde(default)]
     pub endpoint: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_endpoint: Option<String>,
     pub region: String,
     pub speech_key: String,
     #[serde(default = "default_true")]
@@ -82,6 +84,8 @@ pub struct AzureProxyConfig {
 pub struct UserSettings {
     #[serde(default = "default_language")]
     pub language: String,
+    #[serde(default, deserialize_with = "deserialize_file_transcription", skip_serializing_if = "Option::is_none")]
+    pub file_transcription: Option<FileTranscriptionSettings>,
     #[serde(default)]
     pub devices: DeviceIds,
     #[serde(default)]
@@ -96,6 +100,19 @@ pub struct UserSettings {
     pub auto_start: AutoStartSettings,
     #[serde(default)]
     pub window: WindowSettings,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileTranscriptionSettings {
+    pub model: String,
+    pub language: String,
+    pub auto_language_detection: bool,
+    pub diarization: bool,
+}
+
+fn deserialize_file_transcription<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<FileTranscriptionSettings>, D::Error> {
+    Ok(serde_json::from_value(serde_json::Value::deserialize(d)?).ok())
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -128,6 +145,8 @@ pub struct AutoStartSettings {
     pub processes: Vec<String>,
     /// Automatisch gestartete Aufnahme beim Session-Ende beenden.
     pub auto_stop: bool,
+    pub stop_on_silence: bool,
+    pub silence_minutes: u32,
 }
 
 impl Default for AutoStartSettings {
@@ -136,6 +155,8 @@ impl Default for AutoStartSettings {
             enabled: true,
             processes: Vec::new(),
             auto_stop: true,
+            stop_on_silence: false,
+            silence_minutes: 5,
         }
     }
 }
@@ -481,9 +502,8 @@ pub async fn get_app_config_state() -> Result<AppConfigState, SettingsError> {
 /// Write a Markdown export of the transcript next to the app (or into the
 /// configured folder). Returns the absolute path of the written file.
 pub async fn write_transcript_markdown(markdown: &str) -> Result<PathBuf, SettingsError> {
-    let dir = app_dir()?;
     let user = load_user_settings().await?;
-    let target_dir = markdown_export_dir(&dir, &user.transcript.markdown_export);
+    let target_dir = transcript_output_directory(&user)?;
     tokio::fs::create_dir_all(&target_dir).await?;
     static EXPORT_WRITE_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
     let _guard = EXPORT_WRITE_LOCK.lock().await;
@@ -494,6 +514,10 @@ pub async fn write_transcript_markdown(markdown: &str) -> Result<PathBuf, Settin
     }
     write_atomic(&path, markdown.as_bytes()).await?;
     Ok(path)
+}
+
+pub(crate) fn transcript_output_directory(user: &UserSettings) -> Result<PathBuf, SettingsError> {
+    Ok(markdown_export_dir(&app_dir()?, &user.transcript.markdown_export))
 }
 
 pub const DEFAULT_LANGUAGE: &str = "de-DE";
@@ -519,6 +543,7 @@ impl Default for UserSettings {
 pub fn default_user_settings() -> UserSettings {
     UserSettings {
         language: DEFAULT_LANGUAGE.into(),
+        file_transcription: None,
         devices: DeviceIds::default(),
         transcription: TranscriptionSettings::default(),
         diarization: true,
@@ -537,8 +562,19 @@ pub fn default_app_config() -> AppConfig {
 }
 
 fn normalize_user_settings(mut settings: UserSettings) -> UserSettings {
+    if !(1..=120).contains(&settings.auto_start.silence_minutes) {
+        settings.auto_start.silence_minutes = 5;
+    }
     if !is_valid_bcp47(&settings.language) {
         settings.language = DEFAULT_LANGUAGE.into();
+    }
+    if let Some(file) = settings.file_transcription.as_mut() {
+        if !matches!(file.model.as_str(), "standard" | "mai-transcribe-2-streaming" | "windows-sapi") {
+            file.model = "standard".into();
+        }
+        if !is_valid_bcp47(&file.language) {
+            file.language = DEFAULT_LANGUAGE.into();
+        }
     }
     settings
 }
@@ -551,6 +587,26 @@ fn is_valid_bcp47(lang: &str) -> bool {
         && parts[0].chars().all(|c| c.is_ascii_lowercase())
         && parts[1].len() == 2
         && parts[1].chars().all(|c| c.is_ascii_uppercase())
+}
+
+#[cfg(test)]
+#[test]
+fn file_transcription_defaults_round_trip_independently() {
+    let user = normalize_user_settings(serde_json::from_value(serde_json::json!({
+        "language": "de-DE",
+        "diarization": true,
+        "fileTranscription": {
+            "model": "windows-sapi", "language": "en-GB",
+            "autoLanguageDetection": false, "diarization": false
+        }
+    })).unwrap());
+    let saved = serde_json::to_value(user).unwrap();
+    assert_eq!(saved["language"], "de-DE");
+    assert_eq!(saved["diarization"], true);
+    assert_eq!(saved["fileTranscription"], serde_json::json!({
+        "model": "windows-sapi", "language": "en-GB",
+        "autoLanguageDetection": false, "diarization": false
+    }));
 }
 
 async fn write_atomic(path: &PathBuf, bytes: &[u8]) -> Result<(), SettingsError> {
@@ -713,6 +769,7 @@ mod config_tests {
             azure: Some(AzureConfig {
                 model: AzureSpeechModel::Standard,
                 endpoint: "wss://example.test".into(),
+                batch_endpoint: None,
                 region: "westeurope".into(),
                 speech_key: "key".into(),
                 interim_results: true,

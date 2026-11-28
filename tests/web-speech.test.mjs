@@ -148,18 +148,48 @@ test('requires a specific language and maps synchronous permission failures', as
   assert.deepEqual(instances[0].calls, [['abort']])
 })
 
-test('reports an unexpected native end without restarting', async (t) => {
+test('restarts native recognition in the same session and cancels restart on Stop', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
   const { host, SpeechRecognition, instances } = stubWebView(t)
   host.SpeechRecognition = SpeechRecognition
-  const { session, ended } = capture()
+  let restarts = 0
+  const { session, ended, segments } = capture({ onRestart: () => restarts++ })
   const started = session.start()
   const [recognition] = instances
   recognition.onstart()
   await started
+  recognition.result(0, result('Before restart'))
   recognition.onend()
-  assert.match(ended[0], /ended unexpectedly/)
-  assert.deepEqual(recognition.calls, [['start']])
-  assert.equal(instances.length, 1)
+  assert.equal(restarts, 1)
+  t.mock.timers.tick(500)
+  instances[1].onstart()
+  instances[1].result(0, result('After restart'))
+  assert.equal(segments[0].sessionId, segments[1].sessionId)
+  assert.notEqual(segments[0].id, segments[1].id)
+  instances[1].onend()
+  await session.stop()
+  t.mock.timers.tick(500)
+  assert.equal(instances.length, 2)
+  assert.deepEqual(ended, [])
+})
+
+test('ends the recording after repeated rapid Web Speech drops', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const { host, SpeechRecognition, instances } = stubWebView(t)
+  host.SpeechRecognition = SpeechRecognition
+  const { session, ended } = capture({ onRestart: () => {} })
+  const started = session.start()
+  instances[0].onstart()
+  await started
+  for (let run = 0; run < 3; run++) {
+    instances[run].onend()
+    t.mock.timers.tick(500)
+    instances[run + 1].onstart()
+  }
+  instances[3].onend()
+  t.mock.timers.tick(500)
+  assert.equal(instances.length, 4)
+  assert.match(ended[0], /ended repeatedly/)
 })
 
 test('aborts synchronously and ignores queued native callbacks, including while starting', async (t) => {

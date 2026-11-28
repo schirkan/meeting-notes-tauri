@@ -53,7 +53,7 @@ _Dieser Abschnitt wird von `npm run docs:specs` aus den Spec-Dateien erzeugt._
 | T-203 | Smoke-Test: 48-kHz-Stereo-Input führt zu korrektem 16-kHz-Mono-Output… | Der Stichprobentest ist implementiert (`ResamplingValidation`: 48-kHz-Stereo-Ton → 16-kHz-Mono, Länge, Pegel, Übersteuerung, Drop… |
 | T-501 | Reproduzierbarer WebDriver-End-to-End-Test mit App-Start, `start_reco… | Der Nutzer bestaetigte am 28.11.2026 den Ablauf fuer das Azure Speech SDK. Ein WebDriver-Skript oder ein Laufprotokoll fuer die A… |
 | T-503 | `npm run lint` (sofern konfiguriert) ist grün | kein Lint-Setup im Projekt. |
-| T-513 | Zusaetzlicher Auto-Stop bei Stille gemaess Nutzeranforderung vom 28.1… | Stille-Erkennung, Rueckfrage und Timer sind nicht implementiert. Das bestehende Session-Ende arbeitet weiterhin ueber Metadaten. |
+| T-513 | Stille-Timer mit echten Mikrofon- und Loopback-Quellen bei verborgene… | erfordert interaktive Windows- und Audio-Abnahme. |
 | T-513 | Ein normales Podcast-Playback loest **keinen** Auto-Start aus. | Fuer die Gegenprobe am Zielrechner liegt kein Ergebnis vor. |
 | T-513 | Fenster-/Applikations-Fallback nur bei nachgewiesenem Bedarf ergaenze… | Der Nutzer bestaetigte am 28.11.2026, dass Teams funktioniert. Fuer den bestaetigten Teams-Fall ist kein Fallback noetig; daraus… |
 | T-520 | Kosten-, Qualitaets-, Proxy- und Portable-Nachweise fuer die MAI-Frei… | Der Nutzer hat den Freigabevorbehalt am 28.11.2026 bestaetigt. Die separat abgefragten Nachweise in [T-522](./T-522-mai-transcrib… |

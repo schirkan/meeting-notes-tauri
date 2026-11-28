@@ -38,8 +38,10 @@ Kein stiller Alternativprovider, keine Audioablage und kein Modelldownload. Nach
 WebView2-Fenster, ohne Windows-Umgebungsvariablen zu setzen. **Check model availability** prueft lokal die
 SAPI-Diktatgrammatik bzw. die API-Oberflaeche, nicht Mikrofonberechtigung, Cloud-Verbindung oder Qualitaet.
 
-Web Speech startet nur nach manueller Auswahl, meldet Fehler oder unerwartete Enden sichtbar und startet
-nicht automatisch neu. Der App-Status wird erst nach WebView-Readiness im Renderer angezeigt. Stop und
+Web Speech beginnt nur manuell. Endet die Erkennung ohne Browserfehler, startet sie innerhalb derselben
+Aufnahme erneut und protokolliert den Versuch. Nach drei schnellen Neustarts endet die Aufnahme bei
+erneutem Abbruch mit einem Fehler. Explizite Browserfehler werden angezeigt und protokolliert statt
+automatisch wiederholt. Der App-Status wird erst nach WebView-Readiness im Renderer angezeigt. Stop und
 Quit warten begrenzt auf Finals, danach verwendet Quit den bestehenden Markdown-Export. Beim Wechsel
 der Engine bleibt Azure konfiguriert; es findet kein stiller Start der alten Engine statt.
 

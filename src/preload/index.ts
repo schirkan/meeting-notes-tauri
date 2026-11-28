@@ -100,6 +100,8 @@ const api: TranscriptApi = {
   onSegment: (cb) => subscribe<TranscriptSegment>(TAURI_EVENTS.segment, cb),
   onError: (cb) => subscribe<TranscriptError>(TAURI_EVENTS.error, cb),
   onStatus: (cb) => subscribe<TranscriptStatus>(TAURI_EVENTS.status, cb),
+  onAudioActivity: (cb) => subscribe<string>(TAURI_EVENTS.audioActivity, cb),
+  showSilenceWarning: () => invoke<void>(TAURI_COMMANDS.showSilenceWarning),
   onDebugLog: (cb) => subscribe<DebugLogEntry>(TAURI_EVENTS.debug, cb),
   onMeetingDetected: (cb) =>
     subscribe<MeetingDetected>(TAURI_EVENTS.meetingDetected, cb)

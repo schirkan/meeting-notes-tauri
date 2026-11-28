@@ -13,6 +13,7 @@ export type TranscriptionMode = 'live' | 'batch'
 export interface AzureConfig {
   model?: AzureSpeechModel
   endpoint: string
+  batchEndpoint?: string
   region: string
   speechKey: string
   interimResults: boolean
@@ -55,6 +56,8 @@ export interface AutoStartSettings {
   processes: string[]
   /** End an automatically started recording when the meeting session ends. */
   autoStop: boolean
+  stopOnSilence: boolean
+  silenceMinutes: number
 }
 
 export interface WindowSettings {
@@ -66,6 +69,7 @@ export interface WindowSettings {
 
 export interface UserSettings {
   language: string
+  fileTranscription?: FileTranscriptionSettings
   transcription: TranscriptionSettings
   autoLanguageDetection: boolean
   diarization: boolean
@@ -73,9 +77,24 @@ export interface UserSettings {
     micId: string | null
     speakerLoopbackId: string | null
   }
+
   transcript: TranscriptSettings
   autoStart: AutoStartSettings
   window: WindowSettings
+}
+
+export interface FileTranscriptionSettings {
+  model: Exclude<SpeechModel, 'web-speech'>
+  language: string
+  autoLanguageDetection: boolean
+  diarization: boolean
+}
+
+export function fileTranscriptionDefaults(settings: UserSettings): FileTranscriptionSettings {
+  return settings.fileTranscription ?? {
+    model: 'standard', language: settings.language,
+    autoLanguageDetection: settings.autoLanguageDetection, diarization: settings.diarization
+  }
 }
 
 /** Shape of the single on-disk configuration file. */
@@ -102,7 +121,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   transcript: {
     markdownExport: { enabled: true, path: null }
   },
-  autoStart: { enabled: true, processes: [], autoStop: true },
+  autoStart: { enabled: true, processes: [], autoStop: true, stopOnSilence: false, silenceMinutes: 5 },
   window: { minimizeToTrayOnClose: true, hideFromTaskbar: true }
 }
 
@@ -129,6 +148,7 @@ export function normalizeUserSettings(input: UserSettingsInput | null | undefine
 
   return {
     language: safeLanguage,
+    ...(input?.fileTranscription && { fileTranscription: input.fileTranscription }),
     transcription: {
       ...(input?.transcription?.provider !== undefined && input.transcription.provider !== 'azure'
         ? { provider: input.transcription.provider === 'windows-sapi' || input.transcription.provider === 'web-speech'
@@ -167,6 +187,9 @@ export function normalizeUserSettings(input: UserSettingsInput | null | undefine
       }
     },
     autoStart: {
+      stopOnSilence: input?.autoStart?.stopOnSilence === true,
+      silenceMinutes: typeof input?.autoStart?.silenceMinutes === 'number' && Number.isInteger(input.autoStart.silenceMinutes) &&
+        input.autoStart.silenceMinutes >= 1 && input.autoStart.silenceMinutes <= 120 ? input.autoStart.silenceMinutes : 5,
       enabled:
         typeof input?.autoStart?.enabled === 'boolean'
           ? input.autoStart.enabled

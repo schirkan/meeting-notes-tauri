@@ -1,7 +1,7 @@
 # T-513: Automatische Meeting-Erkennung und Auto-Start im Hintergrund
 
 ## Kontext
-Status: teils umgesetzt (Teams im Praxistest bestaetigt; Stille-Erkennung und Podcast-Gegenprobe offen)
+Status: teils umgesetzt (Teams im Praxistest bestaetigt; Hardware-Abnahme des Stille-Timers und Podcast-Gegenprobe offen)
 Priorität: medium
 Abhängigkeiten: T-300, T-305, T-403, T-509, T-511
 
@@ -411,10 +411,11 @@ Explizit gespeichertes `false` bleibt erhalten; fehlende Felder erhalten `true`.
 5. **Einstellungs-Achse** `user.autoStart` (urspruenglich aus, ab v0.1.2 an), Schalter im
    Settings-Dialog.
 
+6. **Pegel-/Stille-Erkennung** als separater, optionaler Auto-Stopp fuer aktive
+   Sidecar-Aufnahmen. Das Session-Ende bleibt unveraendert: `OnStateChanged`/Disconnection,
+   prozessweise Aggregation, 3 s Schonfrist, nur fuer automatisch gestartete Aufnahmen.
+
 **Noch offen:**
-6. **Pegel-/Stille-Erkennung**. Session-Ende ist bereits umgesetzt:
-   `OnStateChanged`/Disconnection, prozessweise Aggregation, 3 s Schonfrist,
-   Auto-Stopp nur fuer die automatisch gestartete Aufnahme.
 7. **Fenster-/Applikations-Fallback** (Stufe 2) - laut Entscheidung erst,
    wenn Stufe 1 in der Praxis nicht trägt.
 
@@ -468,7 +469,8 @@ Der Kalender ist **kein** Bestandteil (Entscheidung vom 2026-11-18).
 - [x] Ohne vollstaendige Azure-Konfiguration startet die Aufnahme nicht automatisch. Beleg: src-tauri/src/lib.rs (start_recording_on_detection prueft load_azure_config, bricht ohne Konfiguration ab). Formnachweis: Code-Guard; der Settings-Default-Test ist kein Wirkungsnachweis dieses Guards.
 - [x] Die Erkennung läuft im **Sidecar** (nicht im Tauri-Main) und nimmt dabei nichts auf. Beleg: sidecar/MeetingDetector.cs (nur Session-Graph), sidecar/Program.cs (Modus `--detect-only`, Event `meeting_detected`), src-tauri/src/autostart.rs (eigener Erkennungsprozess). Testnachweis: C#-Validierung - der Detektor meldet die Capture-Sitzung eines fremden Prozesses als `meeting_detected`.
 - [x] Die Erkennung ist ereignisgesteuert, nicht per Timer. Beleg: sidecar/MeetingDetector.cs (`AudioSessionManager.OnSessionCreated`), src-tauri/src/autostart.rs (Ereignisstrom, kein Polling). Testnachweis: C#-Validierung - die Erkennung kommt als Ereignis an, nicht durch Abfragen.
-- [ ] Zusaetzlicher Auto-Stop bei Stille gemaess Nutzeranforderung vom 28.11.2026: Nach 5 Minuten durchgehender Stille eine Rueckfrage mit 60-Sekunden-Timer anzeigen. Nur ohne Rueckmeldung und bei weiterhin durchgehender Stille nach Ablauf automatisch stoppen. Bei erneutem Audio nicht stoppen. - **offen**: Stille-Erkennung, Rueckfrage und Timer sind nicht implementiert. Das bestehende Session-Ende arbeitet weiterhin ueber Metadaten.
+- [x] Optionaler Auto-Stop bei Stille (standardmaessig aus): Der Timer ist auf 1–120 Minuten einstellbar (Standard 5). Danach erscheint eine Rueckfrage fuer 60 Sekunden. Audio auf einer aktiven Quelle oder **Keep recording** setzt den Timer zurueck. Pause unterbricht die Messung. Unterstuetzt werden Live-Sidecar und lokale WAV-Aufnahme, nicht Web Speech. Beleg: [AudioRecorderSource.cs](../sidecar/AudioRecorderSource.cs), [use-app-state.ts](../src/renderer/src/use-app-state.ts) und [startup-ui.test.mjs](../tests/startup-ui.test.mjs). Das Session-Ende arbeitet unabhaengig weiter ueber Metadaten.
+- [ ] Stille-Timer mit echten Mikrofon- und Loopback-Quellen bei verborgenem Fenster erproben. - **offen**: erfordert interaktive Windows- und Audio-Abnahme.
 - [x] Session-Ende ist identitaetsgebunden, entprellt und stoppt keine manuellen Aufnahmen. Beleg: sidecar/MeetingSessionTracker.cs, src-tauri/src/commands.rs (RecordingLifecycle). Testnachweis: MeetingDetectionValidation (bestehende/reaktivierte Sessions, Terminal-Cleanup), C# Fremdprozess-Probe und Rust-Tests `manual_recordings_and_foreign_end_events_are_protected`, `pause_waiting_for_automatic_stop_cannot_revive_the_recording`.
 - [x] Jede automatisch gestartete Aufnahme ist für den Nutzer sichtbar und jederzeit abbrechbar. Beleg: src/renderer/src/use-app-state.ts (Toast "Meeting erkannt"), src/renderer/src/App.tsx (Start/Stop wie bisher). Testnachweis: Node-UI-Tests grün.
 - [x] Recherche-Beleg: der stärkste einzelne OS-Trigger ist das Ducking-Event (`IAudioVolumeDuckNotification`): "the system adjusts the volume of a non-communication stream when a new communication stream is opened". Beleg: learn.microsoft.com (audiopolicy/nn-audiopolicy-iaudiovolumeducknotification, coreaudio/getting-ducking-events-from-a-communication-device).

@@ -7,7 +7,6 @@ type ConfigPanelProps = {
   statusRunning: boolean
   liveAzure: boolean
   liveEndpointRequired: boolean
-  batch: boolean
   setConfigDraft: React.Dispatch<React.SetStateAction<ConfigDraft>>
 }
 
@@ -15,7 +14,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
   const {
     configState,
     configDraft,
-    statusRunning, liveAzure, liveEndpointRequired, batch,
+    statusRunning, liveAzure, liveEndpointRequired,
     setConfigDraft
   } = props
 
@@ -33,15 +32,24 @@ export function ConfigPanel(props: ConfigPanelProps) {
       )}
 
       <div className="settings-block">
-        <label className="full-field" title={liveEndpointRequired ? 'Enter the HTTPS endpoint of your Azure Speech resource' : 'Enter the HTTPS origin of your Azure Speech resource for file transcription'}>
+        <label className="full-field" title={liveEndpointRequired ? 'Endpoint for Azure Speech live transcription' : 'Used only by Azure Speech live transcription'}>
           Endpoint
           <input
             type="text"
             value={configDraft.endpoint}
             onChange={(event) => setConfigDraft((prev) => ({ ...prev, endpoint: event.target.value }))}
-            placeholder={batch ? 'https://<resource>.cognitiveservices.azure.com' : 'https://...'}
+            placeholder="https://..."
             disabled={statusRunning}
           />
+        </label>
+
+        <label className="full-field" title="HTTPS endpoint from your Azure Speech resource. Do not use the regional live endpoint or include a path.">
+          File transcription endpoint
+          <input type="text" value={configDraft.batchEndpoint} placeholder="https://<resource>.cognitiveservices.azure.com"
+            disabled={statusRunning} onChange={(event) => {
+              const batchEndpoint = event.currentTarget.value
+              setConfigDraft((prev) => ({ ...prev, batchEndpoint }))
+            }} />
         </label>
 
         <label title="Enter the region of your Azure Speech resource, such as westeurope">
