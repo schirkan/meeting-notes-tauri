@@ -15,7 +15,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>MeetingNotes.Sidecar</RootNamespace>
     <AssemblyName>MeetingNotes.Sidecar</AssemblyName>
-    <Version>0.1.9</Version>
+    <Version>0.2.0</Version>
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
     <!-- System.Speech uses built-in COM interop for the native SAPI stream and callbacks. -->
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
@@ -48,7 +48,7 @@
 
   <ItemGroup>
     <PackageReference Include="NAudio" Version="3.3.0" />
-    <PackageReference Include="System.Speech" Version="10.0.15" />
+    <PackageReference Include="System.Speech" Version="11.0.0" />
     <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.53.1" />
   </ItemGroup>
 

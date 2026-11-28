@@ -10,6 +10,13 @@ Alle Pakete und Laufzeit-Referenzen des Projekts auf den aktuellen Stand bringen
 ohne das Verhalten der Anwendung zu aendern. Kein Feature soll dabei entstehen —
 die Aufnahme- und Transkriptionslogik bleibt unveraendert.
 
+## Paketstand v0.2.0 (28.11.2026)
+
+- npm: `@tauri-apps/cli` 2.12.6, `@types/node` 26.6.11, `@types/react` 19.3.3, Vite 8.4.0 und aktualisierte transitive Pakete. `npm audit` meldete beim Update keine Schwachstellen; die Meldung vom 18.11.2026 ist damit historisch.
+- Cargo: `tauri` 2.12.7, `tauri-build` 2.7.6, `url` 2.5.9 und `uuid` 1.29.3 in `Cargo.lock`. `generic-array` und drei aeltere TOML-Eintraege bleiben wegen transitiver Versionsgrenzen gebunden.
+- NuGet: `System.Speech` 11.0.0 liefert .NET-10- und Windows-Runtime-Assets. Die uebrigen direkt referenzierten Pakete waren zum Abrufzeitpunkt bereits aktuell; Ziel bleibt `net10.0-windows`.
+- GitHub Actions: Checkout 7.0.1, Setup Node 7.1.0, Setup .NET 6.1.0, Cache 6.1.0, Upload Artifact 7.0.2. Beleg fuer die Versionen: Manifeste, Lockfiles und `.github/workflows/release.yml`.
+
 ## Done When
 - [x] **npm:** React und React-Doma auf 19.3.1, `@types/react`/`@types/react-dom` auf 19.3.0, Beleg: package.json (React 19.3.1, @types/react 19.3.0, @types/react-dom 19.3.0).
   `@vitejs/plugin-react` auf 6.3.0, Vite auf 8.3.8, Playwright auf 1.65.0,
