@@ -169,7 +169,7 @@ internal static class ShutdownValidation
             stopping.Cancel();
         });
 
-        var (startup, startupWait) = RecordingControl.BeginStereoStartup(StartAsync, StartReader, stopping.Token);
+        var (startup, startupWait) = RecordingControl.BeginStartup(StartAsync, StartReader, stopping.Token);
         try
         {
             await (reader ?? throw new InvalidOperationException("Stereo command reader did not start.")).WaitAsync(watchdog);

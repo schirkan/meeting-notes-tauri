@@ -182,25 +182,32 @@ async fn start_recording_with_origin(
         events::emit_status(app, &status);
         return Ok(status);
     }
-    let (handle, use_sapi) = if batch {
+    let (mut handle, use_sapi, batch_recording) = if batch {
         let root = settings::transcript_output_directory(&user).map_err(|err| err.to_string())?;
         tokio::fs::create_dir_all(&root).await.map_err(|err| format!("Cannot open recording folder: {err}"))?;
         let started_at = crate::batch::capture_start(requested_at_ms, chrono::Utc::now())?;
         let (prefix, recording) = crate::batch::recording_outputs(&root, started_at, &user.transcription)?;
         let handle = sidecar::start_batch_recorder(app, &user, &root, &prefix, started_at.timestamp_millis()).map_err(|e| e.to_string())?;
-        lifecycle.batch_recording = Some(recording);
-        (handle, false)
+        (handle, false, Some(recording))
     } else {
         let options = recording_options(azure, user)?;
         let use_sapi = options.use_sapi;
         let handle = sidecar::start(app, options).await.map_err(|e| e.to_string())?;
-        (handle, use_sapi)
+        (handle, use_sapi, None)
     };
 
-    // Cache the live handle so stop_recording can reach it. Das passiert vor
-    // dem Start des Forwarders: der Handshake (T-201) wird ueber den Cache
-    // quittiert, und der Forwarder laeuft bereits, bevor die erste Zeile
-    // des Sidecars eintrifft.
+    // The caller owns the lifecycle lock. Consume startup output directly;
+    // a forwarder waiting on that lock could never confirm this start.
+    let startup_lines = match crate::protocol::wait_for_capture(&mut handle).await {
+        Ok(lines) => lines,
+        Err(error) => {
+            let _ = sidecar::stop(handle).await;
+            push_and_emit_debug(app, state, DebugLogEntrySource::Sidecar, DebugLogEntryLevel::Error, &error);
+            return Err(error);
+        }
+    };
+
+    // Publish the handle and running status only after capture is confirmed.
     let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
     {
         let mut guard = cache.lock().await;
@@ -217,16 +224,13 @@ async fn start_recording_with_origin(
 
     lifecycle.auto_origin = origin;
     lifecycle.sapi = use_sapi;
+    lifecycle.batch_recording = batch_recording;
     let status = state.mark_started_at(lifecycle.batch_recording.as_ref().map(|recording| recording.started_at.as_str()));
     events::emit_status(app, &status);
     if let Some(origin) = lifecycle.auto_origin.as_ref() {
         events::emit_meeting_detected(app, origin);
     }
-    spawn_event_forwarder(app.clone(), handle.events_rx, Arc::clone(&handle.child));
-
-    // T-201: Ohne gueltiges Handshake wird der Sidecar beendet - ein
-    // Sidecar, der nicht antwortet, wuerde sonst stumm bleiben.
-    spawn_handshake_timeout(app.clone(), handle.child);
+    spawn_event_forwarder(app.clone(), handle.events_rx, handle.child, startup_lines);
 
     push_and_emit_debug(app, state, DebugLogEntrySource::Status, DebugLogEntryLevel::Info, "Status changed: running.");
     Ok(status)
@@ -1157,7 +1161,7 @@ fn is_current_sidecar(
 
 fn is_sidecar_shutdown_ack(parsed: &serde_json::Value) -> bool {
     parsed.get("level").is_none()
-        && matches!(parsed["type"].as_str(), Some("status" | "transcript:status"))
+        && parsed["type"] == "status"
         && parsed["payload"]["phase"] == "stopped"
         && parsed["payload"]["running"] == false
 }
@@ -1174,10 +1178,14 @@ fn spawn_event_forwarder(
     app: AppHandle,
     mut events_rx: tokio::sync::mpsc::Receiver<tauri_plugin_shell::process::CommandEvent>,
     child: Arc<Mutex<Option<CommandChild>>>,
+    startup_lines: Vec<String>,
 ) {
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
         let mut acknowledged_shutdown = false;
+        for line in startup_lines {
+            acknowledged_shutdown |= forward_sidecar_line(&app_handle, &line);
+        }
         while let Some(event) = events_rx.recv().await {
             let cache = app_handle.state::<Arc<Mutex<Option<SidecarHandle>>>>();
             if !is_current_sidecar(cache.lock().await.as_ref(), &child) {
@@ -1190,8 +1198,6 @@ fn spawn_event_forwarder(
                     for line in text.lines() {
                         if line.is_empty() { continue; }
                         if !is_current_sidecar(cache.lock().await.as_ref(), &child) { return; }
-                        // T-201: Das Handshake wird separat behandelt.
-                        if handle_handshake_line(&app_handle, line, &child).await { continue; }
                         acknowledged_shutdown |= forward_sidecar_line(&app_handle, line);
                     }
                 }
@@ -1241,150 +1247,6 @@ fn spawn_event_forwarder(
                     // here until we add a dedicated arm.
                 }
             }
-        }
-    });
-}
-
-/// T-201: Wertet eine Sidecar-Zeile auf ein Handshake-Event aus.
-///
-/// Gibt true zurueck, wenn die Zeile ein Handshake war - sie wird dann
-/// nicht normal weitergeleitet.
-async fn handle_handshake_line(
-    app: &AppHandle,
-    line: &str,
-    child: &Arc<Mutex<Option<CommandChild>>>,
-) -> bool {
-    let parsed: serde_json::Value = match serde_json::from_str(line) {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-    let ty = parsed.get("type").and_then(|v| v.as_str()).unwrap_or("");
-    if ty != "handshake" {
-        return false;
-    }
-    let payload = parsed.get("payload").cloned().unwrap_or(serde_json::Value::Null);
-    let version = payload
-        .get("protocol_version")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let compatible =
-        crate::protocol::version_at_least(&version, crate::protocol::MIN_PROTOCOL_VERSION);
-
-    let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
-    let mut guard = cache.lock().await;
-    if !is_current_sidecar(guard.as_ref(), child) { return true; }
-    {
-        let state = app.state::<AppState>();
-        state.mark_handshake(&version);
-        let entry = state.push_debug(
-            DebugLogEntrySource::Sidecar,
-            if compatible { DebugLogEntryLevel::Info } else { DebugLogEntryLevel::Error },
-            format!("handshake: protocol_version={version} (kompatibel={compatible})"),
-        );
-        events::emit_debug(app, &entry);
-    }
-
-    let handle = if compatible {
-        guard.as_ref().map(|h| SidecarHandle {
-            child: Arc::clone(&h.child),
-            events_rx: tokio::sync::mpsc::channel(1).1,
-            shutdown: None,
-        })
-    } else {
-        let handle = guard.take();
-        let status = app.state::<AppState>().mark_stopped_with_error(Some(
-            "The transcription service reported an incompatible protocol version.".into(),
-        ));
-        events::emit_status(app, &status);
-        handle
-    };
-    drop(guard);
-    if compatible {
-        // Quittung an den Sidecar.
-        if let Some(handle) = handle {
-            let _ = sidecar::send_command(&handle, r#"{"type":"handshake-ack"}"#).await;
-        }
-    } else {
-        // Inkompatible Version: den Sidecar beenden, statt ihn mit
-        // unverstaendlichen Events weiterlaufen zu lassen.
-        let entry = app.state::<AppState>().push_debug(
-            DebugLogEntrySource::Sidecar,
-            DebugLogEntryLevel::Error,
-            format!(
-                "handshake rejected: protocol version {version} is not supported (minimum {}).",
-                crate::protocol::MIN_PROTOCOL_VERSION
-            ),
-        );
-        events::emit_debug(app, &entry);
-        events::emit_error(
-            app,
-            &serde_json::json!({
-                "code": "PROTOCOL_VERSION_MISMATCH",
-                "message": format!(
-                    "The sidecar reports protocol version {version}, at least {} is expected.",
-                    crate::protocol::MIN_PROTOCOL_VERSION
-                ),
-            }),
-        );
-        if let Some(handle) = handle {
-            let _ = sidecar::stop(handle).await;
-        }
-    }
-    true
-}
-
-/// T-201: Beendet den Sidecar, wenn er innerhalb des Zeitfensters kein
-/// Handshake sendet.
-fn spawn_handshake_timeout(app: AppHandle, child: Arc<Mutex<Option<CommandChild>>>) {
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_secs(
-            crate::protocol::HANDSHAKE_TIMEOUT_SECS,
-        ))
-        .await;
-        let cache = app.state::<Arc<Mutex<Option<SidecarHandle>>>>();
-        let mut guard = cache.lock().await;
-        if !is_current_sidecar(guard.as_ref(), &child) || guard.as_ref().is_some_and(|handle| handle.shutdown.is_some()) {
-            return;
-        }
-        let (has_handshake, running) = {
-            let state = app.state::<AppState>();
-            (
-                state.handshake_version().is_some(),
-                state.snapshot_status().running,
-            )
-        };
-        if has_handshake || !running {
-            // Handshake kam, oder die Aufnahme wurde inzwischen gestoppt.
-            return;
-        }
-        let handle = guard.take();
-        let status = app.state::<AppState>().mark_stopped_with_error(Some(
-            "The transcription service did not complete its handshake.".into(),
-        ));
-        events::emit_status(&app, &status);
-        let entry = app.state::<AppState>().push_debug(
-            DebugLogEntrySource::Sidecar,
-            DebugLogEntryLevel::Error,
-            format!(
-                "No handshake from the sidecar within {} s - the sidecar will be stopped.",
-                crate::protocol::HANDSHAKE_TIMEOUT_SECS
-            ),
-        );
-        events::emit_debug(&app, &entry);
-        events::emit_error(
-            &app,
-            &serde_json::json!({
-                "code": "HANDSHAKE_TIMEOUT",
-                "message": format!(
-                    "The sidecar did not answer the handshake within {} s.",
-                    crate::protocol::HANDSHAKE_TIMEOUT_SECS
-                ),
-            }),
-        );
-        drop(guard);
-        if let Some(handle) = handle {
-            let _ = sidecar::stop(handle).await;
         }
     });
 }
@@ -1472,7 +1334,7 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) -> bool {
                 }
             }
         }
-        "transcript" | "transcript:segment" => {
+        "transcript" => {
             // T-502: Die Pipe-Stufe (Sidecar-Event -> Rust) ergaenzen und
             // die Gesamtlatenz bis zum Tauri-Event berechnen. Die Messzeile
             // entsteht nur, wenn MEETING_NOTES_LATENCY_LOG gesetzt ist.
@@ -1481,40 +1343,25 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) -> bool {
             events::emit_segment(app, &enriched);
         }
 
-        "status" | "transcript:status" => {
-            let Some(running) = payload.get("running").and_then(|v| v.as_bool()) else {
-                let entry = app.state::<AppState>().push_debug(
-                    DebugLogEntrySource::Sidecar,
-                    DebugLogEntryLevel::Warn,
-                    "Invalid sidecar status event: running must be a boolean.",
-                );
-                events::emit_debug(app, &entry);
-                return false;
-            };
-            let phase = payload.get("phase").and_then(|v| v.as_str()).unwrap_or("");
-            // Die Phase steuert den Zustand: "paused"/"resumed" duerfen die
-            // Startzeit nicht zuruecksetzen, sonst waere die Laufzeit nach
-            // einer Pause falsch (T-507).
-            let status = match phase {
-                "paused" => app.state::<AppState>().mark_paused(),
-                "resumed" => app.state::<AppState>().mark_resumed(),
+        "status" => {
+            let status = match (payload["phase"].as_str(), payload["running"].as_bool()) {
+                (Some("paused"), Some(true)) => app.state::<AppState>().mark_paused(),
+                (Some("resumed"), Some(true)) => app.state::<AppState>().mark_resumed(),
                 _ => {
-                    if running {
-                        app.state::<AppState>().mark_started()
-                    } else {
-                        app.state::<AppState>().mark_stopped()
-                    }
+                    push_and_emit_debug(app, &app.state::<AppState>(), DebugLogEntrySource::Sidecar,
+                        DebugLogEntryLevel::Warn, "Unexpected sidecar recording status.");
+                    return false;
                 }
             };
             events::emit_status(app, &status);
             let entry = app.state::<AppState>().push_debug(
                 DebugLogEntrySource::Status,
                 DebugLogEntryLevel::Info,
-                format!("sidecar status: phase={phase} running={running}"),
+                format!("sidecar status: phase={} running=true", payload["phase"]),
             );
             events::emit_debug(app, &entry);
         }
-        "error" | "transcript:error" => {
+        "transcript:error" => {
             events::emit_error(app, &payload);
         }
         "debug" => {
@@ -1525,7 +1372,7 @@ fn forward_sidecar_line(app: &AppHandle, line: &str) -> bool {
             );
             events::emit_debug(app, &entry);
         }
-        "device_list" | "device-list" => {
+        "device_list" => {
             // Surface device-list payloads as a debug entry; full UI
             // integration lands when the renderer is taught to subscribe.
             let entry = app.state::<AppState>().push_debug(

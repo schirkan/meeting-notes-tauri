@@ -35,6 +35,10 @@ internal static class BatchProviderValidation
             check(resource.Exit != 0 && HasError(resource.Text, "BATCH_TRANSCRIPTION_FAILED", "subscription key"),
                 "Packaged Azure dispatch requires a key before network access");
             var record = await Run("--record-batch", Path.Combine(directory.FullName, "no capture"), "--transcription-mic", "false", "--transcription-speaker", "false");
+            var handshake = ReadEvents(record.Text).First();
+            check(handshake.GetProperty("type").GetString() == "handshake" &&
+                handshake.GetProperty("payload").GetProperty("protocol_version").GetString() == "2.0.0",
+                "Batch capture sends the 2.0.0 handshake before validation or recording");
             check(record.Exit != 0 && HasError(record.Text, "SIDECAR_START_FAILED", "at least one audio source"),
                 "Packaged batch capture dispatch validates sources without touching audio devices");
             if (!synthetic) return;

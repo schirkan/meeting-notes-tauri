@@ -7,12 +7,11 @@ namespace MeetingNotes.Sidecar;
 /// Version. Die App prueft sie und quittiert mit <c>handshake-ack</c>; eine
 /// inkompatible Version beendet den Sidecar.
 ///
-/// Der Wert muss kompatibel zu <c>MIN_PROTOCOL_VERSION</c> in
-/// <c>src-tauri/src/protocol.rs</c> bleiben - er markiert die aeusserste
-/// gemeinsame Protokollversion beider Seiten.
+/// Der Wert muss exakt <c>PROTOCOL_VERSION</c> in
+/// <c>src-tauri/src/protocol.rs</c> entsprechen.
 /// </summary>
 public static class ProtocolVersion
 {
     /// <summary>Aktuelle Protokollversion des Sidecars.</summary>
-    public const string Current = "1.0.0";
+    public const string Current = "2.0.0";
 }

@@ -60,7 +60,7 @@ internal static class RecordingControl
         }
     }
 
-    internal static (Task<T> Owner, Task<T> UntilReady) BeginStereoStartup<T>(
+    internal static (Task<T> Owner, Task<T> UntilReady) BeginStartup<T>(
         Func<CancellationToken, Task<T>> start, Action startCommandReader, CancellationToken startup)
     {
         // Shutdown must be readable before either native startup or SessionStarted can block.

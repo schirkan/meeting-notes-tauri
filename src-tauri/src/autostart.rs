@@ -98,27 +98,43 @@ pub async fn start_detector(
             processes.join(","),
         ]);
     }
-    let (mut rx, child) = command.spawn().map_err(|e| e.to_string())?;
+    let mut handle = crate::sidecar::spawn_session(command).map_err(|e| e.to_string())?;
+    let detector = DetectorHandle { child: Arc::clone(&handle.child) };
 
-    let handler = Arc::new(on_detected);
-    let end_handler = Arc::new(on_ended);
+    let dispatch = move |entry: &str| {
+        if let Some(payload) = parse_meeting_detected(entry) {
+            on_detected(payload);
+        } else if let Some(payload) = parse_meeting_ended(entry) {
+            on_ended(payload);
+        }
+    };
     // Der App-Handle wandert in den Task - er muss deshalb eigenstaendig
     // (owned) vorliegen, sonst entkommt die Referenz dem Task.
     let app = app.clone();
     tokio::spawn(async move {
-        while let Some(event) = rx.recv().await {
+        // Do not block application setup on a missing or mismatched detector.
+        let pending = match crate::protocol::handshake(&mut handle).await {
+            Ok(pending) => pending,
+            Err(error) => {
+                let _ = crate::sidecar::stop(handle).await;
+                let entry = crate::state::AppState::default().push_debug(
+                    crate::state::DebugLogEntrySource::Sidecar,
+                    crate::state::DebugLogEntryLevel::Warn,
+                    format!("Meeting detection is not available: {error}"),
+                );
+                events::emit_debug(&app, &entry);
+                return;
+            }
+        };
+        for entry in pending {
+            dispatch(&entry);
+        }
+        while let Some(event) = handle.events_rx.recv().await {
             match event {
                 CommandEvent::Stdout(bytes) => {
                     let line = String::from_utf8_lossy(&bytes);
                     for entry in line.lines() {
-                        if entry.trim().is_empty() {
-                            continue;
-                        }
-                        if let Some(payload) = parse_meeting_detected(entry) {
-                            handler(payload);
-                        } else if let Some(payload) = parse_meeting_ended(entry) {
-                            end_handler(payload);
-                        }
+                        dispatch(entry);
                     }
                 }
                 CommandEvent::Stderr(bytes) => {
@@ -153,9 +169,7 @@ pub async fn start_detector(
         }
     });
 
-    Ok(DetectorHandle {
-        child: Arc::new(Mutex::new(Some(child))),
-    })
+    Ok(detector)
 }
 
 /// Beendet den Erkennungsprozess.

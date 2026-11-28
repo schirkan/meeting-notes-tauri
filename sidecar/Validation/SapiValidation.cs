@@ -67,6 +67,9 @@ internal static class SapiValidation
             "SAPI does not fall back to another English culture");
         var recording = await Run("--recognition-provider", "windows-sapi", "--language", "en-XX", "--interim-results", "false");
         check(recording.Exit != 0 && recording.Events[0].GetProperty("type").GetString() == "handshake" &&
+            recording.Events[0].GetProperty("payload").GetProperty("protocol_version").GetString() == "2.0.0" &&
+            recording.Events.All(e => e.GetProperty("type").GetString() != "status" ||
+                !e.TryGetProperty("payload", out var status) || status.GetProperty("phase").GetString() != "started") &&
             recording.Events.Any(e => e.TryGetProperty("code", out var code) && code.GetString() == "SIDECAR_START_FAILED" &&
                 e.GetProperty("message").GetString()!.Contains("dictation recognizer", StringComparison.OrdinalIgnoreCase)),
             "Missing dictation is a structured start error before audio resolution");

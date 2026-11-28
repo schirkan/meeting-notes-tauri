@@ -184,41 +184,42 @@ if (existsSync(SIDECAR_EXE)) {
 
 header('3b. Protokoll-Handshake')
 
-// Der Sidecar sendet zu Beginn ein handshake-Event. Ohne dieses Event
-// beendet die App den Sidecar nach 5 s (Timeout) - der Smoke-Test prueft
-// deshalb end-to-end, dass die Zeile wirklich kommt.
-if (existsSync(SIDECAR_EXE)) {
-  const handshake = spawnSync(SIDECAR_EXE, ['--transcription-mic', 'false', '--transcription-speaker', 'false'], {
+// Disable both sources so the handshake is tested without opening audio devices.
+function checkSidecarHandshake(exe, label) {
+  if (!existsSync(exe)) {
+    fail(label, 'sidecar executable missing')
+    return
+  }
+  const handshake = spawnSync(exe, ['--transcription-mic', 'false', '--transcription-speaker', 'false'], {
     encoding: 'utf8',
     timeout: 10000,
     windowsHide: true,
     env: selfContainedEnvironment()
   })
-  const firstLine = (handshake.stdout || '')
-    .split('\n')
-    .map((l) => l.trim())
-    .find(Boolean)
-
-  if (!firstLine) {
-    fail('sidecar handshake', 'no output on stdout')
-  } else {
-    try {
-      const parsed = JSON.parse(firstLine)
-      const payload = parsed?.payload ?? {}
-      if (parsed?.type !== 'handshake') {
-        fail('sidecar handshake', `first event is "${parsed?.type}", expected "handshake"`)
-      } else if (payload?.protocol_version !== '1.0.0') {
-        fail('sidecar handshake', `unexpected protocol_version "${payload?.protocol_version}"`)
-      } else {
-        pass('sidecar handshake', `protocol_version=${payload.protocol_version}, capabilities=${(payload.capabilities || []).length}`)
-      }
-    } catch (e) {
-      fail('sidecar handshake', `first line is not JSON: ${e.message}`)
-    }
+  if (handshake.error || handshake.status !== 23) {
+    fail(label, handshake.error?.message || `expected no-source exit 23, got ${handshake.status}`)
+    return
   }
-} else {
-  fail('sidecar handshake', 'sidecar executable missing')
+  const firstLine = (handshake.stdout || '').split('\n').map((line) => line.trim()).find(Boolean)
+  if (!firstLine) {
+    fail(label, 'no output on stdout')
+    return
+  }
+  try {
+    const parsed = JSON.parse(firstLine)
+    const payload = parsed?.payload
+    if (parsed?.type !== 'handshake') {
+      fail(label, `first event is "${parsed?.type}", expected "handshake"`)
+    } else if (payload?.protocol_version !== '2.0.0') {
+      fail(label, `unexpected protocol_version "${payload?.protocol_version}"`)
+    } else {
+      pass(label, `protocol_version=${payload.protocol_version}, capabilities=${(payload.capabilities || []).length}`)
+    }
+  } catch (error) {
+    fail(label, `first line is not JSON: ${error.message}`)
+  }
 }
+checkSidecarHandshake(SIDECAR_EXE, 'sidecar handshake')
 
 // --- 4. Portable-Distribution + SHA256SUMS -------------------------------
 
@@ -237,6 +238,7 @@ if (existsSync(PORTABLE_TAURI)) {
 
 if (existsSync(PORTABLE_SIDECAR)) {
   pass('dist/portable/MeetingNotes.Sidecar.exe', `${(statSync(PORTABLE_SIDECAR).size / 1024 / 1024).toFixed(2)} MB`)
+  checkSidecarHandshake(PORTABLE_SIDECAR, 'portable sidecar handshake')
   const probe = spawnSync(PORTABLE_SIDECAR, ['--list-devices'], {
     encoding: 'utf8', timeout: 15000, windowsHide: true, env: selfContainedEnvironment()
   })

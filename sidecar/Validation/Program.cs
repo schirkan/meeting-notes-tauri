@@ -81,7 +81,9 @@ if (args.Contains("--loopback-hardware"))
                 return document.RootElement.Clone();
             }).ToArray();
         bool HasCode(string code) => events.Any(e => e.TryGetProperty("code", out var value) && value.GetString() == code);
-        Check(events[0].GetProperty("type").GetString() == "handshake", "Loopback probe receives initial handshake");
+        Check(events[0].GetProperty("type").GetString() == "handshake" &&
+            events[0].GetProperty("payload").GetProperty("protocol_version").GetString() == "2.0.0",
+            "Loopback probe receives initial 2.0.0 handshake");
         Check(HasCode("handshake_ack"), "Published sidecar accepts handshake-ack");
         Check(!HasCode("unknown_command"), "Handshake acknowledgement is not an unknown command");
         Check(events.Any(e => e.GetProperty("type").GetString() == "status" && e.TryGetProperty("payload", out var payload) &&
@@ -147,7 +149,7 @@ try
                 }
                 else if (expectedType == "handshake")
                 {
-                    Check(payload.GetProperty("protocol_version").GetString() == "1.0.0" && payload.GetProperty("capabilities").GetArrayLength() == 5,
+                    Check(payload.GetProperty("protocol_version").GetString() == "2.0.0" && payload.GetProperty("capabilities").GetArrayLength() == 5,
                         "Trimmed handshake retains version and capabilities");
                     Check(events[1].RootElement.GetProperty("code").GetString() == "SIDECAR_START_FAILED", "Trimmed sidecar preserves structured source error");
                 }
@@ -235,13 +237,13 @@ try
             var events = documents.Select(d => d.RootElement.Clone()).ToArray();
             try
             {
-                Check(events.Length > 0 && events[0].GetProperty("type").GetString() == "handshake",
-                    "Detection mode sends the handshake first");
+                Check(events.Length > 0 && events[0].GetProperty("type").GetString() == "handshake" &&
+                    events[0].GetProperty("payload").GetProperty("protocol_version").GetString() == "2.0.0",
+                    "Detection mode sends the 2.0.0 handshake first");
                 var capabilities = events[0].GetProperty("payload").GetProperty("capabilities");
                 Check(capabilities.EnumerateArray().Any(c => c.GetString() == "meeting_detection"),
                     "Detection mode announces the meeting_detection capability");
-                var detection = events.FirstOrDefault(e =>
-                    e.TryGetProperty("type", out var type) && type.GetString() == "meeting_detected");
+                var detection = events.FirstOrDefault(e => MeetingDetectionValidation.OwnMicrophoneEvent(e, "meeting_detected"));
                 Check(detection.ValueKind == JsonValueKind.Object,
                     "Detection mode reports the foreign capture session as meeting_detected");
                 var payload = detection.GetProperty("payload");
@@ -249,16 +251,15 @@ try
                     "Meeting detection resolves the process name from the session PID");
                 Check(payload.GetProperty("signal").GetString() == "mic",
                     "Meeting detection reports the microphone signal");
-                var ended = events.SingleOrDefault(e =>
-                    e.TryGetProperty("type", out var type) && type.GetString() == "meeting_ended");
+                var ended = events.SingleOrDefault(e => MeetingDetectionValidation.OwnMicrophoneEvent(e, "meeting_ended"));
                 Check(ended.ValueKind == JsonValueKind.Object, "Detection mode reports one debounced meeting_ended event");
                 var endPayload = ended.GetProperty("payload");
                 Check(endPayload.GetProperty("process_name").GetString() == ownProcessName &&
                     endPayload.GetProperty("process_id").GetUInt32() == (uint)Environment.ProcessId,
                     "End event retains exact process identity");
                 Check(endPayload.GetProperty("signal").GetString() == "mic", "End event retains initiating signal");
-                Check(Array.FindIndex(events, e => e.GetProperty("type").GetString() == "meeting_detected") <
-                    Array.FindIndex(events, e => e.GetProperty("type").GetString() == "meeting_ended"),
+                Check(Array.FindIndex(events, e => MeetingDetectionValidation.OwnMicrophoneEvent(e, "meeting_detected")) <
+                    Array.FindIndex(events, e => MeetingDetectionValidation.OwnMicrophoneEvent(e, "meeting_ended")),
                     "Detection precedes the corresponding end event");
                 detectorReady = true;
             }

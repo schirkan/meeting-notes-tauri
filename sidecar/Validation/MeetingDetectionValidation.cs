@@ -77,9 +77,12 @@ internal static class MeetingDetectionValidation
             try
             {
                 var events = documents.Select(d => d.RootElement).ToArray();
-                check(events.Count(e => e.GetProperty("type").GetString() == "meeting_detected") == 1,
+                check(events[0].GetProperty("type").GetString() == "handshake" &&
+                    events[0].GetProperty("payload").GetProperty("protocol_version").GetString() == "2.0.0",
+                    "Existing-session detector publishes the 2.0.0 handshake first");
+                check(events.Count(e => OwnMicrophoneEvent(e, "meeting_detected")) == 1,
                     "Existing session is discovered and reactivation is not a duplicate meeting");
-                check(events.Count(e => e.GetProperty("type").GetString() == "meeting_ended") == 1,
+                check(events.Count(e => OwnMicrophoneEvent(e, "meeting_ended")) == 1,
                     "Short session inactivity is cancelled and final inactivity emits one end");
                 check(process.ExitCode == 0 && string.IsNullOrEmpty(await stderr), "Existing-session detector exits cleanly");
             }
@@ -90,4 +93,9 @@ internal static class MeetingDetectionValidation
             if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); }
         }
     }
+
+    internal static bool OwnMicrophoneEvent(System.Text.Json.JsonElement entry, string type)
+        => entry.GetProperty("type").GetString() == type &&
+            entry.GetProperty("payload").GetProperty("process_id").GetUInt32() == (uint)Environment.ProcessId &&
+            entry.GetProperty("payload").GetProperty("signal").GetString() == "mic";
 }

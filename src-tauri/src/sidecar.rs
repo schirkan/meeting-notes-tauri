@@ -323,8 +323,9 @@ pub fn start_batch_recorder<R: Runtime>(
     spawn_session(apply_proxy(command, None)?)
 }
 
-fn spawn_session(command: tauri_plugin_shell::process::Command) -> Result<SidecarHandle, SidecarError> {
-    let (mut rx, child) = command.spawn().map_err(|e| SidecarError::Spawn(e.to_string()))?;
+pub(crate) fn spawn_session(command: tauri_plugin_shell::process::Command) -> Result<SidecarHandle, SidecarError> {
+    // A cancelled startup must not leave an uncached process capturing audio.
+    let (mut rx, child) = command.kill_on_drop(true).spawn().map_err(|e| SidecarError::Spawn(e.to_string()))?;
 
     let (events_tx, events_rx) = mpsc::channel::<CommandEvent>(128);
 

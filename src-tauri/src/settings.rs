@@ -417,13 +417,16 @@ pub async fn load_app_config() -> Result<AppConfig, SettingsError> {
         Ok(raw) => raw,
         Err(_) => return Ok(default_app_config()),
     };
+    Ok(parse_app_config(&raw))
+}
 
+fn parse_app_config(raw: &str) -> AppConfig {
     // Die beiden Abschnitte werden getrennt gelesen. Ein fehlerhafter
     // Azure-Abschnitt darf die User-Settings nicht mitreißen und
     // umgekehrt.
-    let value: serde_json::Value = match serde_json::from_str(&raw) {
+    let value: serde_json::Value = match serde_json::from_str(raw) {
         Ok(value) => value,
-        Err(_) => return Ok(default_app_config()),
+        Err(_) => return default_app_config(),
     };
     let azure = value
         .get("azure")
@@ -449,7 +452,7 @@ pub async fn load_app_config() -> Result<AppConfig, SettingsError> {
             defaults
         });
 
-    Ok(AppConfig { azure, user })
+    AppConfig { azure, user }
 }
 
 /// Write the whole configuration file atomically.
@@ -648,6 +651,22 @@ mod config_tests {
             config["model"] = invalid;
             assert!(serde_json::from_value::<AzureConfig>(config.clone()).is_err());
         }
+    }
+
+    #[test]
+    fn azure_file_only_settings_survive_the_config_load_and_save_format() {
+        let raw = r#"{"azure":{"batchEndpoint":"https://example.cognitiveservices.azure.com",
+            "region":"westeurope","speechKey":"test"},
+            "user":{"fileTranscription":{"model":"standard","language":"en-GB",
+            "autoLanguageDetection":false,"diarization":false}}}"#;
+        let config = parse_app_config(raw);
+        let saved = parse_app_config(&serde_json::to_string_pretty(&config).unwrap());
+        let azure = saved.azure.unwrap();
+        assert_eq!(azure.batch_endpoint.as_deref(), Some("https://example.cognitiveservices.azure.com"));
+        assert_eq!(azure.region, "westeurope");
+        assert!(azure.endpoint.is_empty());
+        assert!(azure.check_connection_fields().is_err(), "The Standard live endpoint remains required for live capture");
+        assert_eq!(saved.user.file_transcription.unwrap().language, "en-GB");
     }
 
     #[test]

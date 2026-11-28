@@ -22,10 +22,10 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
 
 ## Aktueller Produktstand
 
-- **Meeting Notes**, veroeffentlichte Version **0.1.9**, ist eine portable Windows-11-x64-Anwendung
+- **Meeting Notes**, Release-Stand **0.2.0**, ist eine portable Windows-11-x64-Anwendung
   fuer Live-Transkripte. Azure ist Standard; Windows SAPI
-  und Web Speech API sind experimentell, nicht veroeffentlicht. Modellmatrix und offene Abnahmen: [T-523](./specs/T-523-native-windows-stt-provider.md).
-- Die neue Startseite trennt Live-/lokale Aufnahme von Dateitranskription. Lokale Aufnahme speichert eine oder zwei zeitlich ausgerichtete WAV-Spuren ohne Begleitdatei und befuellt nach erfolgreichem Stop den Dateibereich. Datei-Modelloptionen und Azure-Dateiendpunkt sind getrennt von Live: [T-525](./specs/T-525-batch-transkription-und-lokale-aufnahme.md), noch nicht veroeffentlicht.
+  und Web Speech API sind experimentell. Modellmatrix und offene Abnahmen: [T-523](./specs/T-523-native-windows-stt-provider.md).
+- Die neue Startseite trennt Live-/lokale Aufnahme von Dateitranskription. Lokale Aufnahme speichert eine oder zwei zeitlich ausgerichtete WAV-Spuren ohne Begleitdatei und befuellt nach erfolgreichem Stop den Dateibereich. Datei-Modelloptionen und Azure-Dateiendpunkt sind getrennt von Live: [T-525](./specs/T-525-batch-transkription-und-lokale-aufnahme.md).
 - Die gesamte Oberflaeche, alle Meldungen und die oeffentliche Doku sind
   englisch; Specs, `SPEC.md` und diese Datei bleiben intern deutsch.
   Siehe [T-516](./specs/T-516-englische-oberflaeche-und-oeffentliche-doku.md).
@@ -79,7 +79,8 @@ Aenderungschronik, historischen Build-Messungen oder Migrationsanleitungen hier 
 | [scripts/](./scripts/) und [tests/](./tests/) | Build, Portable-Packing, Verifikation und Regressionstests | [T-500](./specs/T-500-qualitaetssicherung-und-akzeptanztests.md), [T-503](./specs/T-503-distribution-und-build-skripte.md) |
 
 Renderer und Rust kommunizieren per `invoke`/`listen`. Rust und Sidecar nutzen
-JSON-Lines ueber stdin/stdout mit `tauri-plugin-shell`; Protokollversion **1.0.0**.
+JSON-Lines ueber stdin/stdout mit `tauri-plugin-shell`; App und Sidecar muessen
+exakt Protokollversion **2.0.0** verwenden. Aeltere Sidecars werden abgewiesen.
 Azure und SAPI beziehen Audio im Sidecar; Web Speech nutzt das Standardmikrofon in WebView2.
 Keiner der Pfade transportiert Roh-Audio ueber IPC.
 Kein automatischer Reconnect mit neuer Azure-Sitzung. Siehe [T-201](./specs/T-201-json-lines-protokoll-tauri-zu-sidecar.md).
@@ -147,6 +148,8 @@ Offene Abnahmen und Messverfahren: [T-500](./specs/T-500-qualitaetssicherung-und
   Abnahmen stehen in den Specs; groessere Umsetzungen werden im Workboard verfolgt.
 
 ## Workboard
+
+- Review-Fixes, Paketupdates und Release v0.2.0: `bbef3512-a868-402f-9255-58534d7a1dc4`.
 
 - Batch-Dateitranskription und lokaler Recorder: `440e6921-7d49-4702-b849-2fb43e36d1f4`.
 - Unabhaengiger Batch-Dateidialog, zeitgestempelte WAVs und Vorbelegung nach Stop: `1e4f4251-fa49-4649-8fa0-2a8aaafef632`.

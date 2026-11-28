@@ -99,7 +99,7 @@ export function App() {
     closeDebugPanel,
     closeSettingsDialog,
     dismissToast
-  } = useAppState()
+  } = useAppState(aboutOpen)
   const batch = savedFeatures.mode === 'batch'
   const canShowSpeakers = !home && (segments.length > 0 || (status.running && !batch))
   const showSpeakers = canShowSpeakers && speakersOpen
@@ -216,7 +216,7 @@ export function App() {
         />}
       </div>
 
-      {silenceCountdown !== null && <div className="silence-warning" role="status">
+      {silenceCountdown !== null && !settingsDialogOpen && !connectivityDialogOpen && !aboutOpen && <div className="silence-warning" role="status">
         <span>No audio detected. Recording will stop in {silenceCountdown}s.</span>
         <button type="button" onClick={restartSilenceTimer}>Keep recording</button>
         <button type="button" onClick={() => { restartSilenceTimer(); void onToggleRecording() }}>Stop now</button>

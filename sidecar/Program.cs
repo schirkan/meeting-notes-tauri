@@ -286,11 +286,11 @@ MMDeviceEnumerator? deviceEnumerator = null;
 AudioRecorderSource? micSource = null;
 AudioRecorderSource? speakerSource = null;
 var captureCleanupAssigned = false;
-Task<int>? stereoStart = null;
-using var stereoStartup = stereo ? CancellationTokenSource.CreateLinkedTokenSource(stopping) : null;
+Task<int>? captureStart = null;
+using var captureStartup = CancellationTokenSource.CreateLinkedTokenSource(stopping);
 var startupStatusGate = new object();
 var userStopRequested = false;
-var commandsReady = stereo ? new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously) : null;
+var commandsReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
 void RequestStop()
 {
@@ -442,7 +442,7 @@ async Task<int> StartCaptureAsync(CancellationToken startup)
         : $"Speaker capture format: {speakerSource.Format} (mode: {speakerSource.ModeLabel})");
     var azureTarget = stereo ? new WaveFormat(sampleRate, 16, 2) : targetWaveFormat;
     Logger.Info("format", "azure_target", $"Azure Target Format: {azureTarget}");
-    if (stereo && azure is not null) await azure.WaitForStereoReadyAsync(startup);
+    if (azure is not null) await azure.WaitForCaptureReadyAsync(startup);
     return 0;
 }
 
@@ -506,7 +506,7 @@ async Task HandleCommandAsync(string command)
 
 void StartCommandReader() => _ = Task.Run(async () =>
 {
-    try { await RecordingControl.ReadCommandsAsync(Console.In, HandleCommandAsync, RequestStop, stopping, commandsReady?.Task, RequestUserStop); }
+    try { await RecordingControl.ReadCommandsAsync(Console.In, HandleCommandAsync, RequestStop, stopping, commandsReady.Task, RequestUserStop); }
     catch (Exception ex) { Logger.Error("SIDECAR_UNAVAILABLE", $"The stdin reader stopped: {ex.Message}"); }
 });
 
@@ -545,7 +545,7 @@ async Task<int> StopRecordingAsync(bool wasStarted, bool acknowledge = true)
                             requireTerminal: wasStarted);
                 }
             }
-        }, shutdownToken, stereoStart, acknowledge);
+        }, shutdownToken, captureStart, acknowledge);
         return 0;
     }
     catch (Exception ex)
@@ -564,29 +564,23 @@ Console.CancelKeyPress += onCancel;
 
 try
 {
-    int startResult;
-    if (stereoStartup is not null)
-    {
-        stereoStartup.CancelAfter(TimeSpan.FromSeconds(12));
-        var (owner, untilReady) = RecordingControl.BeginStereoStartup(StartCaptureAsync, StartCommandReader, stereoStartup.Token);
-        stereoStart = owner;
-        startResult = await untilReady;
-    }
-    else startResult = await StartCaptureAsync(CancellationToken.None);
+    captureStartup.CancelAfter(TimeSpan.FromSeconds(12));
+    var (owner, untilReady) = RecordingControl.BeginStartup(StartCaptureAsync, StartCommandReader, captureStartup.Token);
+    captureStart = owner;
+    var startResult = await untilReady;
 
     lock (startupStatusGate)
     {
-        stereoStartup?.Token.ThrowIfCancellationRequested();
+        captureStartup.Token.ThrowIfCancellationRequested();
         if (startResult != 0) return startResult;
-        stereoStartup?.CancelAfter(Timeout.InfiniteTimeSpan);
+        captureStartup.CancelAfter(Timeout.InfiniteTimeSpan);
         var activeSources = new List<string>();
         if (micSource is not null) activeSources.Add("Mic");
         if (speakerSource is not null) activeSources.Add("Speaker-Loopback");
         Logger.Info("status", "capturing", $"Active: {string.Join(" + ", activeSources)}.");
         Logger.Event("status", new { phase = "started", running = true });
-        commandsReady?.TrySetResult();
+        commandsReady.TrySetResult();
     }
-    if (!stereo) StartCommandReader();
 
     _ = Task.Run(async () =>
     {
@@ -616,16 +610,16 @@ try
 
     return await StopRecordingAsync(wasStarted: true);
 }
-catch (OperationCanceledException) when (stereo && Volatile.Read(ref userStopRequested))
+catch (OperationCanceledException) when (Volatile.Read(ref userStopRequested))
 {
     // An explicit Stop/Quit before the started status is normal. A terminal
     // SessionStopped event is not guaranteed for a session that never became ready.
     RequestStop();
     return await StopRecordingAsync(wasStarted: false);
 }
-catch (OperationCanceledException) when (stereoStartup?.IsCancellationRequested == true && !stopping.IsCancellationRequested)
+catch (OperationCanceledException) when (captureStartup.IsCancellationRequested && !stopping.IsCancellationRequested)
 {
-    Logger.Error("SIDECAR_START_FAILED", "Timed out waiting for the stereo Azure session to start.");
+    Logger.Error("SIDECAR_START_FAILED", "Timed out waiting for audio capture and speech recognition to start.");
     return 50;
 }
 catch (Exception ex)
@@ -640,16 +634,7 @@ finally
     if (!captureCleanupAssigned)
     {
         RequestStop();
-        if (stereo) _ = await StopRecordingAsync(wasStarted: false, acknowledge: false);
-        else
-        {
-            try { micSource?.Dispose(); }
-            finally
-            {
-                try { speakerSource?.Dispose(); }
-                finally { deviceEnumerator?.Dispose(); }
-            }
-        }
+        _ = await StopRecordingAsync(wasStarted: false, acknowledge: false);
     }
 }
 

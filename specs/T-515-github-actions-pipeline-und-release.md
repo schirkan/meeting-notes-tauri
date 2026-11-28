@@ -141,6 +141,14 @@ war fuer Tag-Commit `529800a` erfolgreich. GitHub fuehrt [v0.1.9](https://github
 als veroeffentlicht. Das belegt den Pipeline-Erfolg, nicht eine erneute lokale
 Download-, Hardware- oder Live-Azure-Abnahme.
 
+### Release v0.2.0 (28.11.2026)
+
+Der Release-Pfad prueft, dass Tag und App-Version uebereinstimmen, und liest
+die versionsbezogenen Release Notes aus `CHANGELOG.md`. Das Portable-ZIP
+muss die zueinander passenden Binaries mit Sidecar-Protokoll 2.0.0 enthalten.
+Der Tag-Workflow baut das Paket, prueft Smoke und Deployment und publiziert
+ZIP und SHA256-Datei zusammen. Workboard: `bbef3512-a868-402f-9255-58534d7a1dc4`.
+
 ### Weitere Nachweise
 
 - 19.11.2026: Manueller Release-Download und Start auf fremdem Rechner vom Nutzer bestaetigt; siehe auch [T-500](./T-500-qualitaetssicherung-und-akzeptanztests.md).

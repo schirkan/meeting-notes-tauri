@@ -1,7 +1,7 @@
 import type { FileTranscriptionSettings } from '@shared/config-contract'
 import { BATCH_MODELS } from '@shared/speech-models'
 import type { BatchAudioSource } from '@shared/transcript-contract'
-import { BATCH_SOURCES, localTrackStart, type BatchAudioSlots } from '../batch-audio'
+import { BATCH_SOURCES, localTrackStart, localTrackStartChoices, type BatchAudioSlots } from '../batch-audio'
 import { Icon } from './Icon'
 import { SpeechLanguageOptions } from './SpeechLanguageOptions'
 
@@ -33,6 +33,11 @@ export function BatchAudioPanel(props: BatchAudioPanelProps) {
         {BATCH_SOURCES.map((source) => {
           const label = sourceLabels[source]
           const slot = slots[source]
+          const localStart = localTrackStart(slot?.startedAt ?? '')
+          const choices = localTrackStartChoices(localStart)
+          const offsetSelection = slot && slot.startedAt !== localStart
+            ? choices.find((choice) => Date.parse(choice.startedAt) === Date.parse(slot.startedAt))?.startedAt ?? ''
+            : ''
           return (
             <fieldset key={source} disabled={disabled}>
               <legend className="field-caption"><Icon name={source} />{label} WAV</legend>
@@ -45,10 +50,17 @@ export function BatchAudioPanel(props: BatchAudioPanelProps) {
               </div>
               <label>
                 {label} start time
-                <input type="datetime-local" step="any" required disabled={!slot} value={localTrackStart(slot?.startedAt ?? '')}
+                <input type="datetime-local" step="any" required disabled={!slot} value={localStart}
                   title={slot?.estimated ? 'Estimated from the file timestamp. Adjust to the first audio sample if needed.' : 'Start time of the first audio sample (local time).'}
                   onChange={(event) => props.onChangeStart(source, event.currentTarget.value)} />
               </label>
+              {choices.length > 1 && <label>
+                {label} UTC offset
+                <select required value={offsetSelection} onChange={(event) => props.onChangeStart(source, event.currentTarget.value)}>
+                  <option value="" disabled>Choose an offset</option>
+                  {choices.map(({ startedAt, label: offset }) => <option key={startedAt} value={startedAt}>{offset}</option>)}
+                </select>
+              </label>}
             </fieldset>
           )
         })}

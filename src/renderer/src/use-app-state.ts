@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_USER_SETTINGS, fileTranscriptionDefaults, isAzureSpeechModel, normalizeUserSettings, type AppConfigState, type AzureConfig, type FileTranscriptionSettings, type SpeechModel, type UserSettings } from '@shared/config-contract'
 import { BATCH_MODELS, meetingSpeechFeatures } from '@shared/speech-models'
 import type { BatchAudioSource, MeetingDetected } from '@shared/transcript-contract'
@@ -76,7 +76,7 @@ function identifiedSpeakers(segments: TranscriptSegment[]) {
   return [...new Set(segments.filter(hasIdentifiedSpeaker).map(getSpeakerIdentity))]
 }
 
-export function useAppState() {
+export function useAppState(aboutOpen: boolean) {
   const [status, setStatus] = useState<TranscriptStatus>(initialStatus)
   const [segments, setSegments] = useState<TranscriptSegment[]>([])
   const [quitExportRequest, setQuitExportRequest] = useState<string | null>(null)
@@ -99,6 +99,7 @@ export function useAppState() {
   const [settingsHint, setSettingsHint] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false)
+  const [connectivityDialogOpen, setConnectivityDialogOpen] = useState(false)
   const [debugOpen, setDebugOpen] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
   const [showHome, setShowHome] = useState(false)
@@ -109,6 +110,7 @@ export function useAppState() {
   const lastCompletedRecordingRef = useRef<string | null>(null)
   const batchPendingRef = useRef(false)
   const startPendingRef = useRef(false)
+  const nativeStartRef = useRef<{ events: (TranscriptStatus | TranscriptSegment)[] } | null>(null)
   const webSpeechRef = useRef<WebSpeechSession | null>(null)
   const segmentReceiverRef = useRef<(segment: TranscriptSegment) => void>(() => {})
   const [meetingDetected, setMeetingDetected] = useState<MeetingDetected | null>(null)
@@ -156,6 +158,19 @@ export function useAppState() {
     setBatchAudioSlots(slotsFromRecording(recording))
     setShowHome(true)
     setToast({ message: 'Recording ready. Choose a model to transcribe the saved WAVs.', variant: 'info', persistent: false })
+  }
+
+  const applyStatus = (nextStatus: TranscriptStatus) => {
+    observeRecordingStart(nextStatus)
+    prefillBatchAudio(nextStatus)
+    setStatus(nextStatus)
+  }
+
+  const replayNativeStartEvents = (events: (TranscriptStatus | TranscriptSegment)[]) => {
+    for (const event of events) {
+      if ('running' in event) applyStatus(event)
+      else segmentReceiverRef.current(event)
+    }
   }
 
   const onToggleDevtools = async () => {
@@ -304,7 +319,11 @@ export function useAppState() {
         return withoutInterimForSource
       })
     }
-    const unsubSegment = transcriptApi.onSegment((segment) => segmentReceiverRef.current(segment))
+    const unsubSegment = transcriptApi.onSegment((segment) => {
+      const pending = nativeStartRef.current
+      if (pending) pending.events.push(segment)
+      else segmentReceiverRef.current(segment)
+    })
 
     const unsubError = transcriptApi.onError((error) => {
       setLastError(error)
@@ -322,10 +341,9 @@ export function useAppState() {
     const unsubStatus = transcriptApi.onStatus((nextStatus) => {
       receivedLiveStatus = true
       if (webSpeechRef.current && (startPendingRef.current || !nextStatus.running)) return
-      observeRecordingStart(nextStatus)
-      prefillBatchAudio(nextStatus)
-      setNow(Date.now())
-      setStatus(nextStatus)
+      const pending = nativeStartRef.current
+      if (pending) pending.events.push(nextStatus)
+      else applyStatus(nextStatus)
     })
 
     const unsubQuitExport = transcriptApi.onQuitExport((requestId) => {
@@ -350,6 +368,13 @@ export function useAppState() {
     // T-513: Eine Meeting-Erkennung wird angezeigt. Die Aufnahme startet
     // der Rust-Main - der Renderer muss sie nur melden.
     const unsubMeetingDetected = transcriptApi.onMeetingDetected((detected) => {
+      // An automatic start can win the Rust start gate. Its own success event
+      // follows its running status, independently of the manual attempt.
+      const pending = nativeStartRef.current
+      if (pending) {
+        nativeStartRef.current = null
+        replayNativeStartEvents(pending.events)
+      }
       setMeetingDetected(detected)
       setToast({
         message:
@@ -365,8 +390,9 @@ export function useAppState() {
     const unsubCrashed = window.transcriptSidecar?.onCrashed((payload) => {
       receivedLiveStatus = true
       setLastError({ code: 'SIDECAR_UNAVAILABLE', message: 'The transcription service has crashed.' })
-      setStatus((prev) => ({ ...prev, running: false, paused: false }))
-      setIsStarting(false)
+      const pending = nativeStartRef.current
+      if (pending) pending.events.push({ running: false, paused: false })
+      else setStatus((prev) => ({ ...prev, running: false, paused: false }))
       setToast({
         message:
           `Sidecar crashed (exit code ${payload.exitCode ?? 'unknown'}). ` +
@@ -580,6 +606,9 @@ export function useAppState() {
       const provider = settingsRef.current.transcription.provider
       const mode = settingsRef.current.transcription.mode ?? 'live'
       if (mode === 'unsupported' || (provider === 'unsupported' && mode === 'live')) throw new Error('Choose a supported meeting mode and transcription model.')
+      if (mode === 'live' && !provider && !isConfigComplete(configState?.config ?? null)) {
+        throw new Error('Configure the Azure connection in Settings before starting live transcription.')
+      }
       const pendingSegments: TranscriptSegment[] = []
       let webStarted = false
       if (provider === 'web-speech' && mode === 'live') {
@@ -612,33 +641,36 @@ export function useAppState() {
         })
         webSpeechRef.current = web
       }
-      clearTranscript()
-      setSessionStartedAt(null)
+      const pendingNative = web ? null : { events: [] as (TranscriptStatus | TranscriptSegment)[] }
+      nativeStartRef.current = pendingNative
       const next = await window.transcriptApi.start(provider ?? 'azure', mode, requestedAtMs)
+      if (!next.running || !next.startedAt) throw new Error('The service did not confirm a recording start.')
       if (web) {
         reservedWeb = true
         if (webSpeechRef.current !== web) return
         await web.start()
         if (webSpeechRef.current !== web) return
       }
-      // The native start event resets the transcript before the first segment.
-      observeRecordingStart(next)
+      applyStatus(next)
+      if (pendingNative && nativeStartRef.current === pendingNative) {
+        nativeStartRef.current = null
+        replayNativeStartEvents(pendingNative.events)
+      }
       webStarted = true
       pendingSegments.forEach(segmentReceiverRef.current)
-      setNow(Date.now())
-      setStatus(next)
       setToast({ message: mode === 'batch' ? 'Recording audio locally.' : 'New transcript started.', variant: 'info', persistent: false })
     } catch (error) {
       if (web) {
         web.abort()
         if (webSpeechRef.current !== web) return
-        webSpeechRef.current = null
         if (reservedWeb) await window.transcriptApi.stop().catch(() => {})
+        if (webSpeechRef.current === web) webSpeechRef.current = null
       }
       const message = errorDetail(error, 'Start failed.')
       setLastError({ code: 'UI_START_FAILED', message })
       setToast({ message: `UI_START_FAILED: ${message}`, variant: 'error', persistent: true })
     } finally {
+      nativeStartRef.current = null
       startPendingRef.current = false
       setIsStarting(false)
     }
@@ -699,36 +731,71 @@ export function useAppState() {
     setSilenceCountdown(null)
   }
 
+  const modalOpen = settingsDialogOpen || connectivityDialogOpen || aboutOpen
+  const modalOpenRef = useRef(modalOpen)
+  const deferSilenceWarningRef = useRef<(() => void) | null>(null)
+  useLayoutEffect(() => {
+    modalOpenRef.current = modalOpen
+    if (modalOpen) deferSilenceWarningRef.current?.()
+  }, [modalOpen])
+
   useEffect(() => {
     setSilenceCountdown(null)
     if (!stopOnSilence || !status.running || status.paused || !status.startedAt || webSpeechRef.current) return
     const startedAt = status.startedAt
     audioActivityRef.current = { startedAt, at: performance.now() }
-    let warnedActivity: { startedAt: string; at: number } | null = null
-    let deadline = 0
-    const interval = window.setInterval(() => {
+    let warning: { activity: NonNullable<typeof audioActivityRef.current>; ready: boolean; deadline: number } | null = null
+    let disposed = false
+    const defer = () => {
+      if (warning) warning.deadline = 0
+      setSilenceCountdown(null)
+    }
+    const onVisibilityChange = () => { if (document.hidden) defer() }
+    deferSilenceWarningRef.current = defer
+    window.addEventListener('blur', defer)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    const tick = () => {
       const activity = audioActivityRef.current
-      if (activity?.startedAt !== startedAt) return
       const now = performance.now()
-      if (now - activity.at < silenceMinutes * 60_000) return
-      if (warnedActivity !== activity) {
-        warnedActivity = activity
-        deadline = now + 60_000
-        void window.transcriptApi.showSilenceWarning().catch((error) => {
+      if (activity?.startedAt !== startedAt || modalOpenRef.current || now - activity.at < silenceMinutes * 60_000) return
+      if (warning?.activity !== activity) {
+        const current: NonNullable<typeof warning> = { activity, ready: false, deadline: 0 }
+        warning = current
+        void window.transcriptApi.showSilenceWarning().then(() => {
+          if (disposed || audioActivityRef.current !== activity) return
+          current.ready = true
+          tick()
+        }, (error) => {
+          if (disposed || audioActivityRef.current !== activity) return
           setToast({ message: errorDetail(error, 'Could not show the silence warning.'), variant: 'error', persistent: true })
           audioActivityRef.current = { startedAt, at: performance.now() }
-          setSilenceCountdown(null)
+          defer()
         })
+        return
       }
-      const remaining = Math.ceil((deadline - now) / 1000)
+      // Give the user a full warning once the window is visible, focused and
+      // no modal traps focus. Time spent blocked does not count towards a stop.
+      if (!warning.ready || document.hidden || !document.hasFocus()) {
+        defer()
+        return
+      }
+      if (!warning.deadline) warning.deadline = now + 60_000
+      const remaining = Math.ceil((warning.deadline - now) / 1000)
       if (remaining > 0) setSilenceCountdown(remaining)
       else {
         window.clearInterval(interval)
         setSilenceCountdown(null)
         void stopForSilenceRef.current()
       }
-    }, 1000)
-    return () => window.clearInterval(interval)
+    }
+    const interval = window.setInterval(tick, 1000)
+    return () => {
+      disposed = true
+      window.clearInterval(interval)
+      window.removeEventListener('blur', defer)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      deferSilenceWarningRef.current = null
+    }
   }, [stopOnSilence, silenceMinutes, status.running, status.paused, status.startedAt])
 
   const onToggleRecording = async () => {
@@ -843,7 +910,7 @@ export function useAppState() {
       const switchingToAzure = liveAzure && !!settingsRef.current.transcription.provider
       const azureChanged = JSON.stringify(configDraft) !== JSON.stringify(toConfigDraft(configState?.config ?? null))
       const saveAzure = async () => {
-        const savedState = await window.transcriptApi.saveConfig(draftToConfig(configDraft, { allowIncomplete: !liveAzure }))
+        const savedState = await window.transcriptApi.saveConfig(draftToConfig(configDraft, { allowIncomplete: !liveAzure, allowFileOnly: true }))
         setConfigState(savedState)
         setConfigDraft(toConfigDraft(savedState.config))
       }
@@ -922,7 +989,6 @@ export function useAppState() {
 
   const [connectivityResult, setConnectivityResult] = useState<ConnectivityResult | null>(null)
   const [isTestingConnectivity, setIsTestingConnectivity] = useState(false)
-  const [connectivityDialogOpen, setConnectivityDialogOpen] = useState(false)
   const [connectivityKind, setConnectivityKind] = useState<'azure' | 'native' | 'web'>('azure')
   const returnToSettingsRef = useRef(true)
 

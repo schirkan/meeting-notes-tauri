@@ -1,15 +1,26 @@
 # Changelog
 
-## Unreleased
+## v0.2.0 - 2026-11-28
+
+### Breaking change
+- The app and sidecar now require protocol `2.0.0`. Extract all files from the same ZIP into a new folder; do not mix v0.2.0 and older executables. Windows AI Speech is not included.
 
 ### Added
 - **Record for later** saves microphone and speaker loopback as separate, time-aligned WAV files without sending audio to a speech service.
 - **Transcribe audio files** imports one or two WAVs with editable start times and separate model and language preferences. Azure Standard and Azure MAI require upload confirmation; Windows SAPI reads the files locally.
 - Experimental Windows SAPI and Web Speech API live models. Web Speech uses the default microphone and is manual and live-only.
+- Optional silence detection for native live transcription and local recording. The warning allows you to keep recording before the app stops.
 
 ### Changed
 - The home page now separates meeting recording from file transcription. Audio devices and live model options are saved on the home page; **Home** preserves the previous transcript.
 - Azure file transcription can use its own Speech resource endpoint without replacing the live endpoint.
+- Updated npm, Rust and .NET dependencies, including Vite 8.4.0, Tauri 2.12.7 and System.Speech 11.0.0.
+
+### Fixed
+- A failed recording start no longer removes the previous transcript or speaker names.
+- The inactivity countdown waits until the warning can be used when a modal dialog is open.
+- Azure file-only settings can be saved without filling in a Live endpoint.
+- Ambiguous manually entered WAV start times no longer silently choose the wrong UTC offset.
 
 ## v0.1.9 - 2026-11-25
 

@@ -160,7 +160,7 @@ internal sealed class WindowsSapi
                 await _lifecycle.WaitAsync(deadline.Token);
                 try
                 {
-                    if (_active is { } batch) await batch.CloseAsync(requireClean: batch.Emit && !_failed);
+                    if (_active is { } batch) await batch.CloseAsync(requireClean: batch.Ready && !_failed);
                     lock (_gate) _active = null;
                 }
                 finally { _lifecycle.Release(); }
@@ -254,7 +254,7 @@ internal sealed class WindowsSapi
         lock (_gate)
         {
             _stop.Token.ThrowIfCancellationRequested();
-            batch.Emit = true;
+            batch.Ready = true;
             Logger.Info("sapi", phase, $"Windows SAPI session {_sessionId}; language={_language}; sources={string.Join(", ", batch.Lanes.Select(l => l.Source))}.");
             Logger.Event("status", new { phase, running = true });
         }
@@ -286,7 +286,9 @@ internal sealed class WindowsSapi
     {
         lock (_gate)
         {
-            if (_active != batch || !batch.Emit || _failed || string.IsNullOrWhiteSpace(result.Text)) return;
+            // One lane may recognize before the other is ready. Rust buffers
+            // these results until it can publish the initial running status.
+            if (_active != batch || (!batch.Ready && _stop.IsCancellationRequested) || _failed || string.IsNullOrWhiteSpace(result.Text)) return;
             Logger.Event("transcript", new
             {
                 id = Guid.NewGuid().ToString(),
@@ -318,7 +320,7 @@ internal sealed class WindowsSapi
     {
         lock (_gate)
         {
-            _active?.FinishAudio(discard: !_active.Emit || _failed);
+            _active?.FinishAudio(discard: !_active.Ready || _failed);
             _stop.Cancel();
         }
     }
@@ -326,7 +328,7 @@ internal sealed class WindowsSapi
     private sealed class Batch(List<Lane> lanes)
     {
         public List<Lane> Lanes { get; } = lanes;
-        public bool Emit { get; set; }
+        public bool Ready { get; set; }
         public void FinishAudio(bool discard)
         {
             foreach (var lane in Lanes) lane.Input.Finish(discard);

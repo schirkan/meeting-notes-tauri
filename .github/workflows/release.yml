@@ -19,18 +19,18 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout the tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: '24'
           cache: npm
 
       - name: Set up .NET 10 SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6.1.0
         with:
           dotnet-version: '10.0.x'
 
@@ -40,7 +40,7 @@ jobs:
           toolchain: stable-x86_64-pc-windows-msvc
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v6.1.0
         with:
           path: |
             ~/.cargo/registry
@@ -93,7 +93,7 @@ jobs:
           Add-Content -Path $env:GITHUB_ENV -Value "RELEASE_VERSION=$version"
 
       - name: Upload the release asset
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: portable-zip
           path: |
@@ -105,44 +105,34 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          $tag = '${{ inputs.tag || github.ref_name }}'
+          $tag = $env:RELEASE_TAG
           $version = $env:RELEASE_VERSION
+          if ($tag -cne "v$version") { throw "Tag $tag does not match package version $version." }
           $zip = Join-Path $env:RUNNER_TEMP "MeetingNotes-v$version-win-x64.zip"
           $sums = Join-Path $env:RUNNER_TEMP 'SHA256SUMS.txt'
-          $notes = @"
-          ## Meeting Notes v$version
-          Portable distribution for Windows x64.
-          
-          ### Included
-          - `MeetingNotes.exe` (Tauri host)
-          - `MeetingNotes.Sidecar.exe` (self-contained, compressed and conservatively trimmed) - **no .NET installation required**
-          - `MeetingNotes.config.example.json`
-          - `SHA256SUMS`
-          
+          $changelog = Get-Content CHANGELOG.md -Raw
+          $section = [regex]::Match($changelog, '(?ms)^## v' + [regex]::Escape($version) + ' - [^\r\n]+\r?\n(?<body>.*?)(?=^## |\z)')
+          if (-not $section.Success) { throw "No changelog section for $tag." }
+          $installation = @'
           ### Installation
-          1. Download the ZIP and extract **all files** into a writable folder
-          2. Start `MeetingNotes.exe`; `MeetingNotes.Sidecar.exe` must sit in the same folder
-          3. Copy `MeetingNotes.config.example.json` to `MeetingNotes.config.json` and enter your Azure credentials
-          
-          ### Requirements
-          - Windows 11 x64
-          - Microsoft Edge WebView2 Runtime (already present on many Windows 11 systems)
-          - An internet connection and an Azure Speech resource with endpoint, region and key
-          - A microphone and/or an audio output device
-          
-          The app is not code-signed, so Windows may display a security warning.
-          Details and open points: [SPEC.md](https://github.com/${{ github.repository }}/blob/main/SPEC.md).
-          "@
+          Download the ZIP and extract **all files** into a new writable folder. Keep `MeetingNotes.exe` and `MeetingNotes.Sidecar.exe` from this ZIP together. Requires Windows 11 x64 and WebView2; no .NET installation is needed.
+
+          Azure credentials are required only for Azure transcription. Local recording and Windows SAPI do not use Azure. The app is not code-signed, so Windows may display a security warning.
+          '@
+          $notes = "## Meeting Notes v$version`n`n" + $section.Groups['body'].Value.Trim() + "`n`n" + $installation
           $notes | Out-File -FilePath (Join-Path $env:RUNNER_TEMP 'notes.md') -Encoding utf8
           $existing = gh release view $tag --json tagName 2>$null
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Release $tag already exists - the assets are replaced."
             gh release upload $tag $zip $sums --clobber
+            if ($LASTEXITCODE -ne 0) { throw 'Could not upload the release assets.' }
             gh release edit $tag --notes-file (Join-Path $env:RUNNER_TEMP 'notes.md') --title "Meeting Notes v$version"
           } else {
             # No --target: the tag already exists, and the API rejects
             # a tag name as target_commitish.
-            gh release create $tag $zip $sums --title "Meeting Notes v$version" --notes-file (Join-Path $env:RUNNER_TEMP 'notes.md')
+            gh release create $tag $zip $sums --verify-tag --title "Meeting Notes v$version" --notes-file (Join-Path $env:RUNNER_TEMP 'notes.md')
           }
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish the GitHub release.' }
           gh release view $tag --json url,tagName,assets

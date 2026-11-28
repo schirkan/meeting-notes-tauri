@@ -24,14 +24,11 @@ struct AppStateInner {
     running: bool,
     paused: bool,
     started_at: Option<String>,
-    start_time_fixed: bool,
     stop_error: Option<String>,
     recording: Option<crate::events::BatchRecording>,
     debug_log: Vec<DebugLogEntry>,
     /// T-201: Zahl der fehlerhaften JSON-Zeilen aus dem Sidecar.
     malformed_lines: u64,
-    /// T-201: Protokollversion aus dem Handshake des Sidecars.
-    handshake_version: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -78,18 +75,6 @@ impl AppState {
         }
     }
 
-    /// T-201: Protokollversion des Sidecars aus dem Handshake merken.
-    pub fn mark_handshake(&self, version: &str) {
-        let mut inner = self.inner.lock().expect("AppState mutex poisoned");
-        inner.handshake_version = Some(version.to_string());
-    }
-
-    /// T-201: Gemeldete Protokollversion, falls ein Handshake kam.
-    pub fn handshake_version(&self) -> Option<String> {
-        let inner = self.inner.lock().expect("AppState mutex poisoned");
-        inner.handshake_version.clone()
-    }
-
     pub fn snapshot_status(&self) -> TranscriptStatus {
         let inner = self.inner.lock().expect("AppState mutex poisoned");
         TranscriptStatus {
@@ -106,10 +91,7 @@ impl AppState {
 
     pub fn mark_started_at(&self, requested_start: Option<&str>) -> TranscriptStatus {
         let mut inner = self.inner.lock().expect("AppState mutex poisoned");
-        let started_at = requested_start.map(str::to_owned)
-            .or_else(|| if inner.start_time_fixed && inner.running { inner.started_at.clone() } else { None })
-            .unwrap_or_else(|| Utc::now().to_rfc3339());
-        inner.start_time_fixed = requested_start.is_some() || (inner.start_time_fixed && inner.running);
+        let started_at = requested_start.map(str::to_owned).unwrap_or_else(|| Utc::now().to_rfc3339());
         inner.running = true;
         inner.paused = false;
         inner.started_at = Some(started_at.clone());
@@ -158,6 +140,7 @@ impl AppState {
         self.inner.lock().expect("AppState mutex poisoned").stop_error.take()
     }
 
+    #[cfg(test)]
     pub fn mark_stopped(&self) -> TranscriptStatus {
         self.mark_stopped_with_error(None)
     }
@@ -172,8 +155,6 @@ impl AppState {
         inner.running = false;
         inner.paused = false;
         inner.started_at = None;
-        inner.start_time_fixed = false;
-        inner.handshake_version = None;
         inner.recording = recording.clone();
         TranscriptStatus {
             running: false,
@@ -225,11 +206,10 @@ mod pause_tests {
     use super::*;
 
     #[test]
-    fn batch_sidecar_confirmation_does_not_change_the_click_time() {
+    fn confirmed_batch_recording_uses_the_click_time() {
         let state = AppState::default();
         let click = "2026-11-27T16:25:00.321+00:00";
-        state.mark_started_at(Some(click));
-        assert_eq!(state.mark_started().started_at.as_deref(), Some(click));
+        assert_eq!(state.mark_started_at(Some(click)).started_at.as_deref(), Some(click));
         state.mark_stopped();
         assert_ne!(state.mark_started().started_at.as_deref(), Some(click));
     }
@@ -282,19 +262,6 @@ mod pause_tests {
         assert!(!stopped.running);
         assert!(!stopped.paused, "After the stop the recording is no longer paused");
         assert_eq!(stopped.started_at, None);
-    }
-
-    #[test]
-    fn restarting_after_stop_requires_a_new_handshake() {
-        let state = AppState::default();
-        state.mark_started();
-        state.mark_handshake("1.0.0");
-        state.mark_stopped();
-        let restarted = state.mark_started();
-        assert!(restarted.running);
-        assert!(state.handshake_version().is_none());
-        state.mark_handshake("1.0.0");
-        assert_eq!(state.handshake_version().as_deref(), Some("1.0.0"));
     }
 
     /// Der Status muss die Pause auch ueber get_status sichtbar machen.

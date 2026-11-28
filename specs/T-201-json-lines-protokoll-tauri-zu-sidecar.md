@@ -19,7 +19,7 @@ Das bestehende Binär-Frame-Protokoll (36-B-Header + PCM-Payload + CRC) aus `../
   deshalb keinen Erfolg vortaeuschen. Die Abfolge bis zum ACK ist ohne Azure
   simuliert; Live-Abnahme des letzten Azure-Segments steht aus.
 - [x] **Sidecar-intern (`stderr`):** Diagnose-Logs, getrennt von stdout (Tauri erfasst stderr separat). Beleg: Logger schreibt Diagnose ueber stderr.
-- [x] Erstes Handshake-Objekt (`stdout`) enthält `protocol_version`, `sidecar_version`, `capabilities`. Tauri-Main validiert `protocol_version >= 1.0.0` und antwortet mit `handshake-ack` auf `stdin`. Ohne gültiges Handshake wird der Sidecar beendet. Beleg: umgesetzt - Sidecar sendet das Handshake als erstes Event (ProtocolVersion.Current = 1.0.0), der Rust-Main validiert es, quittiert und beendet den Sidecar bei Inkompatibilität (PROTOCOL_VERSION_MISMATCH) oder nach 15 s ohne Handshake (HANDSHAKE_TIMEOUT). End-to-end belegt im Smoke-Test: `sidecar handshake: protocol_version=1.0.0, capabilities=5`; 5 Rust-Tests für den Versionsvergleich. Gemessene Startzeit bis zum Handshake: 164-221 ms (5 Läufe) - das Zeitfenster von 15 s hat reichlich Reserve, auch bei einem kalten Start mit Virenscan.
+- [x] Erstes Handshake-Objekt (`stdout`) enthält `protocol_version`, `sidecar_version`, `capabilities`. Seit v0.2.0 akzeptiert Tauri-Main exakt `2.0.0`; ältere Versionen ohne Audioaktivitätsmeldungen werden abgewiesen. Erst nach gültigem Handshake und bestätigter Aufnahmebereitschaft erscheint die neue Sitzung als laufend. Paketdateien verschiedener Releases nicht mischen. Beleg: `src-tauri/src/protocol.rs`, `src-tauri/src/commands.rs`, `sidecar/ProtocolVersion.cs` und `scripts/test-smoke.mjs`.
 - [x] **C#-Seite:** nutzt `System.Text.Json` + `Console.Out` / `Console.In` (async mit `StreamWriter`/`StreamReader` über `Console.OpenStandardOutput()` / `Console.OpenStandardInput()`). **Keine** `NamedPipeServerStream`-Aufrufe mehr. Beleg: System.Text.Json, Console.Out mit Flush (Logger.cs) und Console.In.ReadLineAsync (Program.cs). Abweichung vom Wortlaut: nicht ueber Console.OpenStandardOutput/Input, sondern direkt ueber Console.Out/Console.In.
 - [x] **Rust-Seite:** nutzt `tauri-plugin-shell` (`Command::new_sidecar`) + `serde_json` zum Parsen der stdout-Zeilen + `CommandChild::write()` für stdin. Beleg: tauri-plugin-shell und serde_json in der Rust-Seite.
 - [x] **Newline-Flushing:** C#-Sidecar flusht stdout nach jeder JSON-Zeile (verhindert Stdio-Buffering). Tauri liest Zeile für Zeile. Beleg: Console.Out.Flush() nach jeder Zeile.
@@ -57,7 +57,7 @@ using var stdin  = new StreamReader(Console.OpenStandardInput());
 // Handshake schreiben
 await stdout.WriteLineAsync(JsonSerializer.Serialize(new {
     type = "handshake",
-    protocol_version = "1.0.0",
+    protocol_version = "2.0.0",
     sidecar_version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(),
     capabilities    = new[] { "transcript:partial", "transcript:final", "diarization" }
 }));
@@ -65,7 +65,7 @@ await stdout.WriteLineAsync(JsonSerializer.Serialize(new {
 // Auf Handshake-Ack lesen
 var ackLine = await stdin.ReadLineAsync();
 var ack = JsonSerializer.Deserialize<HandshakeAck>(ackLine!);
-if (ack?.protocol_version != "1.0.0") Environment.Exit(1);
+if (ack?.type != "handshake-ack") Environment.Exit(1);
 
 // Loop: Events schreiben, Commands lesen
 // Task A: stdout-Writer (Events aus Recognizer-Handlern)
@@ -89,10 +89,10 @@ let stdin  = sidecar.stdin().expect("stdin piped");
 // Handshake lesen
 let mut reader = BufReader::new(stdout).lines();
 let handshake: Handshake = serde_json::from_str(&reader.next().await.unwrap()?);
-if handshake.protocol_version != "1.0.0" { return Err(...); }
+if handshake.protocol_version != "2.0.0" { return Err(...); }
 
 // Handshake-Ack schreiben
-stdin.write_all(br#"{"type":"handshake-ack","protocol_version":"1.0.0"}"#).await?;
+stdin.write_all(br#"{"type":"handshake-ack"}"#).await?;
 stdin.write_all(b"\n").await?;
 
 // Event-Loop

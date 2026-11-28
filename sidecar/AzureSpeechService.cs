@@ -178,10 +178,18 @@ public sealed class AzureSpeechService : IDisposable
     /// </summary>
     internal bool IsStereo => _settings.Stereo && _settings.Transcription.Mic && _settings.Transcription.Speaker;
 
-    internal async Task WaitForStereoReadyAsync(CancellationToken stopping)
+    internal async Task WaitForCaptureReadyAsync(CancellationToken stopping)
     {
-        if (IsStereo && (!await _stereoReady.Task.WaitAsync(stopping) || Volatile.Read(ref _stereoFailed) != 0))
-            throw new InvalidOperationException("The stereo Azure session did not start.");
+        if (IsStereo)
+        {
+            if (!await _stereoReady.Task.WaitAsync(stopping) || Volatile.Read(ref _stereoFailed) != 0)
+                throw new InvalidOperationException("The stereo Azure session did not start.");
+            return;
+        }
+        var streams = _streams.Values.ToArray();
+        var ready = await Task.WhenAll(streams.Select(stream => stream.CaptureReady.Task)).WaitAsync(stopping);
+        if (ready.Any(started => !started) || streams.Any(stream => stream.SessionDead))
+            throw new InvalidOperationException("Not all Azure speech sessions started.");
     }
 
     internal bool EffectiveDiarization =>
@@ -464,6 +472,7 @@ public sealed class AzureSpeechService : IDisposable
             }
             state.Drain.OnSessionStarted();
             state.OnSessionStarted(e.SessionId);
+            state.CaptureReady.TrySetResult(true);
             if (IsStereo) _stereoReady.TrySetResult(true);
             Logger.Info("azure", "session_start",
                 $"Session started (source={state.Source}, mode={state.Mode}, session={e.SessionId}).");
@@ -478,6 +487,7 @@ public sealed class AzureSpeechService : IDisposable
                 if (IsStereo) FailStereo(state, "The stereo Azure session ended unexpectedly. Start a new recording.");
                 else state.MarkDead();
             }
+            state.CaptureReady.TrySetResult(false);
         };
         recognizer.SpeechStartDetected += (_, e) =>
             Logger.Info("azure", "speech_start",
@@ -496,6 +506,7 @@ public sealed class AzureSpeechService : IDisposable
 
         state.Drain.Fail();
         if (!_stopping) state.MarkDead();
+        state.CaptureReady.TrySetResult(false);
         var details = (errorDetails ?? "The Azure recognizer was canceled.").Trim();
         var (source, mode) = (state.Source, state.Mode);
         var authRelated = System.Text.RegularExpressions.Regex.IsMatch(
@@ -784,6 +795,7 @@ internal sealed class StreamState
     /// neu verbunden.
     /// </summary>
     public bool SessionDead => _sessionDead;
+    public TaskCompletionSource<bool> CaptureReady { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public void MarkDead() => _sessionDead = true;
 

@@ -28,7 +28,7 @@ export function toConfigDraft(config: AzureConfig | null): ConfigDraft {
   }
 }
 
-export function draftToConfig(draft: ConfigDraft, { allowIncomplete = false } = {}): AzureConfig {
+export function draftToConfig(draft: ConfigDraft, { allowIncomplete = false, allowFileOnly = false } = {}): AzureConfig {
   const endpoint = draft.endpoint.trim()
   const region = draft.region.trim()
   const speechKey = draft.speechKey.trim()
@@ -46,7 +46,8 @@ export function draftToConfig(draft: ConfigDraft, { allowIncomplete = false } = 
     config.batchEndpoint = batchEndpoint
   }
   if (model !== 'standard') config.model = model
-  if (!allowIncomplete && !hasAzureConnectionFields(config)) {
+  const fileOnly = allowFileOnly && batchEndpoint && region && speechKey
+  if (!allowIncomplete && !fileOnly && !hasAzureConnectionFields(config)) {
     throw new Error(model === 'standard'
       ? 'Please fill in endpoint, region and speech key.'
       : 'Please fill in region and speech key.')

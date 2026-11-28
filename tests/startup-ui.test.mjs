@@ -32,7 +32,7 @@ const validConfig = {
 }
 
 async function openApp(options) {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 860 } })
+  const page = await browser.newPage({ viewport: { width: 1280, height: 860 }, timezoneId: options.timezoneId })
   await page.route(/\/preload\/index\.ts(?:\?.*)?$/, (route) => route.fulfill({
     contentType: 'application/javascript',
     body: ''
@@ -42,7 +42,7 @@ async function openApp(options) {
       window.SpeechRecognition = class {
         start() {
           window.webRecognition = this
-          queueMicrotask(() => this.onstart?.())
+          if (!input.deferWebStart) queueMicrotask(() => this.onstart?.())
         }
         stop() {
           this.onresult?.({ resultIndex: 1, results: [null, { isFinal: true, 0: { transcript: 'Last browser words', confidence: 0.9 } }] })
@@ -85,6 +85,7 @@ async function openApp(options) {
         window.lastStartProvider = provider
         window.lastStartMode = mode
         window.lastStartRequestedAt = requestedAtMs
+        if (input.deferStart) return new Promise((resolve, reject) => { window.completeStart = resolve; window.rejectStart = reject })
         return window.emitStatus({ running: true, paused: false, startedAt: new Date().toISOString() })
       },
       stop: async () => {
@@ -204,7 +205,10 @@ async function openApp(options) {
       onError: noSubscription,
       onStatus: (callback) => { onStatus = callback; return () => { onStatus = undefined } },
       onAudioActivity: (callback) => { window.emitAudioActivity = callback; return noSubscription() },
-      showSilenceWarning: async () => {},
+      showSilenceWarning: async () => {
+        window.silenceWarningCalls = (window.silenceWarningCalls ?? 0) + 1
+        if (input.deferSilenceWarning) await new Promise(resolve => { window.completeSilenceWarning = resolve })
+      },
       onDebugLog: (callback) => { window.emitDebugLog = callback; return () => { delete window.emitDebugLog } },
       onMeetingDetected: (callback) => { window.emitMeetingDetected = callback; return () => { delete window.emitMeetingDetected } }
     }
@@ -738,6 +742,72 @@ test('Web Speech starts without Azure, drains finals on quit and does not call t
   } finally { await page.close() }
 })
 
+for (const web of [false, true]) {
+  test(`${web ? 'Web Speech readiness' : 'delayed native start'} preserves the prior transcript, alias and timing until confirmed`, async () => {
+    const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig },
+      running: true, startedAt: new Date(Date.now() - 60_000).toISOString(),
+      transcription: web ? { provider: 'web-speech' } : undefined, webSpeech: web, deferWebStart: web, deferStart: !web,
+      transcript: { markdownExport: { enabled: false } } })
+    const timer = page.locator('.live-badge time')
+    const stop = page.getByRole('button', { name: 'Stop', exact: true })
+    const nextStart = '2026-11-24T17:43:21.000Z'
+    const nextSegment = { id: 'new-final', sessionId: 'new-session', source: 'mic', speaker: 'Guest-1', speakerIdentified: true,
+      timestampIso: nextStart, language: 'en-US', text: 'First newly confirmed segment', state: 'final' }
+    try {
+      await stop.waitFor()
+      await emitSegments(page, 1)
+      await page.getByRole('button', { name: 'Speaker mapping show', exact: true }).click()
+      await page.getByRole('textbox', { name: /Display name for Mic.*Guest-1/ }).fill('Previous speaker alias')
+      await stop.click()
+      await stop.waitFor({ state: 'hidden' })
+      const oldTiming = [await timer.innerText(), await timer.getAttribute('title')]
+      const assertPrevious = async () => {
+        assert.deepEqual([await timer.innerText(), await timer.getAttribute('title')], oldTiming)
+        assert.deepEqual(await page.locator('.speaker-badge').allTextContents(), ['Previous speaker alias'])
+        assert.equal(await page.locator('.segment.final').count(), 1)
+      }
+      const startFromHome = async () => {
+        await page.getByRole('button', { name: 'Home', exact: true }).click()
+        await recordStart(page).click()
+      }
+      await startFromHome()
+      if (web) {
+        await page.waitForFunction(() => !!window.webRecognition)
+      } else {
+        await page.waitForFunction(() => !!window.rejectStart)
+        await page.evaluate(({ startedAt, segment }) => {
+          window.emitStatus({ running: true, startedAt })
+          window.emitSegment(segment)
+        }, { startedAt: nextStart, segment: nextSegment })
+      }
+      await assertPrevious()
+      await page.evaluate(web => web ? window.webRecognition.onerror({ error: 'not-allowed' }) : window.rejectStart('Native start rejected'), web)
+      await page.getByRole('alert').getByText(web ? /Microphone access was denied/ : /Native start rejected/).waitFor()
+      await page.getByRole('button', { name: 'Transcript', exact: true }).click()
+      await assertPrevious()
+
+      if (web) await page.evaluate(() => { window.webRecognition = undefined })
+      else await page.evaluate(() => { window.completeStart = undefined })
+      await startFromHome()
+      await page.waitForFunction(web => web ? !!window.webRecognition : !!window.completeStart, web)
+      await page.evaluate(({ web, segment }) => {
+        if (web) {
+          window.webRecognition.onstart()
+          window.webRecognition.onresult({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: segment.text, confidence: 0.9 } }] })
+        } else {
+          const next = window.emitStatus({ running: true, startedAt: segment.timestampIso })
+          window.emitSegment(segment)
+          window.completeStart(next)
+        }
+      }, { web, segment: nextSegment })
+      await stop.waitFor()
+      await page.getByText(nextSegment.text, { exact: true }).waitFor()
+      assert.equal(await page.locator('.segment.final').count(), 1)
+      assert.equal(await page.getByText('Previous speaker alias', { exact: true }).count(), 0)
+    } finally { await page.close() }
+  })
+}
+
 test('Meeting mode controls automatic recording, and clean stop prefills both WAVs with the click time', async () => {
   const micPath = 'D:/recordings/2026-11-27T16-25-22.123Z-mic.wav'
   const speakerPath = 'D:/recordings/2026-11-27T16-25-22.123Z-speaker.wav'
@@ -792,6 +862,41 @@ test('Meeting mode controls automatic recording, and clean stop prefills both WA
 })
 
 const batchFinal = { id: 'batch-test', sessionId: 'batch-session', source: 'mic', speaker: '', timestampIso: '2026-11-26T11:11:00Z', text: 'Batch final text', state: 'final' }
+
+test('manual WAV times require a DST offset; an inspected timestamp keeps its original ISO', async () => {
+  const mic = 'D:/manual.wav'
+  const speaker = 'D:/inspected.wav'
+  const inspected = '2026-10-25T02:15:00+01:00'
+  const page = await openApp({ timezoneId: 'Europe/Berlin', configState: { exists: true, path: 'test-config', config: validConfig },
+    fileTranscription: { model: 'windows-sapi' }, batchPickerResult: mic, batchInspections: { [speaker]: { startedAt: inspected, estimated: false } },
+    batchResult: [batchFinal], transcript: { markdownExport: { enabled: false } } })
+  try {
+    const form = fileWorkflow(page)
+    await form.getByRole('button', { name: 'Select file for microphone WAV' }).click()
+    const start = form.getByLabel('Microphone start time')
+    await start.fill('2026-03-29T02:30')
+    const transcribe = form.getByRole('button', { name: 'Transcribe', exact: true })
+    await transcribe.click()
+    await page.getByRole('alert').getByText('Enter a valid local microphone start time.').waitFor()
+    await start.fill('2026-10-25T02:30')
+    const offset = form.getByLabel('Microphone UTC offset')
+    assert.equal(await offset.inputValue(), '')
+    assert.deepEqual(await offset.locator('option').allTextContents(), ['Choose an offset', 'UTC+02:00', 'UTC+01:00'])
+    await transcribe.click()
+    await page.getByRole('alert').getByText('Choose the UTC offset for the ambiguous microphone start time.').waitFor()
+    assert.equal(await page.evaluate(() => window.batchCalls), undefined)
+    await offset.selectOption({ label: 'UTC+02:00' })
+    await offset.selectOption({ label: 'UTC+01:00' })
+    await page.evaluate(path => { window.batchPickerResult = path }, speaker)
+    await form.getByRole('button', { name: 'Select file for speaker WAV' }).click()
+    assert.equal(await form.getByLabel('Speaker UTC offset').locator('option:checked').innerText(), 'UTC+01:00')
+    await transcribe.click()
+    await page.waitForFunction(() => window.batchCalls?.length === 1)
+    assert.deepEqual(await page.evaluate(() => window.batchCalls[0].tracks.map(track => track.startedAt)), ['2026-10-25T01:30:00.000Z', inspected])
+    await page.getByRole('button', { name: 'Copy transcript', exact: true }).click()
+    assert.equal(await page.evaluate(() => window.lastCopiedStart), inspected)
+  } finally { await page.close() }
+})
 
 test('start page loads and saves live and file defaults independently', async () => {
   const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig }, language: 'de-DE',
@@ -1566,6 +1671,33 @@ test('the same SDK id in two sessions stays two separate speakers with separate 
   }
 })
 
+test('Azure file-only credentials save with live Standard selected but do not enable live start or diagnostics', async () => {
+  const wav = 'D:/file-only.wav'
+  const batchEndpoint = 'https://files.cognitiveservices.azure.com'
+  const page = await openApp({ configState: { exists: false, path: 'test-config', config: null },
+    batchPickerResult: wav, batchInspections: { [wav]: { startedAt: '2026-11-26T11:11:00Z', estimated: false } }, batchResult: [batchFinal] })
+  try {
+    await page.getByRole('button', { name: 'Configure Azure', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'Settings', exact: true })
+    await dialog.getByLabel('File transcription endpoint', { exact: true }).fill(batchEndpoint)
+    await dialog.getByLabel('Region', { exact: true }).fill(validConfig.region)
+    await dialog.getByLabel('Speech Key', { exact: true }).fill(validConfig.speechKey)
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    assert.deepEqual(await page.evaluate(() => window.lastSavedConfig), { ...validConfig, endpoint: '', batchEndpoint })
+    assert.equal(await recordStart(page).isDisabled(), true)
+    await page.getByRole('button', { name: 'Configure Azure', exact: true }).click()
+    assert.equal(await dialog.getByRole('button', { name: 'Test connection', exact: true }).isDisabled(), true)
+    await page.keyboard.press('Escape')
+    const form = fileWorkflow(page)
+    await form.getByRole('button', { name: 'Select file for microphone WAV' }).click()
+    page.once('dialog', (confirmation) => confirmation.accept())
+    await form.getByRole('button', { name: 'Transcribe', exact: true }).click()
+    await page.getByText(batchFinal.text, { exact: true }).waitFor()
+    assert.equal(await page.evaluate(() => window.batchCalls[0].provider), 'azure')
+  } finally { await page.close() }
+})
+
 test('saving a complete configuration replaces the warning and enables recording', async () => {
   const page = await openApp({ configState: { exists: false, path: 'test-config', config: null } })
   try {
@@ -2073,6 +2205,46 @@ test('silence warning cancels on audio and stops after an unanswered countdown',
     await page.evaluate(() => { window.silenceClockOffset += 60_000 })
     await page.waitForFunction(() => window.lastStopCalled === true)
     await warning.waitFor({ state: 'hidden' })
+  } finally { await page.close() }
+})
+
+test('silence countdown waits for foreground IPC and a modal-free warning the user can act on', async () => {
+  const page = await openApp({ configState: { exists: true, path: 'test-config', config: validConfig },
+    running: true, deferSilenceWarning: true, autoStart: { stopOnSilence: true, silenceMinutes: 1 } })
+  try {
+    const openSettings = page.getByRole('button', { name: 'Open settings dialog' })
+    await openSettings.click()
+    const settings = page.getByRole('dialog', { name: 'Settings', exact: true })
+    const warning = page.locator('.silence-warning')
+    await settings.waitFor()
+    await page.evaluate(() => {
+      const now = performance.now.bind(performance)
+      window.silenceClockOffset = 150_000
+      Object.defineProperty(performance, 'now', { value: () => now() + window.silenceClockOffset })
+    })
+    await page.waitForTimeout(1100)
+    assert.deepEqual(await page.evaluate(() => [window.silenceWarningCalls, window.lastStopCalled]), [undefined, undefined])
+    assert.equal(await warning.isVisible(), false)
+    await page.keyboard.press('Escape')
+    await page.waitForFunction(() => typeof window.completeSilenceWarning === 'function')
+    await page.evaluate(() => { window.silenceClockOffset += 60_001 })
+    await page.waitForTimeout(1100)
+    assert.equal(await page.evaluate(() => window.lastStopCalled), undefined)
+    assert.equal(await warning.isVisible(), false)
+    await page.evaluate(() => window.completeSilenceWarning())
+    await warning.waitFor()
+    assert.match(await warning.innerText(), /stop in 60s/)
+    await openSettings.click()
+    await warning.waitFor({ state: 'hidden' })
+    await page.evaluate(() => { window.silenceClockOffset += 60_001 })
+    await page.waitForTimeout(1100)
+    assert.equal(await page.evaluate(() => window.lastStopCalled), undefined)
+    await page.keyboard.press('Escape')
+    await warning.waitFor()
+    assert.match(await warning.innerText(), /stop in 60s/)
+    await page.getByRole('button', { name: 'Keep recording' }).click()
+    await warning.waitFor({ state: 'hidden' })
+    assert.equal(await page.evaluate(() => window.lastStopCalled), undefined)
   } finally { await page.close() }
 })
 

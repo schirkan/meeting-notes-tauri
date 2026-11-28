@@ -1,7 +1,7 @@
 # Spezifikation v0.1 — Meeting Notes
 
 Stand: 28.11.2026
-Status: Letzte Veroeffentlichung ist [v0.1.9](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.1.9). Die folgenden Anforderungen beschreiben den Entwicklungsstand; lokale WAV-Aufnahme, Dateitranskription und experimentelle Windows-Modelle sind noch nicht veroeffentlicht. Offene Abnahmen stehen in den Einzel-Specs.
+Status: Die folgenden Anforderungen beschreiben [v0.2.0](https://github.com/schirkan/meeting-notes-tauri/releases/tag/v0.2.0), einschliesslich lokaler WAV-Aufnahme, Dateitranskription, experimentellem Windows SAPI und Web Speech. App und Sidecar erfordern gemeinsam Protokoll 2.0.0. Offene Abnahmen stehen in den Einzel-Specs.
 
 Nutzerabnahme vom 28.11.2026: Azure-Speech-Live-Aufnahme unter 5 s im Praxistest ([T-500](./specs/T-500-qualitaetssicherung-und-akzeptanztests.md)); P95 und der 100-Chunks-Report sind nicht nachgewiesen ([T-502](./specs/T-502-latency-messung.md)). Auf frischem Windows 11 mit WebView2 ohne installierte .NET-Runtime wurden App-Start, Settings ohne Azure-Config, Config neben der EXE und verstaendliche Netzwerk-/Proxyfehler manuell bestaetigt ([T-510](./specs/T-510-clean-machine-deployment-windows-11.md)).
 
